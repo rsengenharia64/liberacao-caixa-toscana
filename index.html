@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana: liberação CAIXA (PCI/PLS), contas a pagar, curva S e recurso próprio.">
+<meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana: investimento, liberação CAIXA (PCI/PLS), demonstrativo financeiro, curva S e viabilidade.">
 <style>
   :root { color-scheme: light dark; }
   html, body { margin: 0; padding: 0; }
@@ -124,6 +124,7 @@
   .status-chip.saving { background: rgba(199,107,28,0.25); color: #ffd7ab; }
   .status-chip.saved { background: rgba(31,122,77,0.25); color: #a8e6c4; }
   .status-chip.readonly { background: rgba(179,38,30,0.25); color: #ffb3ae; }
+  .status-chip.local { background: rgba(199,107,28,0.28); color: #ffd7ab; }
   .status-chip .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 
   .tabs { display: flex; gap: 2px; margin-top: 12px; flex-wrap: wrap; }
@@ -135,9 +136,34 @@
   .tab-btn:hover { color: #eef3fa; }
   .tab-btn.active { color: #eef3fa; border-bottom-color: var(--accent); }
 
-  main#app { padding: 20px 22px 60px 22px; max-width: 1400px; margin: 0 auto; overflow-x: clip; }
-  .tab-panel { display: flex; flex-direction: column; gap: 18px; }
+  main#app { padding: 14px 20px 48px 20px; max-width: 1400px; margin: 0 auto; overflow-x: clip; }
+  .tab-panel { display: flex; flex-direction: column; gap: 12px; }
   .tab-panel[hidden] { display: none; }
+
+  .titleblock-acoes { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+  button.btn-sessao {
+    font: 600 11.5px/1 "Archivo", sans-serif; padding: 6px 12px; border-radius: 999px; cursor: pointer;
+    background: rgba(255,255,255,.10); color: #eef3fa; border: 1px solid rgba(255,255,255,.28);
+  }
+  button.btn-sessao:hover { background: rgba(255,255,255,.18); border-color: var(--accent); }
+  button.btn-sessao.ativo { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  .modo-banner {
+    border-radius: var(--radius); padding: 10px 14px; font-size: 12.5px; font-weight: 600;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: var(--warn-soft); color: var(--warn); border: 1px solid var(--warn);
+  }
+  .modo-banner.local { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
+  .modo-banner .modo-acao { margin-left: auto; }
+
+  .login-form { display: flex; flex-direction: column; gap: 12px; }
+  .login-form label { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+  .login-form input {
+    font: inherit; padding: 9px 10px; border: 1px solid var(--border); border-radius: 7px;
+    background: var(--surface); color: var(--ink);
+  }
+  .login-erro { color: var(--danger); font-size: 12.5px; font-weight: 600; }
+  .login-nota { font-size: 11.5px; color: var(--muted); line-height: 1.5; }
 
   .readonly-banner {
     background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger);
@@ -156,21 +182,21 @@
   .cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 12px; align-items: stretch; }
   .card {
     background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--border);
-    border-radius: var(--radius); padding: 14px 16px; box-shadow: var(--shadow);
+    border-radius: var(--radius); padding: 11px 14px; box-shadow: var(--shadow);
     display: flex; flex-direction: column; min-width: 0;
     container-type: inline-size;
   }
 
   .card .card-label {
     font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em;
-    font-weight: 600; line-height: 1.35; min-height: 2.7em; margin-bottom: 8px;
+    font-weight: 600; line-height: 1.3; min-height: 2.6em; margin-bottom: 5px;
   }
   .card .card-value {
     font-size: 21px; font-weight: 700; font-family: "IBM Plex Mono", monospace;
     line-height: 1.2; overflow-wrap: break-word;
   }
   .card .progress-bar { margin-top: 8px; }
-  .card .card-sub { font-size: 12px; color: var(--muted); margin-top: auto; padding-top: 8px; line-height: 1.4; }
+  .card .card-sub { font-size: 11.5px; color: var(--muted); margin-top: auto; padding-top: 6px; line-height: 1.35; }
 
   /* O valor acompanha a largura da própria caixa: com muitas colunas na mesma
      linha, o número diminui em vez de quebrar no meio. Precisa vir depois da
@@ -183,8 +209,8 @@
   .card.warn { border-top-color: var(--danger); }
 
   /* ---------- Panels ---------- */
-  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
-  .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; gap: 10px; flex-wrap: wrap; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 13px 15px; }
+  .panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 9px; gap: 10px; flex-wrap: wrap; }
   .panel-header h2 { margin: 0; font-size: 15px; }
   .panel-header .muted { font-size: 12px; }
 
@@ -216,8 +242,14 @@
   .info-pop.right { left: auto; right: 0; }
   .info-pop.right::before { left: auto; right: 12px; }
 
+  /* Saldo em conta: filtro e valor lado a lado, para o painel não ficar alto. */
+  .saldo-conta-linha { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+  .saldo-conta-linha .saldoContaFiltroSlot { flex: 1; min-width: 190px; }
+  .saldo-conta-valor { font-size: 24px; font-weight: 700; white-space: nowrap; }
+  @media (max-width: 520px) { .saldo-conta-valor { font-size: 21px; } }
+
   /* ---------- Seletor de quinzenas (pílulas agrupadas por mês) ---------- */
-  .qz-picker { display: flex; flex-direction: column; gap: 12px; margin: 4px 0 16px; }
+  .qz-picker { display: flex; flex-direction: column; gap: 9px; margin: 2px 0 10px; }
   .qz-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .qz-count { margin-left: auto; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
   .qz-groups { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -226,7 +258,7 @@
     border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
   }
   button.qz-month, button.qz-chip {
-    border: none; font-family: inherit; cursor: pointer; padding: 7px 10px;
+    border: none; font-family: inherit; cursor: pointer; padding: 5px 9px;
     background: transparent; color: var(--muted); transition: background .12s, color .12s;
   }
   button.qz-month {
@@ -290,6 +322,8 @@
   .extrato-table tfoot td { font-weight: 700; border-top: 2px solid var(--ink); border-bottom: none; }
   .extrato-total-line { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 10px 12px; background: var(--accent-soft); border-radius: 9px; }
   .extrato-total-line strong { font-size: 20px; font-family: "IBM Plex Mono", monospace; color: var(--accent-ink); }
+  .extrato-total-line.negativo { background: var(--danger-soft); }
+  .extrato-total-line.negativo strong { color: var(--danger); }
   .extrato-empty { color: var(--muted); font-size: 13px; line-height: 1.5; }
   .extrato-table tr.extrato-linha-verba td { background: var(--good-soft); color: var(--good); }
   .extrato-table tfoot tr:last-child td { color: var(--accent-ink); font-size: 14px; }
@@ -394,7 +428,7 @@
   .gantt-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
 
   /* ---------- Dashboard Executivo: curva S ---------- */
-  .scurve-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 18px; }
+  .scurve-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap: 12px; }
   .scurve-card { min-width: 0; }
   .scurve-legend { display: flex; gap: 14px; align-items: center; font-size: 12.5px; color: var(--muted); flex-wrap: wrap; }
   .scurve-key { display: inline-block; width: 16px; height: 3px; margin-right: 6px; vertical-align: 2px; border-radius: 2px; }
@@ -437,6 +471,48 @@
   .painel-select-list { max-height: 420px; overflow-y: auto; }
   .clickable-row { cursor: pointer; }
   .clickable-row:hover { background: var(--accent-soft); }
+  /* ---------- Avanço medido por categoria ---------- */
+  .avanco-td { min-width: 190px; }
+  .avanco-cell { display: flex; flex-direction: column; gap: 4px; }
+  .avanco-topo { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .avanco-pct { font-family: "IBM Plex Mono", monospace; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+  .avanco-tag {
+    font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+  }
+  .avanco-bar { height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; border: 1px solid var(--border); }
+  .avanco-bar > span { display: block; height: 100%; border-radius: 3px; }
+  .avanco-hist { font-size: 10.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .avanco-hist.sem { font-style: italic; opacity: .75; }
+
+  .avanco-cell.concluido .avanco-pct { color: var(--good); }
+  .avanco-cell.concluido .avanco-tag { background: var(--good-soft); color: var(--good); }
+  .avanco-cell.concluido .avanco-bar > span { background: var(--good); }
+  .avanco-cell.andamento .avanco-pct { color: var(--accent-ink); }
+  .avanco-cell.andamento .avanco-tag { background: var(--accent-soft); color: var(--accent-ink); }
+  .avanco-cell.andamento .avanco-bar > span { background: var(--accent); }
+  .avanco-cell.nao-iniciado .avanco-pct { color: var(--muted); }
+  .avanco-cell.nao-iniciado .avanco-tag { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+
+  /* Linha do tempo das medições, dentro do quadro de detalhe */
+  .avanco-timeline { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .avanco-timeline.vazio { font-size: 12px; color: var(--muted); font-style: italic; }
+  .avanco-timeline-titulo { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 8px; }
+  .avanco-passo {
+    display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; font-size: 12px;
+    padding: 5px 0 5px 14px; position: relative; border-left: 2px solid var(--accent); color: var(--ink-soft);
+  }
+  .avanco-passo::before {
+    content: ''; position: absolute; left: -5px; top: 11px; width: 8px; height: 8px;
+    border-radius: 50%; background: var(--accent); border: 2px solid var(--accent-soft);
+  }
+  .avanco-passo.final { border-left-color: var(--good); }
+  .avanco-passo.final::before { background: var(--good); border-color: var(--good-soft); }
+  .avanco-passo:last-child { padding-bottom: 0; }
+  .avanco-passo-data { font-family: "IBM Plex Mono", monospace; font-size: 11.5px; color: var(--muted); }
+  .avanco-passo-salto { font-variant-numeric: tabular-nums; }
+  .avanco-passo-delta { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--good); }
+
   .painel-select-body.sem-detalhe { grid-template-columns: 1fr; }
   .painel-select-body.sem-detalhe .painel-select-list { max-height: 480px; }
   .clickable-row.row-selected { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
@@ -576,11 +652,11 @@
       <div class="titleblock-name" id="obraNome">Obra</div>
       <div class="titleblock-meta" id="obraMeta"></div>
     </div>
-    <span class="status-chip saved" id="statusChip"><span class="dot"></span><span id="statusChipText">Sincronizado</span></span>
+    <div class="titleblock-acoes"><span class="status-chip saved" id="statusChip"><span class="dot"></span><span id="statusChipText">Sincronizado</span></span><button type="button" class="btn-sessao" id="btnSessao">Entrar para lançar</button></div>
   </div>
   <nav class="tabs" id="tabs">
     <button class="tab-btn active" data-tab="painel">Dashboard Executivo</button>
-    <button class="tab-btn" data-tab="dashboard">Contas a Pagar (Cliente)</button>
+    <button class="tab-btn" data-tab="dashboard">Demonstrativo Financeiro</button>
     <button class="tab-btn" data-tab="avancos">Lançar Avanços</button>
     <button class="tab-btn" data-tab="cronograma">Cronograma de Obra</button>
     <button class="tab-btn" data-tab="detalhamento">Detalhamento FC</button>
@@ -592,9 +668,7 @@
 </header>
 
 <main id="app">
-  <div class="readonly-banner" id="readonlyBanner" hidden="">
-    Modo somente leitura — filtros, seleções e navegação funcionam normalmente, mas não é possível inserir ou editar lançamentos aqui.
-  </div>
+  <div class="modo-banner" id="modoBanner" hidden=""></div>
   <section id="tab-painel" class="tab-panel"></section>
   <section id="tab-dashboard" class="tab-panel" hidden=""></section>
   <section id="tab-avancos" class="tab-panel" hidden=""></section>
@@ -618,13 +692,13 @@
   </div>
 </template>
 
-<script id="state-data" type="application/json">{"meta":{"obra":"Casa Newton — Gran Park Toscana","endereco":"Rua Sorano nº 43 - Gran Park Toscana - Vespasiano","proprietario":"Newton Leandro / Helena Marina","incorporador":"Rander Bruno","responsavelTecnico":"Emanuel Alef de Oliveira","areaM2":349,"dataInicio":"2026-05-11","previsaoTermino":"2027-08-14"},"parametros":{"recursoProprioPlanejado":571143.99,"financiamentoObraCaixa":1116000,"financiamentoLoteCaixa":384000,"creditoCaixaTotalPCI":1500000,"contratoTotalEmpreiteiro":1081900,"taxaAdministracaoPercent":0.1,"taxaJurosAnualCEF":0.134,"custoLoteExecutado":356168,"saldoRecursoDisponivelManual":null},"categorias":[{"id":"cat-01-servicos-preliminares-e-","numero":1,"nome":"Serviços Preliminares e Gerais (água luz e projetos aprovados)","valorOrcado":31266.91,"percAvancoManual":null,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-01-servicos-preliminares-e--item-1","descricao":"PLANITALTIMETRICO","unidade":"verba","valorOrcado":1700,"valorRealizado":1500,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-2","descricao":"SONDAGEM","unidade":"verba","valorOrcado":2000,"valorRealizado":1875,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-3","descricao":"ARTQUITETONICO","unidade":"serv.","valorOrcado":13200,"valorRealizado":11900,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-4","descricao":"ESTRUTURAL","unidade":"serv.","valorOrcado":11200,"valorRealizado":9870,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-5","descricao":"ELETRICO","unidade":"serv.","valorOrcado":4200,"valorRealizado":3948,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-6","descricao":"HIDRAULICO","unidade":"serv.","valorOrcado":4200,"valorRealizado":3948,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-7","descricao":"PREFEITURA 1","unidade":"serv.","valorOrcado":1000,"valorRealizado":1371.6,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-8","descricao":"TX. AP. PROJETO COND.","unidade":"serv.","valorOrcado":0,"valorRealizado":250,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-9","descricao":"LICENCIAMENTO","unidade":"serv.","valorOrcado":1000,"valorRealizado":0,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-10","descricao":"ART DE EXECUÇÃO","unidade":"serv.","valorOrcado":0,"valorRealizado":103.03,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-11","descricao":"ART PROJETOS","unidade":"serv.","valorOrcado":500,"valorRealizado":0,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-12","descricao":"REGISTRO DE FINANCIAMENTO","unidade":"serv.","valorOrcado":3928,"valorRealizado":1661.47,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-13","descricao":"REGISTRO DO LOTE","unidade":"serv.","valorOrcado":8000,"valorRealizado":14008.01,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-14","descricao":"ITBI DO LOTE","unidade":"serv.","valorOrcado":14400,"valorRealizado":9625.76,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":true,"cronogramaPrevisto":{"inicio":"2026-05-11","termino":"2026-06-05","duracaoDias":26},"verbaCaixa":32252.4,"liberadoCaixaManual":null},{"id":"cat-02-infraestrutura-estacas-b","numero":2,"nome":"Infraestrutura (estacas,brocas,baldrames,sapatas)","valorOrcado":74001.96,"percAvancoManual":1,"dataUltimoAvanco":"2026-06-25","observacao":"","itens":[{"id":"cat-02-infraestrutura-estacas-b-item-1","descricao":"VIGAS BALDRAME","unidade":"UNID","valorOrcado":0,"valorRealizado":9629,"dataPagamento":"2026-06-01T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-02-infraestrutura-estacas-b-item-2","descricao":"FORMAS DA VIGA BALDRAMA","unidade":"UNID","valorOrcado":0,"valorRealizado":6050,"dataPagamento":"2026-06-01T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-02-infraestrutura-estacas-b-item-3","descricao":"CONCRETO BLOCOS ","unidade":"UNID","valorOrcado":0,"valorRealizado":13800,"dataPagamento":"2026-06-01T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-02-infraestrutura-estacas-b-item-4","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":74001.96,"valorRealizado":75789.87,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-06-08","termino":"2026-08-07","duracaoDias":61},"verbaCaixa":76334.4,"liberadoCaixaManual":null},{"id":"cat-03-supra-estrutura-vigas-pi","numero":3,"nome":"Supra estrutura(vigas,pilares,cintas,escada)","valorOrcado":186411.37,"percAvancoManual":0.5,"dataUltimoAvanco":"2026-08-25","observacao":"","itens":[{"id":"cat-03-supra-estrutura-vigas-pi-item-1","descricao":"CONCRETO PISO E BALDRAME PISCINA","unidade":"UNID","valorOrcado":0,"valorRealizado":8300,"dataPagamento":"2026-07-13T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-2","descricao":"LAJE PARA O PRIMEIRO PAVIMENTO","unidade":"UNID","valorOrcado":0,"valorRealizado":12803.31,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-3","descricao":"PILARES E VIGAS 1º PAVIMENTO EM 1/2","unidade":"UNID","valorOrcado":0,"valorRealizado":8500,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-4","descricao":"PILARES E VIGAS 1º PAVIMENTO EM 2/2","unidade":"UNID","valorOrcado":0,"valorRealizado":8500,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-5","descricao":"MADEIRA PARA FORMAS EM 1/2","unidade":"UNID","valorOrcado":0,"valorRealizado":3060,"dataPagamento":"2026-08-06","formaPagamento":"CARTÃO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-6","descricao":"MADEIRA PARA FORMAS EM 2/2","unidade":"UNID","valorOrcado":0,"valorRealizado":3060,"dataPagamento":"2026-09-03","formaPagamento":"CARTÃO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-7","descricao":"DEPOSITO EM GERAL","unidade":"UNID","valorOrcado":0,"valorRealizado":13988.15,"dataPagamento":"2026-09-04","formaPagamento":"CARTÃO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-8","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":186411.37,"valorRealizado":128199.91,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"item-d1d954d2","descricao":"Concreto para concretagem da primeira laje (parcela 1/3)","unidade":"UNID","valorOrcado":0,"valorRealizado":6600,"dataPagamento":"2026-09-03","formaPagamento":"CARTÃO"},{"id":"item-53ecc8a5","descricao":"Concreto para concretagem da primeira laje (parcela 2/3)","unidade":"UNID","valorOrcado":0,"valorRealizado":6600,"dataPagamento":"2026-10-05","formaPagamento":"CARTÃO"},{"id":"item-a2e83c84","descricao":"Concreto para concretagem da primeira laje (parcela 3/3)","unidade":"UNID","valorOrcado":0,"valorRealizado":6600,"dataPagamento":"2026-11-05","formaPagamento":"CARTÃO"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-08-10","termino":"2026-10-16","duracaoDias":68},"verbaCaixa":192286.8,"liberadoCaixaManual":null},{"id":"cat-04-paredes-e-paineis","numero":4,"nome":"Paredes e Painéis","valorOrcado":74001.96,"percAvancoManual":0.5,"dataUltimoAvanco":"2026-07-25","observacao":"","itens":[{"id":"cat-04-paredes-e-paineis-item-1","descricao":"TIJOLO,BLOCO,AREIA,BRITA,VERGALHÃO","unidade":"UNID","valorOrcado":0,"valorRealizado":8500,"dataPagamento":"2026-06-12T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-04-paredes-e-paineis-item-2","descricao":"TIJOLO,BLOCO,AREIA,BRITA,VERGALHÃO","unidade":"UNID","valorOrcado":0,"valorRealizado":11000,"dataPagamento":"2026-07-13T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-04-paredes-e-paineis-item-3","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":74001.96,"valorRealizado":74001.96,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-05","termino":"2026-11-06","duracaoDias":33},"verbaCaixa":76334.4,"liberadoCaixaManual":null},{"id":"cat-05-esquadrias","numero":5,"nome":"Esquadrias","valorOrcado":70648.07,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-05-esquadrias-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":70648.07,"valorRealizado":70648.07,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-11-02","termino":"2026-12-11","duracaoDias":40},"verbaCaixa":72874.8,"liberadoCaixaManual":null},{"id":"cat-06-vidros-e-plasticos","numero":6,"nome":"Vidros e Plásticos","valorOrcado":25641.03,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-06-vidros-e-plasticos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":25641.03,"valorRealizado":25641.03,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-12-07","termino":"2027-01-08","duracaoDias":33},"verbaCaixa":26449.2,"liberadoCaixaManual":null},{"id":"cat-07-coberturas-estrutura-e-t","numero":7,"nome":"Coberturas ( estrutura e telhas)","valorOrcado":39056.59,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-07-coberturas-estrutura-e-t-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":39056.59,"valorRealizado":39056.59,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-19","termino":"2026-12-04","duracaoDias":47},"verbaCaixa":40287.6,"liberadoCaixaManual":null},{"id":"cat-08-impermeabilizacoes","numero":8,"nome":"Impermeabilizações","valorOrcado":29752.25,"percAvancoManual":0.4,"dataUltimoAvanco":"2026-08-25","observacao":"","itens":[{"id":"cat-08-impermeabilizacoes-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":29752.25,"valorRealizado":29752.25,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-12-07","termino":"2027-01-16","duracaoDias":41},"verbaCaixa":30690,"liberadoCaixaManual":null},{"id":"cat-09-revestimentos-internos","numero":9,"nome":"Revestimentos Internos","valorOrcado":78113.18,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-09-revestimentos-internos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":78113.18,"valorRealizado":78113.18,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-01-11","termino":"2027-03-12","duracaoDias":61},"verbaCaixa":80575.2,"liberadoCaixaManual":null},{"id":"cat-10-forros","numero":10,"nome":"Forros","valorOrcado":18933.25,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-10-forros-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":18933.25,"valorRealizado":18933.25,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-02-15","termino":"2027-03-26","duracaoDias":40},"verbaCaixa":19530,"liberadoCaixaManual":null},{"id":"cat-11-revestimentos-externos","numero":11,"nome":"Revestimentos Externos","valorOrcado":44682.47,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-11-revestimentos-externos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":44682.47,"valorRealizado":44682.47,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-02-22","termino":"2027-04-09","duracaoDias":47},"verbaCaixa":46090.8,"liberadoCaixaManual":null},{"id":"cat-12-pintura","numero":12,"nome":"Pintura","valorOrcado":46088.94,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-12-pintura-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":46088.94,"valorRealizado":46088.94,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-03-22","termino":"2027-05-14","duracaoDias":54},"verbaCaixa":47541.6,"liberadoCaixaManual":null},{"id":"cat-13-pisos","numero":13,"nome":"Pisos","valorOrcado":100400.32,"percAvancoManual":0.1001,"dataUltimoAvanco":"2026-08-25","observacao":"","itens":[{"id":"cat-13-pisos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":100400.32,"valorRealizado":100400.32,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-03-29","termino":"2027-05-28","duracaoDias":61},"verbaCaixa":103564.8,"liberadoCaixaManual":null},{"id":"cat-14-acabamentos-soleiras-rod","numero":14,"nome":"Acabamentos(soleiras,rodapés,peitoril etc)","valorOrcado":13415.56,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-14-acabamentos-soleiras-rod-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":13415.56,"valorRealizado":13415.56,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-05-12","termino":"2027-06-13","duracaoDias":33},"verbaCaixa":13838.4,"liberadoCaixaManual":null},{"id":"cat-15-inst-eletricas-e-telefon","numero":15,"nome":"Inst. Elétricas e Telefônicas","valorOrcado":41653.15,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-15-inst-eletricas-e-telefon-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":41653.15,"valorRealizado":41653.15,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-26","termino":"2027-02-05","duracaoDias":103},"verbaCaixa":42966,"liberadoCaixaManual":null},{"id":"cat-16-instalacoes-hidraulicas","numero":16,"nome":"Instalações Hidráulicas","valorOrcado":41653.15,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-16-instalacoes-hidraulicas-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":41653.15,"valorRealizado":41653.15,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-26","termino":"2027-01-29","duracaoDias":96},"verbaCaixa":42966,"liberadoCaixaManual":null},{"id":"cat-17-inst-esgoto-e-aguas-pluv","numero":17,"nome":"Inst. Esgoto e Águas Pluviais","valorOrcado":44682.47,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-17-inst-esgoto-e-aguas-pluv-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":44682.47,"valorRealizado":44682.47,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-26","termino":"2027-01-09","duracaoDias":76},"verbaCaixa":46090.8,"liberadoCaixaManual":null},{"id":"cat-18-loucas-e-metais","numero":18,"nome":"Louças e Metais","valorOrcado":46088.94,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-18-loucas-e-metais-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":46088.94,"valorRealizado":46088.94,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-05-26","termino":"2027-06-27","duracaoDias":33},"verbaCaixa":47541.6,"liberadoCaixaManual":null},{"id":"cat-19-complementos-limpeza-fin","numero":19,"nome":"Complementos( limpeza final e calafete)","valorOrcado":10061.67,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-19-complementos-limpeza-fin-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":10061.67,"valorRealizado":10061.67,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-06-28","termino":"2027-07-23","duracaoDias":26},"verbaCaixa":10378.8,"liberadoCaixaManual":null},{"id":"cat-20-outros-servicos","numero":20,"nome":"Outros Serviços","valorOrcado":65130.38,"percAvancoManual":0.83,"dataUltimoAvanco":"2026-06-25","observacao":"","itens":[{"id":"cat-20-outros-servicos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":65130.38,"valorRealizado":65130.38,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-07-21","termino":"2027-08-14","duracaoDias":25},"verbaCaixa":67183.2,"liberadoCaixaManual":null}],"liberacaoPCI":[{"etapa":1,"descricao":"Aquisição do lote","percLimiteAcumulado":0,"valor":384000,"mesProgramado":1,"liberadoManual":null},{"etapa":2,"descricao":"Fundação","percLimiteAcumulado":0.2,"valor":153000,"mesProgramado":3,"liberadoManual":null},{"etapa":3,"descricao":"Estrutura","percLimiteAcumulado":0.4,"valor":244000,"mesProgramado":6,"liberadoManual":null},{"etapa":4,"descricao":"Alvenaria","percLimiteAcumulado":0.6,"valor":244000,"mesProgramado":9,"liberadoManual":null},{"etapa":5,"descricao":"Cobertura + Instalações","percLimiteAcumulado":0.8,"valor":254000,"mesProgramado":12,"liberadoManual":null},{"etapa":6,"descricao":"Acabamento Final","percLimiteAcumulado":1,"valor":221000,"mesProgramado":15,"liberadoManual":null}],"parcelas":[{"id":"parcela-1","label":"MAIO/1º PARCELA","totalEmpreiteiroPix":31000,"totalAdmPix":0,"gastoCartao":519.51,"totalATransferir":31000,"parcelaEvolucaoCaixa":0,"custoTotal":31519.51,"vencimento":"2026-05-11","vencPlanejado":"2026-05-10","status":"REALIZADO","obs":"Haverá um custo de aproximatamento de R$35.923,31 no cartão para o mês de agosto  referente a compra de madeiras para formas as ferragens de vigas e pilares do 1º pavimento e laje do 1º pavimento","overrides":{},"dataGeracaoCusto":"2026-05-10"},{"id":"parcela-2","label":"MAIO/2º PARCELA","totalEmpreiteiroPix":27500.00206,"totalAdmPix":6000,"gastoCartao":0,"totalATransferir":33500.00206,"parcelaEvolucaoCaixa":0,"custoTotal":33500.00206,"vencimento":"2026-05-26","vencPlanejado":"2026-05-25","status":"REALIZADO","obs":"","overrides":{},"dataGeracaoCusto":"2026-05-25"},{"id":"parcela-3","label":"JUNHO/1º PARCELA","totalEmpreiteiroPix":16857.16062,"totalAdmPix":5414.05,"gastoCartao":29479,"totalATransferir":22271.21062,"parcelaEvolucaoCaixa":519.51,"custoTotal":51750.21062,"vencimento":"2026-06-11","vencPlanejado":"2026-06-10","status":"REALIZADO","obs":"","overrides":{"custoTotal":true},"dataGeracaoCusto":"2026-06-10"},{"id":"parcela-4","label":"JUNHO/2º PARCELA","totalEmpreiteiroPix":44000,"totalAdmPix":6500,"gastoCartao":0,"totalATransferir":50500,"parcelaEvolucaoCaixa":0,"custoTotal":50500,"vencimento":"2026-06-27","vencPlanejado":"2026-06-25","status":"REALIZADO","obs":"","overrides":{},"dataGeracaoCusto":"2026-06-25"},{"id":"parcela-5","label":"JULHO/1º PARCELA","totalEmpreiteiroPix":42000.0019,"totalAdmPix":5200,"gastoCartao":8500,"totalATransferir":47200.0019,"parcelaEvolucaoCaixa":2226.76,"custoTotal":57926.7619,"vencimento":"2026-07-10","vencPlanejado":"2026-07-10","status":"REALIZADO","obs":"","overrides":{},"dataGeracaoCusto":"2026-07-10"},{"id":"parcela-6","label":"JULHO/2º PARCELA","totalEmpreiteiroPix":58033.116,"totalAdmPix":5803.3116,"gastoCartao":0,"totalATransferir":63836.4276,"parcelaEvolucaoCaixa":0,"custoTotal":63836.4276,"vencimento":"2026-07-25","vencPlanejado":"2026-07-25","status":"REALIZADO","obs":"Verifica-se um avanço técnico acumulado em caixa (reserva técnica) no valor de R$ 201.154,64; contudo, será objeto de medição apenas o montante de R$ 58.033,12, tendo em vista que a execução em curso está sendo custeada com recursos próprios do empreiteiro restando um saldo em conta sobre recurso pós essa medição em R$ 137.318,21","overrides":{},"dataGeracaoCusto":"2026-07-25"},{"id":"parcela-7","label":"AGOSTO/1º PARCELA","totalEmpreiteiroPix":34493.146,"totalAdmPix":7815.6456,"gastoCartao":43663.31,"totalATransferir":42308.7916,"parcelaEvolucaoCaixa":8807.23,"custoTotal":85972.1016,"vencimento":"2026-08-10","vencPlanejado":"2026-08-10","status":"REALIZADO","obs":"Em agosto, observou-se uma intensificação das saídas via Caixa CEF, compatível com o avanço físico da obra nesta fase — etapa que naturalmente demanda maior desembolso, como aquisição concentrada de materiais e mão de obra vinculada às etapas de execução programadas. Esse comportamento é esperado e recorrente em obras financiadas por liberações escalonadas, nas quais o saldo acumulado funciona como reserva de capital de giro, absorvendo naturalmente as oscilações entre entradas e saídas de cada etapa.\n\nO saldo acumulado atual, de R$ 63.299,05, confirma que a obra permanece com posição de caixa positiva e dentro da normalidade operacional esperada para este estágio da construção, evidenciando que o planejamento financeiro adotado nos meses anteriores cumpriu sua função de sustentar as etapas de maior desembolso sem comprometer a continuidade da obra.","overrides":{"custoTotal":true},"dataGeracaoCusto":"2026-08-10"},{"id":"parcela-8","label":"AGOSTO/2º PARCELA","totalEmpreiteiroPix":54709,"totalAdmPix":5833.1,"gastoCartao":0,"totalATransferir":60542.09617,"parcelaEvolucaoCaixa":0,"custoTotal":60542.09617,"vencimento":"2026-08-26","vencPlanejado":"2026-08-25","status":"REALIZADO","obs":"","overrides":{},"dataGeracaoCusto":"2026-08-25"},{"id":"parcela-9","label":"SETEMBRO/1º PARCELA","totalEmpreiteiroPix":24917.08,"totalAdmPix":2491.71,"gastoCartao":0,"totalATransferir":29963.59805,"parcelaEvolucaoCaixa":7429.92,"custoTotal":55511.74805,"vencimento":null,"vencPlanejado":"2026-09-10","status":"PLANEJADO","obs":"Avanço da quinzena (valor gerado: R$ -100400.32) — Pisos: 100.0% → 0.0%","overrides":{"custoTotal":true},"dataGeracaoCusto":"2026-09-10"},{"id":"parcela-10","label":"SETEMBRO/2º PARCELA","totalEmpreiteiroPix":18641.137,"totalAdmPix":1864.1137,"gastoCartao":0,"totalATransferir":20505.2507,"parcelaEvolucaoCaixa":0,"custoTotal":20505.2507,"vencimento":null,"vencPlanejado":"2026-09-25","status":"PLANEJADO","obs":"","overrides":{},"dataGeracaoCusto":"2026-09-25"},{"id":"parcela-ef46e960","label":"Outubro/2026 — 1ª Parcela (cartão)","totalEmpreiteiroPix":0,"totalAdmPix":0,"gastoCartao":6600,"totalATransferir":0,"parcelaEvolucaoCaixa":0,"custoTotal":6600,"dataGeracaoCusto":"2026-10-03","vencimento":null,"vencPlanejado":"2026-10-03","status":"PLANEJADO","obs":"","overrides":{}},{"id":"parcela-6c4399d0","label":"Novembro/2026 — 1ª Parcela (cartão)","totalEmpreiteiroPix":0,"totalAdmPix":0,"gastoCartao":6600,"totalATransferir":0,"parcelaEvolucaoCaixa":0,"custoTotal":6600,"dataGeracaoCusto":"2026-11-03","vencimento":null,"vencPlanejado":"2026-11-03","status":"PLANEJADO","obs":"","overrides":{}}],"historicoAvancos":[{"id":"avanco-6f1ae83c","categoriaId":"cat-09-revestimentos-internos","categoriaNome":"Revestimentos Internos","percAvancoAnterior":0,"percAvancoNovo":0.1,"data":"2026-09-10","status":"PLANEJADO","obs":"","timestamp":"2026-09-01T18:34:21.245Z"},{"id":"avanco-451f1930","categoriaId":"cat-08-impermeabilizacoes","categoriaNome":"Impermeabilizações","percAvancoAnterior":0.4,"percAvancoNovo":0.5,"data":"2026-09-10","status":"PLANEJADO","obs":"","timestamp":"2026-09-01T18:34:21.245Z"},{"id":"avanco-ab681f6c","categoriaId":"cat-07-coberturas-estrutura-e-t","categoriaNome":"Coberturas ( estrutura e telhas)","percAvancoAnterior":0,"percAvancoNovo":0.3,"data":"2026-09-10","status":"PLANEJADO","obs":"","timestamp":"2026-09-01T18:34:21.245Z"},{"id":"avanco-cd887419","categoriaId":"cat-03-supra-estrutura-vigas-pi","categoriaNome":"Supra estrutura(vigas,pilares,cintas,escada)","percAvancoAnterior":0.5,"percAvancoNovo":0.65,"data":"2026-09-10","status":"PLANEJADO","obs":"","timestamp":"2026-09-01T18:34:21.245Z"},{"id":"avanco-inicial-2-1","categoriaId":"cat-02-infraestrutura-estacas-b","categoriaNome":"Infraestrutura (estacas,brocas,baldrames,sapatas)","percAvancoAnterior":null,"percAvancoNovo":0.85,"data":"2026-06-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-06-25T00:00:00.000Z"},{"id":"avanco-inicial-2-2","categoriaId":"cat-02-infraestrutura-estacas-b","categoriaNome":"Infraestrutura (estacas,brocas,baldrames,sapatas)","percAvancoAnterior":0.85,"percAvancoNovo":1,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-3-1","categoriaId":"cat-03-supra-estrutura-vigas-pi","categoriaNome":"Supra estrutura(vigas,pilares,cintas,escada)","percAvancoAnterior":null,"percAvancoNovo":0.3995,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-3-2","categoriaId":"cat-03-supra-estrutura-vigas-pi","categoriaNome":"Supra estrutura(vigas,pilares,cintas,escada)","percAvancoAnterior":0.3995,"percAvancoNovo":0.5,"data":"2026-08-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-08-25T00:00:00.000Z"},{"id":"avanco-inicial-4-1","categoriaId":"cat-04-paredes-e-paineis","categoriaNome":"Paredes e Painéis","percAvancoAnterior":null,"percAvancoNovo":0.5,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-8-1","categoriaId":"cat-08-impermeabilizacoes","categoriaNome":"Impermeabilizações","percAvancoAnterior":null,"percAvancoNovo":0.2,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-8-2","categoriaId":"cat-08-impermeabilizacoes","categoriaNome":"Impermeabilizações","percAvancoAnterior":0.2,"percAvancoNovo":0.4,"data":"2026-08-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-08-25T00:00:00.000Z"},{"id":"avanco-inicial-13-1","categoriaId":"cat-13-pisos","categoriaNome":"Pisos","percAvancoAnterior":null,"percAvancoNovo":0.1001,"data":"2026-08-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-08-25T00:00:00.000Z"},{"id":"avanco-inicial-20-1","categoriaId":"cat-20-outros-servicos","categoriaNome":"Outros Serviços","percAvancoAnterior":null,"percAvancoNovo":0.83,"data":"2026-06-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-06-25T00:00:00.000Z"}],"fluxoCaixaAjustes":[],"updatedAt":"2026-09-02T03:08:38.754Z","liberacoesCaixa":[{"id":"liberacao-1","data":"2026-06-25","valor":177000.6,"obs":"Medição 01","status":"REALIZADO"},{"id":"liberacao-2","data":"2026-07-01","valor":132580.8,"obs":"Medição 02","status":"REALIZADO"},{"id":"liberacao-3","data":"2026-08-24","valor":35823.6,"obs":"Medição 03","status":"REALIZADO"},{"id":"liberacao-4","data":"2026-09-20","valor":91071.18,"obs":"Medição 04","status":"PLANEJADO"}],"consumosRecursoProprio":[{"id":"consumo-1","descricao":"Maio/1º parcela (Total Transferido)","valor":31000,"data":"2026-05-11"},{"id":"consumo-2","descricao":"Maio/2º parcela (Total Transferido)","valor":33500,"data":"2026-05-26"},{"id":"consumo-3","descricao":"Junho/1º parcela (Total Transferido)","valor":22271.21,"data":"2026-06-11"},{"id":"consumo-4","descricao":"Entrada do lote","valor":144000,"data":null},{"id":"consumo-5","descricao":"Serviços preliminares (pago direto)","valor":60060.87,"data":null}]}</script>
+<script id="state-data" type="application/json">{"meta":{"obra":"Casa Newton — Gran Park Toscana","endereco":"Rua Sorano nº 43 - Gran Park Toscana - Vespasiano","proprietario":"Newton Leandro / Helena Marina","incorporador":"Rander Bruno","responsavelTecnico":"Emanuel Alef de Oliveira","areaM2":349,"dataInicio":"2026-05-11","previsaoTermino":"2027-08-14"},"parametros":{"recursoProprioPlanejado":571143.99,"financiamentoObraCaixa":1116000,"financiamentoLoteCaixa":384000,"creditoCaixaTotalPCI":1500000,"contratoTotalEmpreiteiro":1081900,"taxaAdministracaoPercent":0.1,"taxaJurosAnualCEF":0.134,"vgv":2950000,"corretagemPercent":0.06,"irPercent":0.15,"custoLoteExecutado":356168,"saldoRecursoDisponivelManual":null},"categorias":[{"id":"cat-01-servicos-preliminares-e-","numero":1,"nome":"Serviços Preliminares e Gerais (água luz e projetos aprovados)","valorOrcado":31266.91,"percAvancoManual":null,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-01-servicos-preliminares-e--item-1","descricao":"PLANITALTIMETRICO","unidade":"verba","valorOrcado":1700,"valorRealizado":1500,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-2","descricao":"SONDAGEM","unidade":"verba","valorOrcado":2000,"valorRealizado":1875,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-3","descricao":"ARTQUITETONICO","unidade":"serv.","valorOrcado":13200,"valorRealizado":11900,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-4","descricao":"ESTRUTURAL","unidade":"serv.","valorOrcado":11200,"valorRealizado":9870,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-5","descricao":"ELETRICO","unidade":"serv.","valorOrcado":4200,"valorRealizado":3948,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-6","descricao":"HIDRAULICO","unidade":"serv.","valorOrcado":4200,"valorRealizado":3948,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-7","descricao":"PREFEITURA 1","unidade":"serv.","valorOrcado":1000,"valorRealizado":1371.6,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-8","descricao":"TX. AP. PROJETO COND.","unidade":"serv.","valorOrcado":0,"valorRealizado":250,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-9","descricao":"LICENCIAMENTO","unidade":"serv.","valorOrcado":1000,"valorRealizado":0,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-10","descricao":"ART DE EXECUÇÃO","unidade":"serv.","valorOrcado":0,"valorRealizado":103.03,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-11","descricao":"ART PROJETOS","unidade":"serv.","valorOrcado":500,"valorRealizado":0,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-12","descricao":"REGISTRO DE FINANCIAMENTO","unidade":"serv.","valorOrcado":3928,"valorRealizado":1661.47,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-13","descricao":"REGISTRO DO LOTE","unidade":"serv.","valorOrcado":8000,"valorRealizado":14008.01,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-14","descricao":"ITBI DO LOTE","unidade":"serv.","valorOrcado":14400,"valorRealizado":9625.76,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":true,"cronogramaPrevisto":{"inicio":"2026-05-11","termino":"2026-06-05","duracaoDias":26},"verbaCaixa":32252.4,"liberadoCaixaManual":null},{"id":"cat-02-infraestrutura-estacas-b","numero":2,"nome":"Infraestrutura (estacas,brocas,baldrames,sapatas)","valorOrcado":74001.96,"percAvancoManual":1,"dataUltimoAvanco":"2026-06-25","observacao":"","itens":[{"id":"cat-02-infraestrutura-estacas-b-item-1","descricao":"VIGAS BALDRAME","unidade":"UNID","valorOrcado":0,"valorRealizado":9629,"dataPagamento":"2026-06-01T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-02-infraestrutura-estacas-b-item-2","descricao":"FORMAS DA VIGA BALDRAMA","unidade":"UNID","valorOrcado":0,"valorRealizado":6050,"dataPagamento":"2026-06-01T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-02-infraestrutura-estacas-b-item-3","descricao":"CONCRETO BLOCOS ","unidade":"UNID","valorOrcado":0,"valorRealizado":13800,"dataPagamento":"2026-06-01T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-02-infraestrutura-estacas-b-item-4","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":74001.96,"valorRealizado":75789.87,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-06-08","termino":"2026-08-07","duracaoDias":61},"verbaCaixa":76334.4,"liberadoCaixaManual":null},{"id":"cat-03-supra-estrutura-vigas-pi","numero":3,"nome":"Supra estrutura(vigas,pilares,cintas,escada)","valorOrcado":186411.37,"percAvancoManual":0.5,"dataUltimoAvanco":"2026-08-25","observacao":"","itens":[{"id":"cat-03-supra-estrutura-vigas-pi-item-1","descricao":"CONCRETO PISO E BALDRAME PISCINA","unidade":"UNID","valorOrcado":0,"valorRealizado":8300,"dataPagamento":"2026-07-13T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-2","descricao":"LAJE PARA O PRIMEIRO PAVIMENTO","unidade":"UNID","valorOrcado":0,"valorRealizado":12803.31,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-3","descricao":"PILARES E VIGAS 1º PAVIMENTO EM 1/2","unidade":"UNID","valorOrcado":0,"valorRealizado":8500,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-4","descricao":"PILARES E VIGAS 1º PAVIMENTO EM 2/2","unidade":"UNID","valorOrcado":0,"valorRealizado":8500,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-5","descricao":"MADEIRA PARA FORMAS EM 1/2","unidade":"UNID","valorOrcado":0,"valorRealizado":3060,"dataPagamento":"2026-08-06","formaPagamento":"CARTÃO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-6","descricao":"MADEIRA PARA FORMAS EM 2/2","unidade":"UNID","valorOrcado":0,"valorRealizado":3060,"dataPagamento":"2026-09-03","formaPagamento":"CARTÃO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-7","descricao":"DEPOSITO EM GERAL","unidade":"UNID","valorOrcado":0,"valorRealizado":13988.15,"dataPagamento":"2026-09-04","formaPagamento":"CARTÃO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-8","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":186411.37,"valorRealizado":128199.91,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"item-d1d954d2","descricao":"Concreto para concretagem da primeira laje (parcela 1/3)","unidade":"UNID","valorOrcado":0,"valorRealizado":6600,"dataPagamento":"2026-09-03","formaPagamento":"CARTÃO"},{"id":"item-53ecc8a5","descricao":"Concreto para concretagem da primeira laje (parcela 2/3)","unidade":"UNID","valorOrcado":0,"valorRealizado":6600,"dataPagamento":"2026-10-05","formaPagamento":"CARTÃO"},{"id":"item-a2e83c84","descricao":"Concreto para concretagem da primeira laje (parcela 3/3)","unidade":"UNID","valorOrcado":0,"valorRealizado":6600,"dataPagamento":"2026-11-05","formaPagamento":"CARTÃO"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-08-10","termino":"2026-10-16","duracaoDias":68},"verbaCaixa":192286.8,"liberadoCaixaManual":null},{"id":"cat-04-paredes-e-paineis","numero":4,"nome":"Paredes e Painéis","valorOrcado":74001.96,"percAvancoManual":0.5,"dataUltimoAvanco":"2026-07-25","observacao":"","itens":[{"id":"cat-04-paredes-e-paineis-item-1","descricao":"TIJOLO,BLOCO,AREIA,BRITA,VERGALHÃO","unidade":"UNID","valorOrcado":0,"valorRealizado":8500,"dataPagamento":"2026-06-12T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-04-paredes-e-paineis-item-2","descricao":"TIJOLO,BLOCO,AREIA,BRITA,VERGALHÃO","unidade":"UNID","valorOrcado":0,"valorRealizado":11000,"dataPagamento":"2026-07-13T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-04-paredes-e-paineis-item-3","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":74001.96,"valorRealizado":74001.96,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-05","termino":"2026-11-06","duracaoDias":33},"verbaCaixa":76334.4,"liberadoCaixaManual":null},{"id":"cat-05-esquadrias","numero":5,"nome":"Esquadrias","valorOrcado":70648.07,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-05-esquadrias-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":70648.07,"valorRealizado":70648.07,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-11-02","termino":"2026-12-11","duracaoDias":40},"verbaCaixa":72874.8,"liberadoCaixaManual":null},{"id":"cat-06-vidros-e-plasticos","numero":6,"nome":"Vidros e Plásticos","valorOrcado":25641.03,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-06-vidros-e-plasticos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":25641.03,"valorRealizado":25641.03,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-12-07","termino":"2027-01-08","duracaoDias":33},"verbaCaixa":26449.2,"liberadoCaixaManual":null},{"id":"cat-07-coberturas-estrutura-e-t","numero":7,"nome":"Coberturas ( estrutura e telhas)","valorOrcado":39056.59,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-07-coberturas-estrutura-e-t-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":39056.59,"valorRealizado":39056.59,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-19","termino":"2026-12-04","duracaoDias":47},"verbaCaixa":40287.6,"liberadoCaixaManual":null},{"id":"cat-08-impermeabilizacoes","numero":8,"nome":"Impermeabilizações","valorOrcado":29752.25,"percAvancoManual":0.4,"dataUltimoAvanco":"2026-08-25","observacao":"","itens":[{"id":"cat-08-impermeabilizacoes-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":29752.25,"valorRealizado":29752.25,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-12-07","termino":"2027-01-16","duracaoDias":41},"verbaCaixa":30690,"liberadoCaixaManual":null},{"id":"cat-09-revestimentos-internos","numero":9,"nome":"Revestimentos Internos","valorOrcado":78113.18,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-09-revestimentos-internos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":78113.18,"valorRealizado":78113.18,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-01-11","termino":"2027-03-12","duracaoDias":61},"verbaCaixa":80575.2,"liberadoCaixaManual":null},{"id":"cat-10-forros","numero":10,"nome":"Forros","valorOrcado":18933.25,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-10-forros-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":18933.25,"valorRealizado":18933.25,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-02-15","termino":"2027-03-26","duracaoDias":40},"verbaCaixa":19530,"liberadoCaixaManual":null},{"id":"cat-11-revestimentos-externos","numero":11,"nome":"Revestimentos Externos","valorOrcado":44682.47,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-11-revestimentos-externos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":44682.47,"valorRealizado":44682.47,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-02-22","termino":"2027-04-09","duracaoDias":47},"verbaCaixa":46090.8,"liberadoCaixaManual":null},{"id":"cat-12-pintura","numero":12,"nome":"Pintura","valorOrcado":46088.94,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-12-pintura-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":46088.94,"valorRealizado":46088.94,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-03-22","termino":"2027-05-14","duracaoDias":54},"verbaCaixa":47541.6,"liberadoCaixaManual":null},{"id":"cat-13-pisos","numero":13,"nome":"Pisos","valorOrcado":100400.32,"percAvancoManual":0.1001,"dataUltimoAvanco":"2026-08-25","observacao":"","itens":[{"id":"cat-13-pisos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":100400.32,"valorRealizado":100400.32,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-03-29","termino":"2027-05-28","duracaoDias":61},"verbaCaixa":103564.8,"liberadoCaixaManual":null},{"id":"cat-14-acabamentos-soleiras-rod","numero":14,"nome":"Acabamentos(soleiras,rodapés,peitoril etc)","valorOrcado":13415.56,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-14-acabamentos-soleiras-rod-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":13415.56,"valorRealizado":13415.56,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-05-12","termino":"2027-06-13","duracaoDias":33},"verbaCaixa":13838.4,"liberadoCaixaManual":null},{"id":"cat-15-inst-eletricas-e-telefon","numero":15,"nome":"Inst. Elétricas e Telefônicas","valorOrcado":41653.15,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-15-inst-eletricas-e-telefon-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":41653.15,"valorRealizado":41653.15,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-26","termino":"2027-02-05","duracaoDias":103},"verbaCaixa":42966,"liberadoCaixaManual":null},{"id":"cat-16-instalacoes-hidraulicas","numero":16,"nome":"Instalações Hidráulicas","valorOrcado":41653.15,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-16-instalacoes-hidraulicas-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":41653.15,"valorRealizado":41653.15,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-26","termino":"2027-01-29","duracaoDias":96},"verbaCaixa":42966,"liberadoCaixaManual":null},{"id":"cat-17-inst-esgoto-e-aguas-pluv","numero":17,"nome":"Inst. Esgoto e Águas Pluviais","valorOrcado":44682.47,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-17-inst-esgoto-e-aguas-pluv-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":44682.47,"valorRealizado":44682.47,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-26","termino":"2027-01-09","duracaoDias":76},"verbaCaixa":46090.8,"liberadoCaixaManual":null},{"id":"cat-18-loucas-e-metais","numero":18,"nome":"Louças e Metais","valorOrcado":46088.94,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-18-loucas-e-metais-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":46088.94,"valorRealizado":46088.94,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-05-26","termino":"2027-06-27","duracaoDias":33},"verbaCaixa":47541.6,"liberadoCaixaManual":null},{"id":"cat-19-complementos-limpeza-fin","numero":19,"nome":"Complementos( limpeza final e calafete)","valorOrcado":10061.67,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-19-complementos-limpeza-fin-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":10061.67,"valorRealizado":10061.67,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-06-28","termino":"2027-07-23","duracaoDias":26},"verbaCaixa":10378.8,"liberadoCaixaManual":null},{"id":"cat-20-outros-servicos","numero":20,"nome":"Outros Serviços","valorOrcado":65130.38,"percAvancoManual":0.83,"dataUltimoAvanco":"2026-06-25","observacao":"","itens":[{"id":"cat-20-outros-servicos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":65130.38,"valorRealizado":65130.38,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-07-21","termino":"2027-08-14","duracaoDias":25},"verbaCaixa":67183.2,"liberadoCaixaManual":null}],"liberacaoPCI":[{"etapa":1,"descricao":"Aquisição do lote","percLimiteAcumulado":0,"valor":384000,"mesProgramado":1,"liberadoManual":null},{"etapa":2,"descricao":"Fundação","percLimiteAcumulado":0.2,"valor":153000,"mesProgramado":3,"liberadoManual":null},{"etapa":3,"descricao":"Estrutura","percLimiteAcumulado":0.4,"valor":244000,"mesProgramado":6,"liberadoManual":null},{"etapa":4,"descricao":"Alvenaria","percLimiteAcumulado":0.6,"valor":244000,"mesProgramado":9,"liberadoManual":null},{"etapa":5,"descricao":"Cobertura + Instalações","percLimiteAcumulado":0.8,"valor":254000,"mesProgramado":12,"liberadoManual":null},{"etapa":6,"descricao":"Acabamento Final","percLimiteAcumulado":1,"valor":221000,"mesProgramado":15,"liberadoManual":null}],"parcelas":[{"id":"parcela-1","label":"MAIO/1º PARCELA","totalEmpreiteiroPix":31000,"totalAdmPix":0,"gastoCartao":519.51,"totalATransferir":31000,"parcelaEvolucaoCaixa":0,"custoTotal":31519.51,"vencimento":"2026-05-11","vencPlanejado":"2026-05-10","status":"REALIZADO","obs":"Haverá um custo de aproximatamento de R$35.923,31 no cartão para o mês de agosto  referente a compra de madeiras para formas as ferragens de vigas e pilares do 1º pavimento e laje do 1º pavimento","overrides":{},"dataGeracaoCusto":"2026-05-10"},{"id":"parcela-2","label":"MAIO/2º PARCELA","totalEmpreiteiroPix":27500.00206,"totalAdmPix":6000,"gastoCartao":0,"totalATransferir":33500.00206,"parcelaEvolucaoCaixa":0,"custoTotal":33500.00206,"vencimento":"2026-05-26","vencPlanejado":"2026-05-25","status":"REALIZADO","obs":"","overrides":{},"dataGeracaoCusto":"2026-05-25"},{"id":"parcela-3","label":"JUNHO/1º PARCELA","totalEmpreiteiroPix":16857.16062,"totalAdmPix":5414.05,"gastoCartao":29479,"totalATransferir":22271.21062,"parcelaEvolucaoCaixa":519.51,"custoTotal":51750.21062,"vencimento":"2026-06-11","vencPlanejado":"2026-06-10","status":"REALIZADO","obs":"","overrides":{"custoTotal":true},"dataGeracaoCusto":"2026-06-10"},{"id":"parcela-4","label":"JUNHO/2º PARCELA","totalEmpreiteiroPix":44000,"totalAdmPix":6500,"gastoCartao":0,"totalATransferir":50500,"parcelaEvolucaoCaixa":0,"custoTotal":50500,"vencimento":"2026-06-27","vencPlanejado":"2026-06-25","status":"REALIZADO","obs":"","overrides":{},"dataGeracaoCusto":"2026-06-25"},{"id":"parcela-5","label":"JULHO/1º PARCELA","totalEmpreiteiroPix":42000.0019,"totalAdmPix":5200,"gastoCartao":8500,"totalATransferir":47200.0019,"parcelaEvolucaoCaixa":2226.76,"custoTotal":57926.7619,"vencimento":"2026-07-10","vencPlanejado":"2026-07-10","status":"REALIZADO","obs":"","overrides":{},"dataGeracaoCusto":"2026-07-10"},{"id":"parcela-6","label":"JULHO/2º PARCELA","totalEmpreiteiroPix":58033.116,"totalAdmPix":5803.3116,"gastoCartao":0,"totalATransferir":63836.4276,"parcelaEvolucaoCaixa":0,"custoTotal":63836.4276,"vencimento":"2026-07-25","vencPlanejado":"2026-07-25","status":"REALIZADO","obs":"Verifica-se um avanço técnico acumulado em caixa (reserva técnica) no valor de R$ 201.154,64; contudo, será objeto de medição apenas o montante de R$ 58.033,12, tendo em vista que a execução em curso está sendo custeada com recursos próprios do empreiteiro restando um saldo em conta sobre recurso pós essa medição em R$ 137.318,21","overrides":{},"dataGeracaoCusto":"2026-07-25"},{"id":"parcela-7","label":"AGOSTO/1º PARCELA","totalEmpreiteiroPix":34493.146,"totalAdmPix":7815.6456,"gastoCartao":43663.31,"totalATransferir":42308.7916,"parcelaEvolucaoCaixa":8807.23,"custoTotal":85972.1016,"vencimento":"2026-08-10","vencPlanejado":"2026-08-10","status":"REALIZADO","obs":"Em agosto, observou-se uma intensificação das saídas via Caixa CEF, compatível com o avanço físico da obra nesta fase — etapa que naturalmente demanda maior desembolso, como aquisição concentrada de materiais e mão de obra vinculada às etapas de execução programadas. Esse comportamento é esperado e recorrente em obras financiadas por liberações escalonadas, nas quais o saldo acumulado funciona como reserva de capital de giro, absorvendo naturalmente as oscilações entre entradas e saídas de cada etapa.\n\nO saldo acumulado atual, de R$ 63.299,05, confirma que a obra permanece com posição de caixa positiva e dentro da normalidade operacional esperada para este estágio da construção, evidenciando que o planejamento financeiro adotado nos meses anteriores cumpriu sua função de sustentar as etapas de maior desembolso sem comprometer a continuidade da obra.","overrides":{"custoTotal":true},"dataGeracaoCusto":"2026-08-10"},{"id":"parcela-8","label":"AGOSTO/2º PARCELA","totalEmpreiteiroPix":54709,"totalAdmPix":5833.1,"gastoCartao":0,"totalATransferir":60542.09617,"parcelaEvolucaoCaixa":0,"custoTotal":60542.09617,"vencimento":"2026-08-26","vencPlanejado":"2026-08-25","status":"REALIZADO","obs":"","overrides":{},"dataGeracaoCusto":"2026-08-25"},{"id":"parcela-9","label":"SETEMBRO/1º PARCELA","totalEmpreiteiroPix":24917.08,"totalAdmPix":2491.71,"gastoCartao":0,"totalATransferir":29963.59805,"parcelaEvolucaoCaixa":7429.92,"custoTotal":55511.74805,"vencimento":null,"vencPlanejado":"2026-09-10","status":"PLANEJADO","obs":"Avanço da quinzena (valor gerado: R$ -100400.32) — Pisos: 100.0% → 0.0%","overrides":{"custoTotal":true},"dataGeracaoCusto":"2026-09-10"},{"id":"parcela-10","label":"SETEMBRO/2º PARCELA","totalEmpreiteiroPix":18641.137,"totalAdmPix":1864.1137,"gastoCartao":0,"totalATransferir":20505.2507,"parcelaEvolucaoCaixa":0,"custoTotal":20505.2507,"vencimento":null,"vencPlanejado":"2026-09-25","status":"PLANEJADO","obs":"","overrides":{},"dataGeracaoCusto":"2026-09-25"},{"id":"parcela-ef46e960","label":"Outubro/2026 — 1ª Parcela (cartão)","totalEmpreiteiroPix":0,"totalAdmPix":0,"gastoCartao":6600,"totalATransferir":0,"parcelaEvolucaoCaixa":0,"custoTotal":6600,"dataGeracaoCusto":"2026-10-03","vencimento":null,"vencPlanejado":"2026-10-03","status":"PLANEJADO","obs":"","overrides":{}},{"id":"parcela-6c4399d0","label":"Novembro/2026 — 1ª Parcela (cartão)","totalEmpreiteiroPix":0,"totalAdmPix":0,"gastoCartao":6600,"totalATransferir":0,"parcelaEvolucaoCaixa":0,"custoTotal":6600,"dataGeracaoCusto":"2026-11-03","vencimento":null,"vencPlanejado":"2026-11-03","status":"PLANEJADO","obs":"","overrides":{}}],"historicoAvancos":[{"id":"avanco-6f1ae83c","categoriaId":"cat-09-revestimentos-internos","categoriaNome":"Revestimentos Internos","percAvancoAnterior":0,"percAvancoNovo":0.1,"data":"2026-09-10","status":"PLANEJADO","obs":"","timestamp":"2026-09-01T18:34:21.245Z"},{"id":"avanco-451f1930","categoriaId":"cat-08-impermeabilizacoes","categoriaNome":"Impermeabilizações","percAvancoAnterior":0.4,"percAvancoNovo":0.5,"data":"2026-09-10","status":"PLANEJADO","obs":"","timestamp":"2026-09-01T18:34:21.245Z"},{"id":"avanco-ab681f6c","categoriaId":"cat-07-coberturas-estrutura-e-t","categoriaNome":"Coberturas ( estrutura e telhas)","percAvancoAnterior":0,"percAvancoNovo":0.3,"data":"2026-09-10","status":"PLANEJADO","obs":"","timestamp":"2026-09-01T18:34:21.245Z"},{"id":"avanco-cd887419","categoriaId":"cat-03-supra-estrutura-vigas-pi","categoriaNome":"Supra estrutura(vigas,pilares,cintas,escada)","percAvancoAnterior":0.5,"percAvancoNovo":0.65,"data":"2026-09-10","status":"PLANEJADO","obs":"","timestamp":"2026-09-01T18:34:21.245Z"},{"id":"avanco-inicial-2-1","categoriaId":"cat-02-infraestrutura-estacas-b","categoriaNome":"Infraestrutura (estacas,brocas,baldrames,sapatas)","percAvancoAnterior":null,"percAvancoNovo":0.85,"data":"2026-06-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-06-25T00:00:00.000Z"},{"id":"avanco-inicial-2-2","categoriaId":"cat-02-infraestrutura-estacas-b","categoriaNome":"Infraestrutura (estacas,brocas,baldrames,sapatas)","percAvancoAnterior":0.85,"percAvancoNovo":1,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-3-1","categoriaId":"cat-03-supra-estrutura-vigas-pi","categoriaNome":"Supra estrutura(vigas,pilares,cintas,escada)","percAvancoAnterior":null,"percAvancoNovo":0.3995,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-3-2","categoriaId":"cat-03-supra-estrutura-vigas-pi","categoriaNome":"Supra estrutura(vigas,pilares,cintas,escada)","percAvancoAnterior":0.3995,"percAvancoNovo":0.5,"data":"2026-08-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-08-25T00:00:00.000Z"},{"id":"avanco-inicial-4-1","categoriaId":"cat-04-paredes-e-paineis","categoriaNome":"Paredes e Painéis","percAvancoAnterior":null,"percAvancoNovo":0.5,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-8-1","categoriaId":"cat-08-impermeabilizacoes","categoriaNome":"Impermeabilizações","percAvancoAnterior":null,"percAvancoNovo":0.2,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-8-2","categoriaId":"cat-08-impermeabilizacoes","categoriaNome":"Impermeabilizações","percAvancoAnterior":0.2,"percAvancoNovo":0.4,"data":"2026-08-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-08-25T00:00:00.000Z"},{"id":"avanco-inicial-13-1","categoriaId":"cat-13-pisos","categoriaNome":"Pisos","percAvancoAnterior":null,"percAvancoNovo":0.1001,"data":"2026-08-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-08-25T00:00:00.000Z"},{"id":"avanco-inicial-20-1","categoriaId":"cat-20-outros-servicos","categoriaNome":"Outros Serviços","percAvancoAnterior":null,"percAvancoNovo":0.83,"data":"2026-06-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-06-25T00:00:00.000Z"}],"fluxoCaixaAjustes":[],"updatedAt":"2026-09-02T03:08:38.754Z","liberacoesCaixa":[{"id":"liberacao-1","data":"2026-06-25","valor":177000.6,"obs":"Medição 01","status":"REALIZADO"},{"id":"liberacao-2","data":"2026-07-01","valor":132580.8,"obs":"Medição 02","status":"REALIZADO"},{"id":"liberacao-3","data":"2026-08-24","valor":35823.6,"obs":"Medição 03","status":"REALIZADO"},{"id":"liberacao-4","data":"2026-09-20","valor":91071.18,"obs":"Medição 04","status":"PLANEJADO"}],"consumosRecursoProprio":[{"id":"consumo-1","descricao":"Maio/1º parcela (Total Transferido)","valor":31000,"data":"2026-05-11"},{"id":"consumo-2","descricao":"Maio/2º parcela (Total Transferido)","valor":33500,"data":"2026-05-26"},{"id":"consumo-3","descricao":"Junho/1º parcela (Total Transferido)","valor":22271.21,"data":"2026-06-11"},{"id":"consumo-4","descricao":"Entrada do lote","valor":144000,"data":null},{"id":"consumo-5","descricao":"Serviços preliminares (pago direto)","valor":60060.87,"data":null}]}</script>
 <script>
 'use strict';
 /* ==========================================================================
    Dados embutidos: o estado atual (canônico) e o seed original (para reset)
    ========================================================================== */
-const ORIGINAL_SEED = {"meta":{"obra":"Casa Newton — Gran Park Toscana","endereco":"Rua Sorano nº 43 - Gran Park Toscana - Vespasiano","proprietario":"Newton Leandro / Helena Marina","incorporador":"Rander Bruno","responsavelTecnico":"Emanuel Alef de Oliveira","areaM2":349,"dataInicio":"2026-05-11","previsaoTermino":"2027-08-14"},"parametros":{"recursoProprioPlanejado":571143.99,"financiamentoObraCaixa":1200000,"financiamentoLoteCaixa":384000,"creditoCaixaTotalPCI":1500000,"contratoTotalEmpreiteiro":1081900,"taxaAdministracaoPercent":0.1,"taxaJurosAnualCEF":0.134,"custoLoteExecutado":356168,"saldoRecursoDisponivelManual":null},"categorias":[{"id":"cat-01-servicos-preliminares-e-","numero":1,"nome":"Serviços Preliminares e Gerais (água luz e projetos aprovados)","valorOrcado":31266.91,"percAvancoManual":1.0,"dataUltimoAvanco":"2026-06-25","observacao":"","itens":[{"id":"cat-01-servicos-preliminares-e--item-1","descricao":"PLANITALTIMETRICO","unidade":"verba","valorOrcado":1700,"valorRealizado":1500,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-2","descricao":"SONDAGEM","unidade":"verba","valorOrcado":2000,"valorRealizado":1875,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-3","descricao":"ARTQUITETONICO","unidade":"serv.","valorOrcado":13200,"valorRealizado":11900,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-4","descricao":"ESTRUTURAL","unidade":"serv.","valorOrcado":11200,"valorRealizado":9870,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-5","descricao":"ELETRICO","unidade":"serv.","valorOrcado":4200,"valorRealizado":3948,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-6","descricao":"HIDRAULICO","unidade":"serv.","valorOrcado":4200,"valorRealizado":3948,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-7","descricao":"PREFEITURA 1","unidade":"serv.","valorOrcado":1000,"valorRealizado":1371.6,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-8","descricao":"TX. AP. PROJETO COND.","unidade":"serv.","valorOrcado":0,"valorRealizado":250,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-9","descricao":"LICENCIAMENTO","unidade":"serv.","valorOrcado":1000,"valorRealizado":0,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-10","descricao":"ART DE EXECUÇÃO","unidade":"serv.","valorOrcado":0,"valorRealizado":103.03,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-11","descricao":"ART PROJETOS","unidade":"serv.","valorOrcado":500,"valorRealizado":0,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-12","descricao":"REGISTRO DE FINANCIAMENTO","unidade":"serv.","valorOrcado":3928,"valorRealizado":1661.47,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-13","descricao":"REGISTRO DO LOTE","unidade":"serv.","valorOrcado":8000,"valorRealizado":14008.01,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-14","descricao":"ITBI DO LOTE","unidade":"serv.","valorOrcado":14400,"valorRealizado":9625.76,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":true,"cronogramaPrevisto":{"inicio":"2026-05-11","termino":"2026-06-05","duracaoDias":26},"verbaCaixa":32252.4,"liberadoCaixaManual":null},{"id":"cat-02-infraestrutura-estacas-b","numero":2,"nome":"Infraestrutura (estacas,brocas,baldrames,sapatas)","valorOrcado":74001.96,"percAvancoManual":1.0,"dataUltimoAvanco":"2026-07-25","observacao":"","itens":[{"id":"cat-02-infraestrutura-estacas-b-item-1","descricao":"VIGAS BALDRAME","unidade":"UNID","valorOrcado":0,"valorRealizado":9629,"dataPagamento":"2026-06-01T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-02-infraestrutura-estacas-b-item-2","descricao":"FORMAS DA VIGA BALDRAMA","unidade":"UNID","valorOrcado":0,"valorRealizado":6050,"dataPagamento":"2026-06-01T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-02-infraestrutura-estacas-b-item-3","descricao":"CONCRETO BLOCOS ","unidade":"UNID","valorOrcado":0,"valorRealizado":13800,"dataPagamento":"2026-06-01T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-02-infraestrutura-estacas-b-item-4","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":74001.96,"valorRealizado":75789.87,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-06-08","termino":"2026-08-07","duracaoDias":61},"verbaCaixa":76334.4,"liberadoCaixaManual":null},{"id":"cat-03-supra-estrutura-vigas-pi","numero":3,"nome":"Supra estrutura(vigas,pilares,cintas,escada)","valorOrcado":186411.37,"percAvancoManual":0.5,"dataUltimoAvanco":"2026-08-25","observacao":"","itens":[{"id":"cat-03-supra-estrutura-vigas-pi-item-1","descricao":"CONCRETO PISO E BALDRAME PISCINA","unidade":"UNID","valorOrcado":0,"valorRealizado":8300,"dataPagamento":"2026-07-13T00:00:00","formaPagamento":"CARTÃO EM AGOSTO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-2","descricao":"LAJE PARA O PRIMEIRO PAVIMENTO","unidade":"UNID","valorOrcado":0,"valorRealizado":12803.31,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO EM AGOSTO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-3","descricao":"PILARES E VIGAS 1º PAVIMENTO EM 1/2","unidade":"UNID","valorOrcado":0,"valorRealizado":8500,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO EM AGOSTO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-4","descricao":"PILARES E VIGAS 1º PAVIMENTO EM 2/2","unidade":"UNID","valorOrcado":0,"valorRealizado":8500,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO EM SETEMBRO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-5","descricao":"MADEIRA PARA FORMAS EM 1/2","unidade":"UNID","valorOrcado":0,"valorRealizado":3060,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO EM AGOSTO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-6","descricao":"MADEIRA PARA FORMAS EM 2/2","unidade":"UNID","valorOrcado":0,"valorRealizado":3060,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO EM SETEMBRO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-7","descricao":"DEPOSITO EM GERAL","unidade":"UNID","valorOrcado":0,"valorRealizado":13988.15,"dataPagamento":"2026-08-14T00:00:00","formaPagamento":"CARTÃO EM SETEMBRO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-8","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":186411.37,"valorRealizado":128199.91,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-08-10","termino":"2026-10-16","duracaoDias":68},"verbaCaixa":192286.8,"liberadoCaixaManual":null},{"id":"cat-04-paredes-e-paineis","numero":4,"nome":"Paredes e Painéis","valorOrcado":74001.96,"percAvancoManual":0.5,"dataUltimoAvanco":"2026-07-25","observacao":"","itens":[{"id":"cat-04-paredes-e-paineis-item-1","descricao":"TIJOLO,BLOCO,AREIA,BRITA,VERGALHÃO","unidade":"UNID","valorOrcado":0,"valorRealizado":8500,"dataPagamento":"2026-06-12T00:00:00","formaPagamento":"CARTÃO EM SETEMBRO"},{"id":"cat-04-paredes-e-paineis-item-2","descricao":"TIJOLO,BLOCO,AREIA,BRITA,VERGALHÃO","unidade":"UNID","valorOrcado":0,"valorRealizado":11000,"dataPagamento":"2026-07-13T00:00:00","formaPagamento":"CARTÃO EM SETEMBRO"},{"id":"cat-04-paredes-e-paineis-item-3","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":74001.96,"valorRealizado":74001.96,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-05","termino":"2026-11-06","duracaoDias":33},"verbaCaixa":76334.4,"liberadoCaixaManual":null},{"id":"cat-05-esquadrias","numero":5,"nome":"Esquadrias","valorOrcado":70648.07,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-05-esquadrias-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":70648.07,"valorRealizado":70648.07,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-11-02","termino":"2026-12-11","duracaoDias":40},"verbaCaixa":72874.8,"liberadoCaixaManual":null},{"id":"cat-06-vidros-e-plasticos","numero":6,"nome":"Vidros e Plásticos","valorOrcado":25641.03,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-06-vidros-e-plasticos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":25641.03,"valorRealizado":25641.03,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-12-07","termino":"2027-01-08","duracaoDias":33},"verbaCaixa":26449.2,"liberadoCaixaManual":null},{"id":"cat-07-coberturas-estrutura-e-t","numero":7,"nome":"Coberturas ( estrutura e telhas)","valorOrcado":39056.59,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-07-coberturas-estrutura-e-t-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":39056.59,"valorRealizado":39056.59,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-19","termino":"2026-12-04","duracaoDias":47},"verbaCaixa":40287.6,"liberadoCaixaManual":null},{"id":"cat-08-impermeabilizacoes","numero":8,"nome":"Impermeabilizações","valorOrcado":29752.25,"percAvancoManual":0.4,"dataUltimoAvanco":"2026-08-25","observacao":"","itens":[{"id":"cat-08-impermeabilizacoes-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":29752.25,"valorRealizado":29752.25,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-12-07","termino":"2027-01-16","duracaoDias":41},"verbaCaixa":30690,"liberadoCaixaManual":null},{"id":"cat-09-revestimentos-internos","numero":9,"nome":"Revestimentos Internos","valorOrcado":78113.18,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-09-revestimentos-internos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":78113.18,"valorRealizado":78113.18,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-01-11","termino":"2027-03-12","duracaoDias":61},"verbaCaixa":80575.2,"liberadoCaixaManual":null},{"id":"cat-10-forros","numero":10,"nome":"Forros","valorOrcado":18933.25,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-10-forros-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":18933.25,"valorRealizado":18933.25,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-02-15","termino":"2027-03-26","duracaoDias":40},"verbaCaixa":19530,"liberadoCaixaManual":null},{"id":"cat-11-revestimentos-externos","numero":11,"nome":"Revestimentos Externos","valorOrcado":44682.47,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-11-revestimentos-externos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":44682.47,"valorRealizado":44682.47,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-02-22","termino":"2027-04-09","duracaoDias":47},"verbaCaixa":46090.8,"liberadoCaixaManual":null},{"id":"cat-12-pintura","numero":12,"nome":"Pintura","valorOrcado":46088.94,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-12-pintura-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":46088.94,"valorRealizado":46088.94,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-03-22","termino":"2027-05-14","duracaoDias":54},"verbaCaixa":47541.6,"liberadoCaixaManual":null},{"id":"cat-13-pisos","numero":13,"nome":"Pisos","valorOrcado":100400.32,"percAvancoManual":0.1001,"dataUltimoAvanco":"2026-08-25","observacao":"","itens":[{"id":"cat-13-pisos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":100400.32,"valorRealizado":100400.32,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-03-29","termino":"2027-05-28","duracaoDias":61},"verbaCaixa":103564.8,"liberadoCaixaManual":null},{"id":"cat-14-acabamentos-soleiras-rod","numero":14,"nome":"Acabamentos(soleiras,rodapés,peitoril etc)","valorOrcado":13415.56,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-14-acabamentos-soleiras-rod-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":13415.56,"valorRealizado":13415.56,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-05-12","termino":"2027-06-13","duracaoDias":33},"verbaCaixa":13838.4,"liberadoCaixaManual":null},{"id":"cat-15-inst-eletricas-e-telefon","numero":15,"nome":"Inst. Elétricas e Telefônicas","valorOrcado":41653.15,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-15-inst-eletricas-e-telefon-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":41653.15,"valorRealizado":41653.15,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-26","termino":"2027-02-05","duracaoDias":103},"verbaCaixa":42966,"liberadoCaixaManual":null},{"id":"cat-16-instalacoes-hidraulicas","numero":16,"nome":"Instalações Hidráulicas","valorOrcado":41653.15,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-16-instalacoes-hidraulicas-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":41653.15,"valorRealizado":41653.15,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-26","termino":"2027-01-29","duracaoDias":96},"verbaCaixa":42966,"liberadoCaixaManual":null},{"id":"cat-17-inst-esgoto-e-aguas-pluv","numero":17,"nome":"Inst. Esgoto e Águas Pluviais","valorOrcado":44682.47,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-17-inst-esgoto-e-aguas-pluv-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":44682.47,"valorRealizado":44682.47,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-26","termino":"2027-01-09","duracaoDias":76},"verbaCaixa":46090.8,"liberadoCaixaManual":null},{"id":"cat-18-loucas-e-metais","numero":18,"nome":"Louças e Metais","valorOrcado":46088.94,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-18-loucas-e-metais-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":46088.94,"valorRealizado":46088.94,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-05-26","termino":"2027-06-27","duracaoDias":33},"verbaCaixa":47541.6,"liberadoCaixaManual":null},{"id":"cat-19-complementos-limpeza-fin","numero":19,"nome":"Complementos( limpeza final e calafete)","valorOrcado":10061.67,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-19-complementos-limpeza-fin-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":10061.67,"valorRealizado":10061.67,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-06-28","termino":"2027-07-23","duracaoDias":26},"verbaCaixa":10378.8,"liberadoCaixaManual":null},{"id":"cat-20-outros-servicos","numero":20,"nome":"Outros Serviços","valorOrcado":65130.38,"percAvancoManual":0.83,"dataUltimoAvanco":"2026-06-25","observacao":"","itens":[{"id":"cat-20-outros-servicos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":65130.38,"valorRealizado":65130.38,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-07-21","termino":"2027-08-14","duracaoDias":25},"verbaCaixa":67183.2,"liberadoCaixaManual":null}],"liberacaoPCI":[{"etapa":1,"descricao":"Aquisição do lote","percLimiteAcumulado":0,"valor":384000,"mesProgramado":1,"liberadoManual":null},{"etapa":2,"descricao":"Fundação","percLimiteAcumulado":0.2,"valor":153000,"mesProgramado":3,"liberadoManual":null},{"etapa":3,"descricao":"Estrutura","percLimiteAcumulado":0.4,"valor":244000,"mesProgramado":6,"liberadoManual":null},{"etapa":4,"descricao":"Alvenaria","percLimiteAcumulado":0.6,"valor":244000,"mesProgramado":9,"liberadoManual":null},{"etapa":5,"descricao":"Cobertura + Instalações","percLimiteAcumulado":0.8,"valor":254000,"mesProgramado":12,"liberadoManual":null},{"etapa":6,"descricao":"Acabamento Final","percLimiteAcumulado":1,"valor":221000,"mesProgramado":15,"liberadoManual":null}],"parcelas":[{"id":"parcela-1","label":"MAIO/1º PARCELA","totalEmpreiteiroPix":31000,"totalAdmPix":0,"gastoCartao":519.51,"totalATransferir":31000,"parcelaEvolucaoCaixa":0,"custoTotal":31519.51,"vencimento":"2026-05-11","vencPlanejado":"2026-05-10","status":"REALIZADO","obs":"Haverá um custo de aproximatamento de R$35.923,31 no cartão para o mês de agosto  referente a compra de madeiras para formas as ferragens de vigas e pilares do 1º pavimento e laje do 1º pavimento","overrides":{}},{"id":"parcela-2","label":"MAIO/2º PARCELA","totalEmpreiteiroPix":27500.00206,"totalAdmPix":6000,"gastoCartao":0,"totalATransferir":33500.00206,"parcelaEvolucaoCaixa":0,"custoTotal":33500.00206,"vencimento":"2026-05-26","vencPlanejado":"2026-05-25","status":"REALIZADO","obs":"","overrides":{}},{"id":"parcela-3","label":"JUNHO/1º PARCELA","totalEmpreiteiroPix":16857.16062,"totalAdmPix":5414.05,"gastoCartao":29479,"totalATransferir":22271.21062,"parcelaEvolucaoCaixa":519.51,"custoTotal":51750.21062,"vencimento":"2026-06-11","vencPlanejado":"2026-06-10","status":"REALIZADO","obs":"","overrides":{"custoTotal":true}},{"id":"parcela-4","label":"JUNHO/2º PARCELA","totalEmpreiteiroPix":44000,"totalAdmPix":6500,"gastoCartao":0,"totalATransferir":50500,"parcelaEvolucaoCaixa":0,"custoTotal":50500,"vencimento":"2026-06-27","vencPlanejado":"2026-06-25","status":"REALIZADO","obs":"","overrides":{}},{"id":"parcela-5","label":"JULHO/1º PARCELA","totalEmpreiteiroPix":42000.0019,"totalAdmPix":5200,"gastoCartao":8500,"totalATransferir":47200.0019,"parcelaEvolucaoCaixa":2226.76,"custoTotal":57926.7619,"vencimento":"2026-07-10","vencPlanejado":"2026-07-10","status":"REALIZADO","obs":"","overrides":{}},{"id":"parcela-6","label":"JULHO/2º PARCELA","totalEmpreiteiroPix":58033.116,"totalAdmPix":5803.3116,"gastoCartao":0,"totalATransferir":63836.4276,"parcelaEvolucaoCaixa":0,"custoTotal":63836.4276,"vencimento":"2026-07-25","vencPlanejado":"2026-07-25","status":"REALIZADO","obs":"Verifica-se um avanço técnico acumulado em caixa (reserva técnica) no valor de R$ 201.154,64; contudo, será objeto de medição apenas o montante de R$ 58.033,12, tendo em vista que a execução em curso está sendo custeada com recursos próprios do empreiteiro restando um saldo em conta sobre recurso pós essa medição em R$ 137.318,21","overrides":{}},{"id":"parcela-7","label":"AGOSTO/1º PARCELA","totalEmpreiteiroPix":34493.146,"totalAdmPix":7815.6456,"gastoCartao":43663.31,"totalATransferir":42308.7916,"parcelaEvolucaoCaixa":8807.23,"custoTotal":85972.1016,"vencimento":"2026-08-10","vencPlanejado":"2026-08-10","status":"REALIZADO","obs":"Em agosto, observou-se uma intensificação das saídas via Caixa CEF, compatível com o avanço físico da obra nesta fase — etapa que naturalmente demanda maior desembolso, como aquisição concentrada de materiais e mão de obra vinculada às etapas de execução programadas. Esse comportamento é esperado e recorrente em obras financiadas por liberações escalonadas, nas quais o saldo acumulado funciona como reserva de capital de giro, absorvendo naturalmente as oscilações entre entradas e saídas de cada etapa.\n\nO saldo acumulado atual, de R$ 63.299,05, confirma que a obra permanece com posição de caixa positiva e dentro da normalidade operacional esperada para este estágio da construção, evidenciando que o planejamento financeiro adotado nos meses anteriores cumpriu sua função de sustentar as etapas de maior desembolso sem comprometer a continuidade da obra.","overrides":{"custoTotal":true}},{"id":"parcela-8","label":"AGOSTO/2º PARCELA","totalEmpreiteiroPix":54708.99652,"totalAdmPix":5833.099652,"gastoCartao":0,"totalATransferir":60542.09617,"parcelaEvolucaoCaixa":0,"custoTotal":60542.09617,"vencimento":"2026-08-26","vencPlanejado":"2026-08-25","status":"REALIZADO","obs":"","overrides":{}},{"id":"parcela-9","label":"SETEMBRO/1º PARCELA","totalEmpreiteiroPix":24917.0755,"totalAdmPix":5046.52255,"gastoCartao":25548.15,"totalATransferir":29963.59805,"parcelaEvolucaoCaixa":7429.921609,"custoTotal":55511.74805,"vencimento":null,"vencPlanejado":"2026-09-10","status":"PLANEJADO","obs":"","overrides":{"custoTotal":true}},{"id":"parcela-10","label":"SETEMBRO/2º PARCELA","totalEmpreiteiroPix":18641.137,"totalAdmPix":1864.1137,"gastoCartao":0,"totalATransferir":20505.2507,"parcelaEvolucaoCaixa":0,"custoTotal":20505.2507,"vencimento":null,"vencPlanejado":"2026-09-25","status":"PLANEJADO","obs":"","overrides":{}}],"historicoAvancos":[{"id":"avanco-inicial-1-1","categoriaId":"cat-01-servicos-preliminares-e-","categoriaNome":"Serviços Preliminares e Gerais (água luz e projetos aprovados)","percAvancoAnterior":null,"percAvancoNovo":1.0,"data":"2026-06-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-06-25T00:00:00.000Z"},{"id":"avanco-inicial-2-1","categoriaId":"cat-02-infraestrutura-estacas-b","categoriaNome":"Infraestrutura (estacas,brocas,baldrames,sapatas)","percAvancoAnterior":null,"percAvancoNovo":0.85,"data":"2026-06-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-06-25T00:00:00.000Z"},{"id":"avanco-inicial-2-2","categoriaId":"cat-02-infraestrutura-estacas-b","categoriaNome":"Infraestrutura (estacas,brocas,baldrames,sapatas)","percAvancoAnterior":0.85,"percAvancoNovo":1.0,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-3-1","categoriaId":"cat-03-supra-estrutura-vigas-pi","categoriaNome":"Supra estrutura(vigas,pilares,cintas,escada)","percAvancoAnterior":null,"percAvancoNovo":0.3995,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-3-2","categoriaId":"cat-03-supra-estrutura-vigas-pi","categoriaNome":"Supra estrutura(vigas,pilares,cintas,escada)","percAvancoAnterior":0.3995,"percAvancoNovo":0.5,"data":"2026-08-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-08-25T00:00:00.000Z"},{"id":"avanco-inicial-4-1","categoriaId":"cat-04-paredes-e-paineis","categoriaNome":"Paredes e Painéis","percAvancoAnterior":null,"percAvancoNovo":0.5,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-8-1","categoriaId":"cat-08-impermeabilizacoes","categoriaNome":"Impermeabilizações","percAvancoAnterior":null,"percAvancoNovo":0.2,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-8-2","categoriaId":"cat-08-impermeabilizacoes","categoriaNome":"Impermeabilizações","percAvancoAnterior":0.2,"percAvancoNovo":0.4,"data":"2026-08-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-08-25T00:00:00.000Z"},{"id":"avanco-inicial-13-1","categoriaId":"cat-13-pisos","categoriaNome":"Pisos","percAvancoAnterior":null,"percAvancoNovo":0.1001,"data":"2026-08-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-08-25T00:00:00.000Z"},{"id":"avanco-inicial-20-1","categoriaId":"cat-20-outros-servicos","categoriaNome":"Outros Serviços","percAvancoAnterior":null,"percAvancoNovo":0.83,"data":"2026-06-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-06-25T00:00:00.000Z"}],"fluxoCaixaAjustes":[],"updatedAt":"2026-08-31T21:44:28.849Z","liberacoesCaixa":[{"id":"liberacao-1","data":"2026-06-01","valor":177000.6,"obs":"Medição 01","status":"REALIZADO"},{"id":"liberacao-2","data":"2026-07-01","valor":132580.8,"obs":"Medição 02","status":"REALIZADO"},{"id":"liberacao-3","data":"2026-08-01","valor":35823.6,"obs":"Medição 03","status":"REALIZADO"},{"id":"liberacao-4","data":"2026-09-01","valor":91071.18,"obs":"Medição 04","status":"REALIZADO"}],"consumosRecursoProprio":[{"id":"consumo-1","descricao":"Maio/1º parcela (Total Transferido)","valor":31000,"data":"2026-05-11"},{"id":"consumo-2","descricao":"Maio/2º parcela (Total Transferido)","valor":33500,"data":"2026-05-26"},{"id":"consumo-3","descricao":"Junho/1º parcela (Total Transferido)","valor":22271.21,"data":"2026-06-11"},{"id":"consumo-4","descricao":"Entrada do lote","valor":144000,"data":null},{"id":"consumo-5","descricao":"Serviços preliminares (pago direto)","valor":60060.87,"data":null}]};
+const ORIGINAL_SEED = {"meta":{"obra":"Casa Newton — Gran Park Toscana","endereco":"Rua Sorano nº 43 - Gran Park Toscana - Vespasiano","proprietario":"Newton Leandro / Helena Marina","incorporador":"Rander Bruno","responsavelTecnico":"Emanuel Alef de Oliveira","areaM2":349,"dataInicio":"2026-05-11","previsaoTermino":"2027-08-14"},"parametros":{"recursoProprioPlanejado":571143.99,"financiamentoObraCaixa":1200000,"financiamentoLoteCaixa":384000,"creditoCaixaTotalPCI":1500000,"contratoTotalEmpreiteiro":1081900,"taxaAdministracaoPercent":0.1,"taxaJurosAnualCEF":0.134,"vgv":2950000,"corretagemPercent":0.06,"irPercent":0.15,"custoLoteExecutado":356168,"saldoRecursoDisponivelManual":null},"categorias":[{"id":"cat-01-servicos-preliminares-e-","numero":1,"nome":"Serviços Preliminares e Gerais (água luz e projetos aprovados)","valorOrcado":31266.91,"percAvancoManual":1.0,"dataUltimoAvanco":"2026-06-25","observacao":"","itens":[{"id":"cat-01-servicos-preliminares-e--item-1","descricao":"PLANITALTIMETRICO","unidade":"verba","valorOrcado":1700,"valorRealizado":1500,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-2","descricao":"SONDAGEM","unidade":"verba","valorOrcado":2000,"valorRealizado":1875,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-3","descricao":"ARTQUITETONICO","unidade":"serv.","valorOrcado":13200,"valorRealizado":11900,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-4","descricao":"ESTRUTURAL","unidade":"serv.","valorOrcado":11200,"valorRealizado":9870,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-5","descricao":"ELETRICO","unidade":"serv.","valorOrcado":4200,"valorRealizado":3948,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-6","descricao":"HIDRAULICO","unidade":"serv.","valorOrcado":4200,"valorRealizado":3948,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-7","descricao":"PREFEITURA 1","unidade":"serv.","valorOrcado":1000,"valorRealizado":1371.6,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-8","descricao":"TX. AP. PROJETO COND.","unidade":"serv.","valorOrcado":0,"valorRealizado":250,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-9","descricao":"LICENCIAMENTO","unidade":"serv.","valorOrcado":1000,"valorRealizado":0,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-10","descricao":"ART DE EXECUÇÃO","unidade":"serv.","valorOrcado":0,"valorRealizado":103.03,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-11","descricao":"ART PROJETOS","unidade":"serv.","valorOrcado":500,"valorRealizado":0,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-12","descricao":"REGISTRO DE FINANCIAMENTO","unidade":"serv.","valorOrcado":3928,"valorRealizado":1661.47,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-13","descricao":"REGISTRO DO LOTE","unidade":"serv.","valorOrcado":8000,"valorRealizado":14008.01,"dataPagamento":null,"formaPagamento":"PIX"},{"id":"cat-01-servicos-preliminares-e--item-14","descricao":"ITBI DO LOTE","unidade":"serv.","valorOrcado":14400,"valorRealizado":9625.76,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":true,"cronogramaPrevisto":{"inicio":"2026-05-11","termino":"2026-06-05","duracaoDias":26},"verbaCaixa":32252.4,"liberadoCaixaManual":null},{"id":"cat-02-infraestrutura-estacas-b","numero":2,"nome":"Infraestrutura (estacas,brocas,baldrames,sapatas)","valorOrcado":74001.96,"percAvancoManual":1.0,"dataUltimoAvanco":"2026-07-25","observacao":"","itens":[{"id":"cat-02-infraestrutura-estacas-b-item-1","descricao":"VIGAS BALDRAME","unidade":"UNID","valorOrcado":0,"valorRealizado":9629,"dataPagamento":"2026-06-01T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-02-infraestrutura-estacas-b-item-2","descricao":"FORMAS DA VIGA BALDRAMA","unidade":"UNID","valorOrcado":0,"valorRealizado":6050,"dataPagamento":"2026-06-01T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-02-infraestrutura-estacas-b-item-3","descricao":"CONCRETO BLOCOS ","unidade":"UNID","valorOrcado":0,"valorRealizado":13800,"dataPagamento":"2026-06-01T00:00:00","formaPagamento":"CARTÃO"},{"id":"cat-02-infraestrutura-estacas-b-item-4","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":74001.96,"valorRealizado":75789.87,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-06-08","termino":"2026-08-07","duracaoDias":61},"verbaCaixa":76334.4,"liberadoCaixaManual":null},{"id":"cat-03-supra-estrutura-vigas-pi","numero":3,"nome":"Supra estrutura(vigas,pilares,cintas,escada)","valorOrcado":186411.37,"percAvancoManual":0.5,"dataUltimoAvanco":"2026-08-25","observacao":"","itens":[{"id":"cat-03-supra-estrutura-vigas-pi-item-1","descricao":"CONCRETO PISO E BALDRAME PISCINA","unidade":"UNID","valorOrcado":0,"valorRealizado":8300,"dataPagamento":"2026-07-13T00:00:00","formaPagamento":"CARTÃO EM AGOSTO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-2","descricao":"LAJE PARA O PRIMEIRO PAVIMENTO","unidade":"UNID","valorOrcado":0,"valorRealizado":12803.31,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO EM AGOSTO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-3","descricao":"PILARES E VIGAS 1º PAVIMENTO EM 1/2","unidade":"UNID","valorOrcado":0,"valorRealizado":8500,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO EM AGOSTO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-4","descricao":"PILARES E VIGAS 1º PAVIMENTO EM 2/2","unidade":"UNID","valorOrcado":0,"valorRealizado":8500,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO EM SETEMBRO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-5","descricao":"MADEIRA PARA FORMAS EM 1/2","unidade":"UNID","valorOrcado":0,"valorRealizado":3060,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO EM AGOSTO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-6","descricao":"MADEIRA PARA FORMAS EM 2/2","unidade":"UNID","valorOrcado":0,"valorRealizado":3060,"dataPagamento":"2026-07-24T00:00:00","formaPagamento":"CARTÃO EM SETEMBRO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-7","descricao":"DEPOSITO EM GERAL","unidade":"UNID","valorOrcado":0,"valorRealizado":13988.15,"dataPagamento":"2026-08-14T00:00:00","formaPagamento":"CARTÃO EM SETEMBRO"},{"id":"cat-03-supra-estrutura-vigas-pi-item-8","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":186411.37,"valorRealizado":128199.91,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-08-10","termino":"2026-10-16","duracaoDias":68},"verbaCaixa":192286.8,"liberadoCaixaManual":null},{"id":"cat-04-paredes-e-paineis","numero":4,"nome":"Paredes e Painéis","valorOrcado":74001.96,"percAvancoManual":0.5,"dataUltimoAvanco":"2026-07-25","observacao":"","itens":[{"id":"cat-04-paredes-e-paineis-item-1","descricao":"TIJOLO,BLOCO,AREIA,BRITA,VERGALHÃO","unidade":"UNID","valorOrcado":0,"valorRealizado":8500,"dataPagamento":"2026-06-12T00:00:00","formaPagamento":"CARTÃO EM SETEMBRO"},{"id":"cat-04-paredes-e-paineis-item-2","descricao":"TIJOLO,BLOCO,AREIA,BRITA,VERGALHÃO","unidade":"UNID","valorOrcado":0,"valorRealizado":11000,"dataPagamento":"2026-07-13T00:00:00","formaPagamento":"CARTÃO EM SETEMBRO"},{"id":"cat-04-paredes-e-paineis-item-3","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":74001.96,"valorRealizado":74001.96,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-05","termino":"2026-11-06","duracaoDias":33},"verbaCaixa":76334.4,"liberadoCaixaManual":null},{"id":"cat-05-esquadrias","numero":5,"nome":"Esquadrias","valorOrcado":70648.07,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-05-esquadrias-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":70648.07,"valorRealizado":70648.07,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-11-02","termino":"2026-12-11","duracaoDias":40},"verbaCaixa":72874.8,"liberadoCaixaManual":null},{"id":"cat-06-vidros-e-plasticos","numero":6,"nome":"Vidros e Plásticos","valorOrcado":25641.03,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-06-vidros-e-plasticos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":25641.03,"valorRealizado":25641.03,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-12-07","termino":"2027-01-08","duracaoDias":33},"verbaCaixa":26449.2,"liberadoCaixaManual":null},{"id":"cat-07-coberturas-estrutura-e-t","numero":7,"nome":"Coberturas ( estrutura e telhas)","valorOrcado":39056.59,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-07-coberturas-estrutura-e-t-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":39056.59,"valorRealizado":39056.59,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-19","termino":"2026-12-04","duracaoDias":47},"verbaCaixa":40287.6,"liberadoCaixaManual":null},{"id":"cat-08-impermeabilizacoes","numero":8,"nome":"Impermeabilizações","valorOrcado":29752.25,"percAvancoManual":0.4,"dataUltimoAvanco":"2026-08-25","observacao":"","itens":[{"id":"cat-08-impermeabilizacoes-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":29752.25,"valorRealizado":29752.25,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-12-07","termino":"2027-01-16","duracaoDias":41},"verbaCaixa":30690,"liberadoCaixaManual":null},{"id":"cat-09-revestimentos-internos","numero":9,"nome":"Revestimentos Internos","valorOrcado":78113.18,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-09-revestimentos-internos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":78113.18,"valorRealizado":78113.18,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-01-11","termino":"2027-03-12","duracaoDias":61},"verbaCaixa":80575.2,"liberadoCaixaManual":null},{"id":"cat-10-forros","numero":10,"nome":"Forros","valorOrcado":18933.25,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-10-forros-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":18933.25,"valorRealizado":18933.25,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-02-15","termino":"2027-03-26","duracaoDias":40},"verbaCaixa":19530,"liberadoCaixaManual":null},{"id":"cat-11-revestimentos-externos","numero":11,"nome":"Revestimentos Externos","valorOrcado":44682.47,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-11-revestimentos-externos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":44682.47,"valorRealizado":44682.47,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-02-22","termino":"2027-04-09","duracaoDias":47},"verbaCaixa":46090.8,"liberadoCaixaManual":null},{"id":"cat-12-pintura","numero":12,"nome":"Pintura","valorOrcado":46088.94,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-12-pintura-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":46088.94,"valorRealizado":46088.94,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-03-22","termino":"2027-05-14","duracaoDias":54},"verbaCaixa":47541.6,"liberadoCaixaManual":null},{"id":"cat-13-pisos","numero":13,"nome":"Pisos","valorOrcado":100400.32,"percAvancoManual":0.1001,"dataUltimoAvanco":"2026-08-25","observacao":"","itens":[{"id":"cat-13-pisos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":100400.32,"valorRealizado":100400.32,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-03-29","termino":"2027-05-28","duracaoDias":61},"verbaCaixa":103564.8,"liberadoCaixaManual":null},{"id":"cat-14-acabamentos-soleiras-rod","numero":14,"nome":"Acabamentos(soleiras,rodapés,peitoril etc)","valorOrcado":13415.56,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-14-acabamentos-soleiras-rod-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":13415.56,"valorRealizado":13415.56,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-05-12","termino":"2027-06-13","duracaoDias":33},"verbaCaixa":13838.4,"liberadoCaixaManual":null},{"id":"cat-15-inst-eletricas-e-telefon","numero":15,"nome":"Inst. Elétricas e Telefônicas","valorOrcado":41653.15,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-15-inst-eletricas-e-telefon-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":41653.15,"valorRealizado":41653.15,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-26","termino":"2027-02-05","duracaoDias":103},"verbaCaixa":42966,"liberadoCaixaManual":null},{"id":"cat-16-instalacoes-hidraulicas","numero":16,"nome":"Instalações Hidráulicas","valorOrcado":41653.15,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-16-instalacoes-hidraulicas-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":41653.15,"valorRealizado":41653.15,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-26","termino":"2027-01-29","duracaoDias":96},"verbaCaixa":42966,"liberadoCaixaManual":null},{"id":"cat-17-inst-esgoto-e-aguas-pluv","numero":17,"nome":"Inst. Esgoto e Águas Pluviais","valorOrcado":44682.47,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-17-inst-esgoto-e-aguas-pluv-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":44682.47,"valorRealizado":44682.47,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2026-10-26","termino":"2027-01-09","duracaoDias":76},"verbaCaixa":46090.8,"liberadoCaixaManual":null},{"id":"cat-18-loucas-e-metais","numero":18,"nome":"Louças e Metais","valorOrcado":46088.94,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-18-loucas-e-metais-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":46088.94,"valorRealizado":46088.94,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-05-26","termino":"2027-06-27","duracaoDias":33},"verbaCaixa":47541.6,"liberadoCaixaManual":null},{"id":"cat-19-complementos-limpeza-fin","numero":19,"nome":"Complementos( limpeza final e calafete)","valorOrcado":10061.67,"percAvancoManual":0,"dataUltimoAvanco":"2026-06-10","observacao":"","itens":[{"id":"cat-19-complementos-limpeza-fin-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":10061.67,"valorRealizado":10061.67,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-06-28","termino":"2027-07-23","duracaoDias":26},"verbaCaixa":10378.8,"liberadoCaixaManual":null},{"id":"cat-20-outros-servicos","numero":20,"nome":"Outros Serviços","valorOrcado":65130.38,"percAvancoManual":0.83,"dataUltimoAvanco":"2026-06-25","observacao":"","itens":[{"id":"cat-20-outros-servicos-item-1","descricao":"Mão de obra Fama+ material","unidade":"verba","valorOrcado":65130.38,"valorRealizado":65130.38,"dataPagamento":null,"formaPagamento":"PIX"}],"pagoDiretoProprietario":false,"cronogramaPrevisto":{"inicio":"2027-07-21","termino":"2027-08-14","duracaoDias":25},"verbaCaixa":67183.2,"liberadoCaixaManual":null}],"liberacaoPCI":[{"etapa":1,"descricao":"Aquisição do lote","percLimiteAcumulado":0,"valor":384000,"mesProgramado":1,"liberadoManual":null},{"etapa":2,"descricao":"Fundação","percLimiteAcumulado":0.2,"valor":153000,"mesProgramado":3,"liberadoManual":null},{"etapa":3,"descricao":"Estrutura","percLimiteAcumulado":0.4,"valor":244000,"mesProgramado":6,"liberadoManual":null},{"etapa":4,"descricao":"Alvenaria","percLimiteAcumulado":0.6,"valor":244000,"mesProgramado":9,"liberadoManual":null},{"etapa":5,"descricao":"Cobertura + Instalações","percLimiteAcumulado":0.8,"valor":254000,"mesProgramado":12,"liberadoManual":null},{"etapa":6,"descricao":"Acabamento Final","percLimiteAcumulado":1,"valor":221000,"mesProgramado":15,"liberadoManual":null}],"parcelas":[{"id":"parcela-1","label":"MAIO/1º PARCELA","totalEmpreiteiroPix":31000,"totalAdmPix":0,"gastoCartao":519.51,"totalATransferir":31000,"parcelaEvolucaoCaixa":0,"custoTotal":31519.51,"vencimento":"2026-05-11","vencPlanejado":"2026-05-10","status":"REALIZADO","obs":"Haverá um custo de aproximatamento de R$35.923,31 no cartão para o mês de agosto  referente a compra de madeiras para formas as ferragens de vigas e pilares do 1º pavimento e laje do 1º pavimento","overrides":{}},{"id":"parcela-2","label":"MAIO/2º PARCELA","totalEmpreiteiroPix":27500.00206,"totalAdmPix":6000,"gastoCartao":0,"totalATransferir":33500.00206,"parcelaEvolucaoCaixa":0,"custoTotal":33500.00206,"vencimento":"2026-05-26","vencPlanejado":"2026-05-25","status":"REALIZADO","obs":"","overrides":{}},{"id":"parcela-3","label":"JUNHO/1º PARCELA","totalEmpreiteiroPix":16857.16062,"totalAdmPix":5414.05,"gastoCartao":29479,"totalATransferir":22271.21062,"parcelaEvolucaoCaixa":519.51,"custoTotal":51750.21062,"vencimento":"2026-06-11","vencPlanejado":"2026-06-10","status":"REALIZADO","obs":"","overrides":{"custoTotal":true}},{"id":"parcela-4","label":"JUNHO/2º PARCELA","totalEmpreiteiroPix":44000,"totalAdmPix":6500,"gastoCartao":0,"totalATransferir":50500,"parcelaEvolucaoCaixa":0,"custoTotal":50500,"vencimento":"2026-06-27","vencPlanejado":"2026-06-25","status":"REALIZADO","obs":"","overrides":{}},{"id":"parcela-5","label":"JULHO/1º PARCELA","totalEmpreiteiroPix":42000.0019,"totalAdmPix":5200,"gastoCartao":8500,"totalATransferir":47200.0019,"parcelaEvolucaoCaixa":2226.76,"custoTotal":57926.7619,"vencimento":"2026-07-10","vencPlanejado":"2026-07-10","status":"REALIZADO","obs":"","overrides":{}},{"id":"parcela-6","label":"JULHO/2º PARCELA","totalEmpreiteiroPix":58033.116,"totalAdmPix":5803.3116,"gastoCartao":0,"totalATransferir":63836.4276,"parcelaEvolucaoCaixa":0,"custoTotal":63836.4276,"vencimento":"2026-07-25","vencPlanejado":"2026-07-25","status":"REALIZADO","obs":"Verifica-se um avanço técnico acumulado em caixa (reserva técnica) no valor de R$ 201.154,64; contudo, será objeto de medição apenas o montante de R$ 58.033,12, tendo em vista que a execução em curso está sendo custeada com recursos próprios do empreiteiro restando um saldo em conta sobre recurso pós essa medição em R$ 137.318,21","overrides":{}},{"id":"parcela-7","label":"AGOSTO/1º PARCELA","totalEmpreiteiroPix":34493.146,"totalAdmPix":7815.6456,"gastoCartao":43663.31,"totalATransferir":42308.7916,"parcelaEvolucaoCaixa":8807.23,"custoTotal":85972.1016,"vencimento":"2026-08-10","vencPlanejado":"2026-08-10","status":"REALIZADO","obs":"Em agosto, observou-se uma intensificação das saídas via Caixa CEF, compatível com o avanço físico da obra nesta fase — etapa que naturalmente demanda maior desembolso, como aquisição concentrada de materiais e mão de obra vinculada às etapas de execução programadas. Esse comportamento é esperado e recorrente em obras financiadas por liberações escalonadas, nas quais o saldo acumulado funciona como reserva de capital de giro, absorvendo naturalmente as oscilações entre entradas e saídas de cada etapa.\n\nO saldo acumulado atual, de R$ 63.299,05, confirma que a obra permanece com posição de caixa positiva e dentro da normalidade operacional esperada para este estágio da construção, evidenciando que o planejamento financeiro adotado nos meses anteriores cumpriu sua função de sustentar as etapas de maior desembolso sem comprometer a continuidade da obra.","overrides":{"custoTotal":true}},{"id":"parcela-8","label":"AGOSTO/2º PARCELA","totalEmpreiteiroPix":54708.99652,"totalAdmPix":5833.099652,"gastoCartao":0,"totalATransferir":60542.09617,"parcelaEvolucaoCaixa":0,"custoTotal":60542.09617,"vencimento":"2026-08-26","vencPlanejado":"2026-08-25","status":"REALIZADO","obs":"","overrides":{}},{"id":"parcela-9","label":"SETEMBRO/1º PARCELA","totalEmpreiteiroPix":24917.0755,"totalAdmPix":5046.52255,"gastoCartao":25548.15,"totalATransferir":29963.59805,"parcelaEvolucaoCaixa":7429.921609,"custoTotal":55511.74805,"vencimento":null,"vencPlanejado":"2026-09-10","status":"PLANEJADO","obs":"","overrides":{"custoTotal":true}},{"id":"parcela-10","label":"SETEMBRO/2º PARCELA","totalEmpreiteiroPix":18641.137,"totalAdmPix":1864.1137,"gastoCartao":0,"totalATransferir":20505.2507,"parcelaEvolucaoCaixa":0,"custoTotal":20505.2507,"vencimento":null,"vencPlanejado":"2026-09-25","status":"PLANEJADO","obs":"","overrides":{}}],"historicoAvancos":[{"id":"avanco-inicial-1-1","categoriaId":"cat-01-servicos-preliminares-e-","categoriaNome":"Serviços Preliminares e Gerais (água luz e projetos aprovados)","percAvancoAnterior":null,"percAvancoNovo":1.0,"data":"2026-06-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-06-25T00:00:00.000Z"},{"id":"avanco-inicial-2-1","categoriaId":"cat-02-infraestrutura-estacas-b","categoriaNome":"Infraestrutura (estacas,brocas,baldrames,sapatas)","percAvancoAnterior":null,"percAvancoNovo":0.85,"data":"2026-06-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-06-25T00:00:00.000Z"},{"id":"avanco-inicial-2-2","categoriaId":"cat-02-infraestrutura-estacas-b","categoriaNome":"Infraestrutura (estacas,brocas,baldrames,sapatas)","percAvancoAnterior":0.85,"percAvancoNovo":1.0,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-3-1","categoriaId":"cat-03-supra-estrutura-vigas-pi","categoriaNome":"Supra estrutura(vigas,pilares,cintas,escada)","percAvancoAnterior":null,"percAvancoNovo":0.3995,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-3-2","categoriaId":"cat-03-supra-estrutura-vigas-pi","categoriaNome":"Supra estrutura(vigas,pilares,cintas,escada)","percAvancoAnterior":0.3995,"percAvancoNovo":0.5,"data":"2026-08-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-08-25T00:00:00.000Z"},{"id":"avanco-inicial-4-1","categoriaId":"cat-04-paredes-e-paineis","categoriaNome":"Paredes e Painéis","percAvancoAnterior":null,"percAvancoNovo":0.5,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-8-1","categoriaId":"cat-08-impermeabilizacoes","categoriaNome":"Impermeabilizações","percAvancoAnterior":null,"percAvancoNovo":0.2,"data":"2026-07-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-07-25T00:00:00.000Z"},{"id":"avanco-inicial-8-2","categoriaId":"cat-08-impermeabilizacoes","categoriaNome":"Impermeabilizações","percAvancoAnterior":0.2,"percAvancoNovo":0.4,"data":"2026-08-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-08-25T00:00:00.000Z"},{"id":"avanco-inicial-13-1","categoriaId":"cat-13-pisos","categoriaNome":"Pisos","percAvancoAnterior":null,"percAvancoNovo":0.1001,"data":"2026-08-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-08-25T00:00:00.000Z"},{"id":"avanco-inicial-20-1","categoriaId":"cat-20-outros-servicos","categoriaNome":"Outros Serviços","percAvancoAnterior":null,"percAvancoNovo":0.83,"data":"2026-06-25","status":"REALIZADO","obs":"Medição física (liberação CAIXA na planilha)","timestamp":"2026-06-25T00:00:00.000Z"}],"fluxoCaixaAjustes":[],"updatedAt":"2026-08-31T21:44:28.849Z","liberacoesCaixa":[{"id":"liberacao-1","data":"2026-06-01","valor":177000.6,"obs":"Medição 01","status":"REALIZADO"},{"id":"liberacao-2","data":"2026-07-01","valor":132580.8,"obs":"Medição 02","status":"REALIZADO"},{"id":"liberacao-3","data":"2026-08-01","valor":35823.6,"obs":"Medição 03","status":"REALIZADO"},{"id":"liberacao-4","data":"2026-09-01","valor":91071.18,"obs":"Medição 04","status":"REALIZADO"}],"consumosRecursoProprio":[{"id":"consumo-1","descricao":"Maio/1º parcela (Total Transferido)","valor":31000,"data":"2026-05-11"},{"id":"consumo-2","descricao":"Maio/2º parcela (Total Transferido)","valor":33500,"data":"2026-05-26"},{"id":"consumo-3","descricao":"Junho/1º parcela (Total Transferido)","valor":22271.21,"data":"2026-06-11"},{"id":"consumo-4","descricao":"Entrada do lote","valor":144000,"data":null},{"id":"consumo-5","descricao":"Serviços preliminares (pago direto)","valor":60060.87,"data":null}]};
 const STATE = JSON.parse(document.getElementById('state-data').textContent);
 
 /* ==========================================================================
@@ -870,6 +944,39 @@ function recompute(state) {
   const contratoTotalEmpreiteiro = Number(parametros.contratoTotalEmpreiteiro) || totalOrcadoCategorias;
   const recursoProprioPlanejado = Number(parametros.recursoProprioPlanejado) || 0;
 
+  /* Viabilidade do empreendimento.
+     -----------------------------------------------------------------------
+     Investimento total = tudo que entra na obra, venha do banco ou do bolso
+     do proprietário. A margem é o VGV menos esse investimento, e o retorno
+     sobre capital próprio (ROI) mede essa margem contra o dinheiro que o
+     proprietário efetivamente colocou — que é a conta que importa para quem
+     incorpora, já que o resto é financiado.
+     Atenção: não desconta juros do financiamento nem impostos de venda. */
+  const vgv = Number(parametros.vgv) || 0;
+  const investimentoTotal = round2(creditoCaixaTotalPCI + recursoProprioPlanejado);
+  const margemBruta = round2(vgv - investimentoTotal);
+  const margemSobreCusto = investimentoTotal > 0 ? margemBruta / investimentoTotal : 0;
+  const margemSobreVgv = vgv > 0 ? margemBruta / vgv : 0;
+  const roiCapitalProprio = recursoProprioPlanejado > 0 ? margemBruta / recursoProprioPlanejado : 0;
+
+  /* Resultado líquido: tira da venda o que não é seu.
+     -----------------------------------------------------------------------
+     Corretagem incide sobre o VGV (é percentual do valor de venda). O IR
+     incide sobre o GANHO — receita de venda já líquida de corretagem, menos
+     o custo total da operação — que é como funciona o ganho de capital.
+     As duas alíquotas são editáveis; se o resultado antes do IR for
+     negativo, não há imposto a pagar. */
+  const corretagemPercent = Number(parametros.corretagemPercent) || 0;
+  const irPercent = Number(parametros.irPercent) || 0;
+  const corretagemValor = round2(vgv * corretagemPercent);
+  const receitaLiquidaVenda = round2(vgv - corretagemValor);
+  const lucroAntesIR = round2(receitaLiquidaVenda - investimentoTotal);
+  const irValor = round2(Math.max(0, lucroAntesIR) * irPercent);
+  const lucroLiquido = round2(lucroAntesIR - irValor);
+  const margemLiquidaSobreVgv = vgv > 0 ? lucroLiquido / vgv : 0;
+  const margemLiquidaSobreCusto = investimentoTotal > 0 ? lucroLiquido / investimentoTotal : 0;
+  const roiLiquidoCapitalProprio = recursoProprioPlanejado > 0 ? lucroLiquido / recursoProprioPlanejado : 0;
+
   const totalConsumidoContrato = round2(totalEmpreiteiroPago + totalCartaoPago);
   const saldoAPagarEmpreiteiro = round2(totalMedido - totalConsumidoContrato);
   const saldoContratoRestante = round2(contratoTotalEmpreiteiro - totalMedido);
@@ -1002,6 +1109,10 @@ function recompute(state) {
     creditoCaixaTotalPCI, caixaLiberadaAcumulada,
     percCaixaLiberada: creditoCaixaTotalPCI > 0 ? round2((caixaLiberadaAcumulada / creditoCaixaTotalPCI) * 10000) / 10000 : 0,
     recursoProprioPlanejado, totalInvestidoDisponivel,
+    vgv, investimentoTotal, margemBruta, margemSobreCusto, margemSobreVgv, roiCapitalProprio,
+    corretagemPercent, irPercent, corretagemValor, receitaLiquidaVenda,
+    lucroAntesIR, irValor, lucroLiquido,
+    margemLiquidaSobreVgv, margemLiquidaSobreCusto, roiLiquidoCapitalProprio,
     // % Execução financeira: mesma fórmula da aba "Contas a pagar"!I6 da planilha
     // original (=C6/(1500000+A6)) — usa GASTO PLS + Provisão da Quizena (C6) sobre
     // o total de financiamento disponível (crédito CAIXA total + recurso próprio).
@@ -1254,7 +1365,7 @@ let FILTRO_SALDO_CONTA_REALIZADO_ATE = null;
 // Executivo) — Set de "mes|quinzena" (ex.: "2026-07|1"); null = ainda não
 // inicializado (marca todas na primeira renderização).
 let FILTRO_CUSTO_TOTAL_QUINZENAS = null;
-let READONLY = false;
+let READONLY = true;   // o painel abre travado; a sessão de lançamento destrava
 let saveTimer = null;
 const SAVE_DEBOUNCE_MS = 1500;
 
@@ -1408,8 +1519,10 @@ function renderSaldoContaPanel({ title, subtitle, filtroLabel, getFiltro, setFil
       <h2>${esc(title)}</h2>
       <div class="muted">${subtitle}</div>
     </div></div>
-    <div class="saldoContaFiltroSlot" style="margin-bottom:8px"></div>
-    <div class="card-value" style="font-size:32px; font-weight:700; margin-top:4px"></div>
+    <div class="saldo-conta-linha">
+      <div class="saldoContaFiltroSlot"></div>
+      <div class="card-value saldo-conta-valor"></div>
+    </div>
   `;
 
   const ultimoPeriodo = periodos[periodos.length - 1] || null;
@@ -1417,7 +1530,7 @@ function renderSaldoContaPanel({ title, subtitle, filtroLabel, getFiltro, setFil
 
   const filtroWrap = document.createElement('div');
   filtroWrap.className = 'form-grid';
-  filtroWrap.style.maxWidth = '320px';
+  filtroWrap.style.maxWidth = '250px';
   filtroWrap.innerHTML = `<label>${esc(filtroLabel)}
     <select class="cell-input filter-control">
       ${periodos.map((p) => `<option value="${p.mes}|${p.quinzena}">${esc(p.label)}</option>`).join('')}
@@ -1511,7 +1624,7 @@ function renderCustoTotalPeriodoPanel() {
     </div>
     <div class="qz-picker"></div>
     <button type="button" class="value-drill filter-control" id="custoTotalPeriodoValor" title="Clique para ver o extrato — de onde sai esse número">
-      <span class="drill-value card-value" style="font-size:32px; font-weight:700;"></span>
+      <span class="drill-value card-value" style="font-size:25px; font-weight:700;"></span>
       <span class="drill-hint">ver extrato</span>
     </button>
   `;
@@ -1723,16 +1836,166 @@ function setStatus(kind) {
   const text = document.getElementById('statusChipText');
   if (!chip || !text) return;
   chip.className = `status-chip ${kind}`;
-  const labels = { saving: 'Salvando…', saved: 'Sincronizado', error: 'Erro ao salvar', readonly: 'Somente leitura' };
+  const labels = { saving: 'Salvando…', saved: 'Sincronizado', error: 'Erro ao salvar', readonly: 'Somente leitura', local: 'Salvo neste navegador' };
   text.textContent = labels[kind] || kind;
 }
 
+/* ==========================================================================
+   Sessão de lançamento (login)
+   --------------------------------------------------------------------------
+   O painel abre travado para quem só vai olhar. Quem lança dados entra com
+   usuário e senha e destrava os campos. A credencial fica guardada como
+   hash, não em texto claro — mas isto NÃO é segurança de verdade: o app é um
+   arquivo único que roda inteiro no navegador, então quem baixar o arquivo
+   consegue contornar a trava. Serve para evitar edição acidental e para tirar
+   a tarja de "somente leitura" da frente de quem trabalha, não para proteger
+   dado sigiloso.
+
+   Onde o app consegue publicar (dentro do Claude, com permissão de escrita),
+   salvar continua sendo publicar uma nova versão. Onde não consegue (cópia
+   no GitHub Pages, ou visitante sem permissão), o lançamento é guardado no
+   navegador de quem está lançando e precisa ser exportado para virar oficial.
+   ========================================================================== */
+const CREDENCIAL_HASH = '96861735b01dcf0bce66ec73559217e32fa4f8c8c1959ac1e92929d8b9a98549';
+const CHAVE_SESSAO = 'lct_sessao';
+const CHAVE_RASCUNHO = 'lct_rascunho';
+
+let SESSAO = null;          // { usuario } quando destravado
+let PODE_PUBLICAR = null;   // null = ainda verificando; true/false depois
+
+async function hashCredencial(usuario, senha) {
+  const texto = `lct|${String(usuario).trim().toLowerCase()}|${String(senha).trim()}`;
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(texto));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+function lerSessao() {
+  try {
+    const raw = sessionStorage.getItem(CHAVE_SESSAO);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function gravarSessao(sessao) {
+  try {
+    if (sessao) sessionStorage.setItem(CHAVE_SESSAO, JSON.stringify(sessao));
+    else sessionStorage.removeItem(CHAVE_SESSAO);
+  } catch (e) { /* navegador sem storage: a sessão vale só até recarregar */ }
+}
+
+function aplicarModo() {
+  READONLY = !SESSAO;
+
+  const btn = document.getElementById('btnSessao');
+  if (btn) {
+    btn.textContent = SESSAO ? `${SESSAO.usuario} · sair` : 'Entrar para lançar';
+    btn.classList.toggle('ativo', !!SESSAO);
+    btn.title = SESSAO ? 'Encerrar a sessão de lançamento' : 'Entrar para inserir e editar lançamentos';
+  }
+
+  const banner = document.getElementById('modoBanner');
+  if (banner) {
+    if (!SESSAO) {
+      banner.hidden = true;
+      banner.className = 'modo-banner';
+      banner.textContent = '';
+      setStatus('readonly');
+    } else if (PODE_PUBLICAR === false) {
+      banner.hidden = false;
+      banner.className = 'modo-banner local';
+      banner.innerHTML = `<span>Modo lançamento — ${esc(SESSAO.usuario)}. Esta cópia não publica no servidor: o que você lançar fica guardado <strong>só neste navegador</strong>. Exporte o arquivo para tornar oficial.</span>`;
+      const acao = document.createElement('button');
+      acao.type = 'button';
+      acao.className = 'btn small modo-acao filter-control';
+      acao.textContent = 'Salvar cópia em HTML';
+      acao.onclick = exportarCopiaHtml;
+      banner.appendChild(acao);
+      setStatus('local');
+    } else {
+      banner.hidden = true;
+      banner.className = 'modo-banner';
+      banner.textContent = '';
+      setStatus('saved');
+    }
+  }
+}
+
+function abrirLogin() {
+  openModal('Entrar para lançar', (body, close) => {
+    const form = document.createElement('form');
+    form.className = 'login-form';
+    form.innerHTML = `
+      <label>Usuário<input name="usuario" autocomplete="username" autocapitalize="none" required /></label>
+      <label>Senha<input name="senha" type="password" autocomplete="current-password" required /></label>
+      <div class="login-erro" hidden></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" class="btn" id="cancelaLogin">Cancelar</button>
+        <button type="submit" class="btn primary">Entrar</button>
+      </div>
+      <div class="login-nota">A sessão vale só nesta aba do navegador e cai quando você a fecha. Esta trava evita edição acidental — não é proteção de dado sigiloso, já que o app roda inteiro no navegador.</div>
+    `;
+    form.querySelector('#cancelaLogin').onclick = close;
+    const erro = form.querySelector('.login-erro');
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const dados = Object.fromEntries(new FormData(form).entries());
+      const hash = await hashCredencial(dados.usuario || '', dados.senha || '');
+      if (hash !== CREDENCIAL_HASH) {
+        erro.hidden = false;
+        erro.textContent = 'Usuário ou senha não confere.';
+        return;
+      }
+      SESSAO = { usuario: String(dados.usuario).trim() };
+      gravarSessao(SESSAO);
+      close();
+      aplicarModo();
+      renderAll();
+      toast(`Modo lançamento ativo — ${SESSAO.usuario}.`);
+    });
+    body.appendChild(form);
+    setTimeout(() => form.querySelector('input[name="usuario"]').focus(), 30);
+  });
+}
+
+async function sairDaSessao() {
+  if (!await confirmDialog('Encerrar a sessão de lançamento? O painel volta a ficar travado para edição.', { title: 'Sair', okLabel: 'Sair' })) return;
+  SESSAO = null;
+  gravarSessao(null);
+  aplicarModo();
+  renderAll();
+}
+
+// Guarda o lançamento no navegador de quem está lançando, quando a cópia não
+// tem como publicar no servidor.
+function salvarRascunhoLocal() {
+  try {
+    localStorage.setItem(CHAVE_RASCUNHO, JSON.stringify({ salvoEm: new Date().toISOString(), estado: STATE }));
+    setStatus('local');
+  } catch (e) {
+    setStatus('error');
+    toast('Não foi possível guardar o lançamento neste navegador.', true);
+  }
+}
+
+function restaurarRascunhoLocal() {
+  try {
+    const raw = localStorage.getItem(CHAVE_RASCUNHO);
+    if (!raw) return false;
+    const r = JSON.parse(raw);
+    if (!r || !r.estado) return false;
+    // Só vale se for mais recente do que o estado embutido no arquivo.
+    if (r.estado.updatedAt && STATE.updatedAt && r.estado.updatedAt <= STATE.updatedAt) return false;
+    // STATE é const: substituímos o CONTEÚDO, não a referência.
+    for (const k of Object.keys(STATE)) delete STATE[k];
+    Object.assign(STATE, r.estado);
+    VIEW = recompute(STATE);
+    return true;
+  } catch (e) { return false; }
+}
+
 function enterReadOnly() {
-  if (READONLY) return;
-  READONLY = true;
-  const banner = document.getElementById('readonlyBanner');
-  if (banner) banner.hidden = false;
-  setStatus('readonly');
+  PODE_PUBLICAR = false;
+  aplicarModo();
   renderAll();
 }
 
@@ -1753,14 +2016,16 @@ function restoreViewState() {
 
 async function doSave() {
   const ns = await ARTIFACT_NS_PROMISE;
-  if (!ns) { enterReadOnly(); return; }
+  if (!ns) { PODE_PUBLICAR = false; salvarRascunhoLocal(); aplicarModo(); return; }
   try {
     stashViewState();
     await ns.publish(buildFullDocument(STATE));
     // sucesso: a própria plataforma recarrega esta visão para a nova versão.
   } catch (e) {
     if (e && (e.code === 'not_writer' || e.code === 'not_granted')) {
-      enterReadOnly();
+      PODE_PUBLICAR = false;
+      salvarRascunhoLocal();
+      aplicarModo();
     } else if (e && e.code === 'conflict') {
       // outra edição venceu; a visão já está sendo recarregada para ela.
     } else {
@@ -2510,6 +2775,7 @@ const DRILLS = {
   recursoProprio: () => abrirExtratoRecursoProprio(),
   caixaLiberado: () => abrirExtratoCaixaLiberado(),
   verbaDisponivel: () => abrirExtratoVerbaDisponivel(),
+  viabilidade: () => abrirExtratoViabilidade(),
 };
 
 function ligarDrills(root) {
@@ -2517,6 +2783,102 @@ function ligarDrills(root) {
     const fn = DRILLS[btn.dataset.drill];
     if (fn) btn.onclick = fn;
   });
+}
+
+/* Viabilidade do empreendimento: VGV, margem e retorno.
+   -------------------------------------------------------------------------
+   Aqui o painel deixa de olhar só o caixa da obra e passa a olhar o negócio:
+   quanto entra de investimento (banco + capital próprio), quanto se espera
+   de venda (VGV) e o que sobra. O ROI é medido sobre o CAPITAL PRÓPRIO, não
+   sobre o investimento total — é a conta que interessa a quem incorpora,
+   porque o restante é dinheiro financiado. O VGV é editável aqui mesmo e
+   todo o resto recalcula na hora. */
+function abrirExtratoViabilidade() {
+  const r = VIEW.resumo;
+  const pci = Number(r.creditoCaixaTotalPCI) || 0;
+  const rp = Number(r.recursoProprioPlanejado) || 0;
+  const inv = Number(r.investimentoTotal) || 0;
+  const vgv = Number(r.vgv) || 0;
+  const margem = Number(r.margemBruta) || 0;
+
+  openModal('Viabilidade — VGV, margem e retorno', (body) => {
+    const topo = document.createElement('div');
+    topo.className = `extrato-total-line ${r.lucroLiquido < 0 ? 'negativo' : ''}`;
+    topo.innerHTML = `<span>Lucro líquido — depois de corretagem e IR</span><strong>${money(r.lucroLiquido)}</strong>`;
+    body.appendChild(topo);
+
+    // VGV editável: muda aqui, recalcula tudo.
+    const edit = document.createElement('div');
+    edit.className = 'consumo-filtro';
+    const reabrir = () => {
+      const bd = body.closest('.modal-backdrop');
+      if (bd) bd.remove();
+      abrirExtratoViabilidade();
+    };
+    const campo = (titulo, el) => {
+      const label = document.createElement('label');
+      label.textContent = titulo;
+      el.classList.add('filter-control');
+      el.style.maxWidth = '150px';
+      label.appendChild(el);
+      edit.appendChild(label);
+    };
+    campo('VGV (R$)', moneyInput({ value: vgv, onSave: (v) => { updateParametros({ vgv: v }); reabrir(); } }));
+    campo('Corretagem (%)', percentInput({ value: r.corretagemPercent, onSave: (v) => { updateParametros({ corretagemPercent: v }); reabrir(); } }));
+    campo('IR sobre o ganho (%)', percentInput({ value: r.irPercent, onSave: (v) => { updateParametros({ irPercent: v }); reabrir(); } }));
+    const dica = document.createElement('div');
+    dica.className = 'consumo-leitura muted';
+    dica.textContent = 'Mude qualquer um destes três e todos os indicadores recalculam.';
+    edit.appendChild(dica);
+    body.appendChild(edit);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'table-scroll';
+    wrap.style.maxHeight = '48vh';
+    wrap.innerHTML = `
+      <table class="extrato-table">
+        <tbody>
+          <tr class="extrato-grupo"><td colspan="2">De onde vem o investimento</td></tr>
+          <tr><td>Recursos CAIXA — crédito PCI total</td><td class="num">${money(pci)}</td></tr>
+          <tr><td>Recursos próprios planejados</td><td class="num">${money(rp)}</td></tr>
+          <tr class="extrato-residuo"><td><strong>Investimento total</strong></td><td class="num"><strong>${money(inv)}</strong></td></tr>
+          <tr><td class="sub-item">participação do capital próprio</td><td class="num">${pct(inv > 0 ? rp / inv : 0)}</td></tr>
+          <tr><td class="sub-item">participação do financiamento</td><td class="num">${pct(inv > 0 ? pci / inv : 0)}</td></tr>
+
+          <tr class="extrato-grupo"><td colspan="2">Resultado esperado</td></tr>
+          <tr><td>VGV estimado (valor de venda)</td><td class="num">${money(vgv)}</td></tr>
+          <tr><td>Investimento total</td><td class="num">− ${money(inv)}</td></tr>
+          <tr class="extrato-residuo"><td><strong>Margem</strong></td><td class="num"><strong>${money(margem)}</strong></td></tr>
+
+          <tr class="extrato-grupo"><td colspan="2">Margem bruta — indicadores</td></tr>
+          <tr><td>Margem sobre o custo total de operação <span class="muted">(margem ÷ investimento)</span></td><td class="num"><strong>${pct(r.margemSobreCusto)}</strong></td></tr>
+          <tr><td>Margem sobre o VGV <span class="muted">(margem ÷ VGV)</span></td><td class="num"><strong>${pct(r.margemSobreVgv)}</strong></td></tr>
+          <tr><td>ROI bruto sobre capital próprio <span class="muted">(margem ÷ recurso próprio)</span></td><td class="num"><strong>${pct(r.roiCapitalProprio)}</strong></td></tr>
+
+          <tr class="extrato-grupo"><td colspan="2">Descontos da venda</td></tr>
+          <tr><td>VGV estimado</td><td class="num">${money(vgv)}</td></tr>
+          <tr><td>Corretagem sobre o VGV <span class="muted">(${pct(r.corretagemPercent)})</span></td><td class="num">− ${money(r.corretagemValor)}</td></tr>
+          <tr><td>Receita líquida de corretagem</td><td class="num">${money(r.receitaLiquidaVenda)}</td></tr>
+          <tr><td>Custo total de operação (investimento)</td><td class="num">− ${money(inv)}</td></tr>
+          <tr><td><strong>Ganho antes do IR</strong></td><td class="num"><strong>${money(r.lucroAntesIR)}</strong></td></tr>
+          <tr><td>IR sobre o ganho <span class="muted">(${pct(r.irPercent)})</span></td><td class="num">− ${money(r.irValor)}</td></tr>
+          <tr class="extrato-residuo"><td><strong>Lucro líquido</strong></td><td class="num"><strong>${money(r.lucroLiquido)}</strong></td></tr>
+
+          <tr class="extrato-grupo"><td colspan="2">Resultado líquido — indicadores</td></tr>
+          <tr><td>Margem líquida sobre o custo total <span class="muted">(${money(r.lucroLiquido)} ÷ ${money(inv)})</span></td><td class="num"><strong>${pct(r.margemLiquidaSobreCusto)}</strong></td></tr>
+          <tr><td>Margem líquida sobre o VGV <span class="muted">(${money(r.lucroLiquido)} ÷ ${money(vgv)})</span></td><td class="num"><strong>${pct(r.margemLiquidaSobreVgv)}</strong></td></tr>
+          <tr class="extrato-residuo"><td><strong>ROI líquido sobre capital próprio</strong> <span class="muted">(${money(r.lucroLiquido)} ÷ ${money(rp)})</span></td><td class="num"><strong>${pct(r.roiLiquidoCapitalProprio)}</strong></td></tr>
+        </tbody>
+      </table>`;
+    body.appendChild(wrap);
+
+    const nota = document.createElement('div');
+    nota.className = 'muted';
+    nota.innerHTML = r.lucroLiquido < 0
+      ? '<strong>Atenção:</strong> com esse VGV a operação fecha no negativo depois de corretagem e imposto.'
+      : 'A corretagem incide sobre o VGV; o IR incide sobre o ganho (receita já líquida de corretagem menos o custo total da operação), como no ganho de capital. Ainda <strong>não desconta</strong> os juros do financiamento CAIXA nem outras despesas de comercialização — as alíquotas acima são editáveis.';
+    body.appendChild(nota);
+  }, { wide: true });
 }
 
 // Extrato da "Verba total disponível": o dinheiro que ainda existe para
@@ -3184,6 +3546,46 @@ function renderSCurveCard({ title, subtitle, curve, hojeStr, marker = null }) {
   return card;
 }
 
+/* Avanço de cada categoria, cruzado com o histórico de medições.
+   -------------------------------------------------------------------------
+   A coluna "% avanço" era só um número solto. Aqui ela ganha barra, rótulo
+   de estado e — o que interessa de verdade — a amarração com o histórico:
+   a data da última medição realizada e quantos pontos percentuais aquela
+   medição acrescentou. 100% deixa de ser "100%" e passa a ser "Medido /
+   concluído", que é o que o número quer dizer. */
+function historicoDaCategoria(catId, apenasRealizados = true) {
+  return (VIEW.historicoAvancos || [])
+    .filter((h) => h.categoriaId === catId && (!apenasRealizados || h.status === 'REALIZADO'))
+    .sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
+}
+
+function estadoAvanco(perc) {
+  if (perc >= 0.9999) return { classe: 'concluido', rotulo: 'Medido / concluído' };
+  if (perc > 0) return { classe: 'andamento', rotulo: 'Em execução' };
+  return { classe: 'nao-iniciado', rotulo: 'Não iniciado' };
+}
+
+// Célula de avanço: barra + percentual + estado + última medição do histórico.
+function celulaAvanco(c) {
+  const perc = Number(c.percAvancoEfetivo) || 0;
+  const est = estadoAvanco(perc);
+  const hist = historicoDaCategoria(c.id);
+  const ultimo = hist[hist.length - 1] || null;
+  const delta = ultimo && ultimo.percAvancoAnterior != null
+    ? (Number(ultimo.percAvancoNovo) || 0) - (Number(ultimo.percAvancoAnterior) || 0)
+    : (ultimo ? Number(ultimo.percAvancoNovo) || 0 : 0);
+
+  const rodape = ultimo
+    ? `<span class="avanco-hist" title="Última medição registrada no histórico de avanços">${dateBR(ultimo.data)} · +${fmtNum.format(delta * 100)} p.p.${hist.length > 1 ? ` · ${hist.length} medições` : ''}</span>`
+    : '<span class="avanco-hist sem">sem medição no histórico</span>';
+
+  return `<div class="avanco-cell ${est.classe}">
+      <div class="avanco-topo"><span class="avanco-pct">${pct(perc)}</span><span class="avanco-tag">${est.rotulo}</span></div>
+      <div class="avanco-bar"><span style="width:${Math.min(100, Math.max(0, perc * 100)).toFixed(1)}%"></span></div>
+      ${rodape}
+    </div>`;
+}
+
 function renderPainel() {
   const root = document.getElementById('tab-painel');
   root.innerHTML = '';
@@ -3193,19 +3595,29 @@ function renderPainel() {
   kpis.className = 'cards-grid';
   kpis.innerHTML = `
     <div class="card accent">
-      <div class="card-label">Contrato total empreiteiro</div>
-      <div class="card-value">${money(r.contratoTotalEmpreiteiro)}</div>
-      <div class="card-sub">Executado: ${money(r.totalConsumidoContrato)} · ${pct(r.percValorTotalPago)}</div>
+      <div class="card-label">Investimento total</div>
+      ${cardValueDrill('viabilidade', r.investimentoTotal)}
+      <div class="card-sub">Crédito CAIXA (PCI) + recurso próprio planejado — tudo que entra na obra</div>
     </div>
     <div class="card accent">
-      <div class="card-label">Crédito CAIXA (PCI) total</div>
+      <div class="card-label">Recursos CAIXA — crédito PCI</div>
       <div class="card-value">${money(r.creditoCaixaTotalPCI)}</div>
       <div class="card-sub"><button type="button" class="value-drill tiny filter-control" data-drill="caixaLiberado" title="Clique para ver o extrato — lote e medições PLS"><span class="drill-value">Liberado: ${money(r.caixaLiberadaAcumulada)} · ${pct(r.percCaixaLiberada)}</span><span class="drill-hint">extrato</span></button></div>
     </div>
     <div class="card">
-      <div class="card-label">Recurso próprio planejado</div>
+      <div class="card-label">Recursos próprios planejados</div>
       <div class="card-value">${money(r.recursoProprioPlanejado)}</div>
-      <div class="card-sub">Execução financeira (caixa liberado + recurso próprio): ${money(r.totalInvestidoDisponivel)}</div>
+      <div class="card-sub">${pct(r.investimentoTotal > 0 ? r.recursoProprioPlanejado / r.investimentoTotal : 0)} do investimento total</div>
+    </div>
+    <div class="card ${r.margemBruta < 0 ? 'warn' : 'good'}">
+      <div class="card-label">VGV estimado</div>
+      ${cardValueDrill('viabilidade', r.vgv, 'ver viabilidade')}
+      <div class="card-sub">Lucro líquido: ${money(r.lucroLiquido)} · ROI líquido s/ capital próprio: ${pct(r.roiLiquidoCapitalProprio)}</div>
+    </div>
+    <div class="card accent">
+      <div class="card-label">Contrato total empreiteiro</div>
+      <div class="card-value">${money(r.contratoTotalEmpreiteiro)}</div>
+      <div class="card-sub">Executado: ${money(r.totalConsumidoContrato)} · ${pct(r.percValorTotalPago)}</div>
     </div>
     <div class="card ${r.percObraGeral + 0.0001 >= r.percPrevistoGeral ? 'good' : 'warn'}">
       <div class="card-label">% Obra: real x previsto</div>
@@ -3250,7 +3662,7 @@ function renderPainel() {
 
   const selPanel = document.createElement('div');
   selPanel.className = 'panel';
-  selPanel.innerHTML = `<div class="panel-header"><div><h2>O que pagar</h2>
+  selPanel.innerHTML = `<div class="panel-header"><div><h2>PCI — Planilha de Custo de Investimento</h2>
     <div class="muted">Clique numa linha para ver claramente o valor orçado, já medido/pago e o saldo restante do contrato dessa categoria. Clicar de novo na mesma linha fecha o quadro.</div></div></div>`;
   const selBody = document.createElement('div');
   selBody.className = 'painel-select-body';
@@ -3259,13 +3671,13 @@ function renderPainel() {
   listWrap.className = 'table-scroll painel-select-list';
   const table = document.createElement('table');
   table.className = 'data';
-  table.innerHTML = `<thead><tr><th>Nº</th><th class="wrap">Categoria</th><th class="num">% avanço</th><th class="num">Saldo do contrato</th></tr></thead><tbody></tbody>`;
+  table.innerHTML = `<thead><tr><th>Nº</th><th class="wrap">Categoria</th><th>Avanço medido</th><th class="num">Saldo do contrato</th></tr></thead><tbody></tbody>`;
   const tbody = table.querySelector('tbody');
   for (const c of VIEW.categorias) {
     const tr = document.createElement('tr');
     tr.className = `clickable-row${PAINEL_CATEGORIA_SELECIONADA === c.id ? ' row-selected' : ''}`;
     tr.dataset.catId = c.id;
-    tr.innerHTML = `<td>${c.numero}</td><td class="wrap">${esc(c.nome)}</td><td class="num">${pct(c.percAvancoEfetivo)}</td><td class="num">${money(c.saldoContratoCategoria)}</td>`;
+    tr.innerHTML = `<td>${c.numero}</td><td class="wrap">${esc(c.nome)}</td><td class="avanco-td">${celulaAvanco(c)}</td><td class="num">${money(c.saldoContratoCategoria)}</td>`;
     // Clicar de novo na mesma linha fecha o quadro (comporta como um toggle).
     tr.onclick = () => {
       PAINEL_CATEGORIA_SELECIONADA = PAINEL_CATEGORIA_SELECIONADA === c.id ? null : c.id;
@@ -3299,6 +3711,22 @@ function renderPainel() {
         <div><div class="muted">% previsto (cronograma)</div><strong>${pct(selecionada.percPrevisto)}</strong></div>
         <div><div class="muted">Janela prevista</div><strong>${selecionada.cronogramaPrevisto ? `${dateBR(selecionada.cronogramaPrevisto.inicio)} – ${dateBR(selecionada.cronogramaPrevisto.termino)}` : '—'}</strong></div>
       </div>
+      ${(() => {
+        const hist = historicoDaCategoria(selecionada.id);
+        if (!hist.length) return '<div class="avanco-timeline vazio">Nenhuma medição registrada no histórico de avanços para esta categoria.</div>';
+        return `<div class="avanco-timeline">
+          <div class="avanco-timeline-titulo">Histórico de medições</div>
+          ${hist.map((h) => {
+            const ant = h.percAvancoAnterior == null ? 0 : Number(h.percAvancoAnterior) || 0;
+            const novo = Number(h.percAvancoNovo) || 0;
+            return `<div class="avanco-passo${novo >= 0.9999 ? ' final' : ''}">
+              <span class="avanco-passo-data">${dateBR(h.data)}</span>
+              <span class="avanco-passo-salto">${h.percAvancoAnterior == null ? '—' : pct(ant)} → <strong>${pct(novo)}</strong></span>
+              <span class="avanco-passo-delta">+${fmtNum.format((novo - ant) * 100)} p.p.</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+      })()}
       <div class="muted info-collapse" data-info-anchor=".painel-detail-head h3" style="margin-top:8px">${esc(selecionada.nome)} representa ${pct(selecionada.peso)} do contrato total. O saldo do contrato é o que ainda falta pagar ao empreiteiro por essa categoria especificamente (valor orçado − valor já medido).</div>
     `;
     detailWrap.querySelector('.painel-detail-close').onclick = () => { PAINEL_CATEGORIA_SELECIONADA = null; renderPainel(); };
@@ -4893,6 +5321,9 @@ function renderParametros() {
   const paramForm = document.createElement('div');
   paramForm.className = 'form-grid';
   const paramFields = [
+    ['vgv', 'VGV estimado — valor de venda (R$)'],
+    ['corretagemPercent', 'Corretagem sobre a venda (%)'],
+    ['irPercent', 'IR sobre o ganho (%)'],
     ['recursoProprioPlanejado', 'Recurso próprio planejado (R$)'],
     ['financiamentoObraCaixa', 'Financiamento obra — CAIXA (R$)'],
     ['financiamentoLoteCaixa', 'Financiamento lote — CAIXA (R$)'],
@@ -5170,12 +5601,20 @@ function startInfoObserver() {
    ========================================================================== */
 restoreViewState();
 prepararInstalacaoApp();
+SESSAO = lerSessao();
+if (SESSAO) restaurarRascunhoLocal();
 setupTabs();
+document.getElementById('btnSessao').onclick = () => { if (SESSAO) sairDaSessao(); else abrirLogin(); };
+aplicarModo();
 renderAll();
 applyInfoIcons(document.getElementById('app'));
 ajustarGrids();
 startInfoObserver();
-ARTIFACT_NS_PROMISE.then((ns) => { if (!ns) enterReadOnly(); });
+ARTIFACT_NS_PROMISE.then((ns) => {
+  PODE_PUBLICAR = !!ns;
+  aplicarModo();
+  if (!ns) renderAll();
+});
 </script>
 </body>
 </html>
