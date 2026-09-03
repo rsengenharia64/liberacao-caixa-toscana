@@ -39,6 +39,7 @@
     --danger: #b3261e;
     --danger-soft: #fbe6e4;
     --grid-line: rgba(15, 33, 55, 0.06);
+    --header-bg: #0f2137;
     --shadow: 0 1px 2px rgba(15, 33, 55, 0.06);
     --radius: 10px;
     font-family: "Archivo", Arial, Helvetica, sans-serif;
@@ -62,6 +63,7 @@
       --danger: #e2685f;
       --danger-soft: #3a1815;
       --grid-line: rgba(231, 237, 245, 0.055);
+      --header-bg: #05101c;
       --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
     }
   }
@@ -83,6 +85,7 @@
     --danger: #e2685f;
     --danger-soft: #3a1815;
     --grid-line: rgba(231, 237, 245, 0.055);
+    --header-bg: #05101c;
     --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
   }
 
@@ -96,10 +99,13 @@
 
   /* ---------- Title block header ---------- */
   .titleblock {
+    /* O cabeçalho é SEMPRE escuro com texto claro, em qualquer tema. Antes ele
+       usava var(--ink), que no tema escuro vira quase branco — o cabeçalho
+       ficava claro com letras claras e sumia no celular. Cor própria, fixa. */
     background:
-      repeating-linear-gradient(0deg, var(--grid-line) 0 1px, transparent 1px 28px),
-      repeating-linear-gradient(90deg, var(--grid-line) 0 1px, transparent 1px 28px),
-      var(--ink);
+      repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 28px),
+      repeating-linear-gradient(90deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 28px),
+      var(--header-bg, #0f2137);
     color: #eef3fa;
     padding: 18px 24px 0 24px;
     position: sticky;
@@ -107,7 +113,6 @@
     z-index: 20;
     border-bottom: 3px solid var(--accent);
   }
-  :root[data-theme="dark"] .titleblock, @media (prefers-color-scheme:dark){ .titleblock { background: repeating-linear-gradient(0deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 28px), repeating-linear-gradient(90deg, rgba(255,255,255,0.05) 0 1px, transparent 1px 28px), #05101c; } }
   .titleblock-row {
     display: flex;
     justify-content: space-between;
