@@ -257,6 +257,28 @@
   }
   .saldo-negativo.critico { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
 
+  .saldo-grid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 14px 22px; align-items: start; margin-top: 8px; }
+  .saldo-bloco { display: flex; flex-direction: column; gap: 4px; }
+  .saldo-bloco .card-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+  .saldo-bloco .card-value { font-size: 28px; font-weight: 700; font-family: "IBM Plex Mono", monospace; line-height: 1.1; }
+  .saldo-bloco .card-sub { font-size: 12px; color: var(--ink-soft); }
+  .saldo-acoes { display: flex; flex-direction: column; gap: 6px; align-self: center; }
+  .saldo-prox-select { font-size: 12px; padding: 2px 6px; margin-left: 4px; max-width: 220px; }
+  .mov-entrada { color: var(--good); font-weight: 600; }
+  .mov-saida { color: var(--danger); font-weight: 600; }
+  .extrato-conta tr.mov-previsto td { color: var(--muted); }
+  .extrato-conta tr.mov-previsto .mov-entrada, .extrato-conta tr.mov-previsto .mov-saida { opacity: .75; }
+  .extrato-conta tr.mov-futuro td:first-child { border-left: 3px solid var(--border); }
+  @media (max-width: 860px) { .saldo-grid { grid-template-columns: 1fr; } .saldo-acoes { flex-direction: row; } }
+  @media print {
+    body * { visibility: hidden !important; }
+    .modal-backdrop, .modal-backdrop * { visibility: visible !important; }
+    .modal-backdrop { position: absolute !important; inset: 0 !important; background: #fff !important; padding: 0 !important; display: block !important; }
+    .modal { max-width: none !important; max-height: none !important; overflow: visible !important; box-shadow: none !important; border: none !important; width: 100% !important; }
+    .modal-close, .no-print, .drill-hint { display: none !important; }
+    .table-scroll { max-height: none !important; overflow: visible !important; }
+    .extrato-table th, .extrato-table td { font-size: 11px !important; }
+  }
   .saldo-conta-linha { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
   .saldo-conta-linha .saldoContaFiltroSlot { flex: 1; min-width: 190px; }
   .saldo-conta-valor { font-size: 24px; font-weight: 700; white-space: nowrap; }
@@ -1805,37 +1827,175 @@ function proximaQuinzena(periodos, hoje) {
   return periodos.find((p) => p.vencPlanejado > hoje) || periodos[periodos.length - 1] || null;
 }
 
-function renderSaldoContaGrid() {
+/* Movimentações da conta da obra — o extrato bancário.
+   -------------------------------------------------------------------------
+   Mesmas fontes e mesma regra do saldo que já existia: ENTRADAS são as
+   liberações do CAIXA (aba Liberação PCI) e SAÍDAS são o "Custo total" de
+   cada quinzena de Contas a Pagar, contando a partir do marco configurado em
+   Parâmetros. O que muda é a forma: em vez de um número com filtro, uma
+   lista cronológica com saldo corrente, como extrato de banco. Nada que já
+   consumia `saldoContaRealizado` foi alterado. */
+function movimentosConta() {
   const r = VIEW.resumo;
   const marco = r.marcoSaldoConta;
-  const periodos = buildQuinzenaPeriods(VIEW.meta?.dataInicio, VIEW.meta?.previsaoTermino).filter((p) => p.vencPlanejado >= marco);
+  const hoje = r.dataReferenciaCronograma || new Date().toISOString().slice(0, 10);
+  const movs = [];
+  for (const l of VIEW.liberacoesCaixa || []) {
+    const data = l.data || '';
+    if (data < marco) continue;
+    movs.push({
+      data, ordem: 0, tipo: 'entrada',
+      descricao: `Liberação CAIXA${l.obs ? ` — ${l.obs}` : ''}`,
+      origem: 'Liberação PCI',
+      valor: round2(Number(l.valor) || 0),
+      realizado: l.status !== 'PLANEJADO',
+    });
+  }
+  for (const p of VIEW.parcelas || []) {
+    const data = p.vencimento || p.vencPlanejado || '';
+    if (!data || data < marco) continue;
+    movs.push({
+      data, ordem: 1, tipo: 'saida',
+      descricao: `Custo da quinzena — ${p.mesReferenciaLabel || p.label}`,
+      origem: 'Contas a Pagar',
+      valor: round2(Number(p.custoTotal) || 0),
+      realizado: p.status === 'REALIZADO',
+      parcelaId: p.id,
+    });
+  }
+  movs.sort((a, b) => a.data.localeCompare(b.data) || a.ordem - b.ordem);
+  let saldoReal = 0;
+  let saldoProj = 0;
+  for (const m of movs) {
+    const sinal = m.tipo === 'entrada' ? 1 : -1;
+    saldoProj = round2(saldoProj + sinal * m.valor);
+    if (m.realizado) saldoReal = round2(saldoReal + sinal * m.valor);
+    m.saldoProjetado = saldoProj;
+    m.saldoRealizado = saldoReal;
+    m.futuro = m.data > hoje;
+  }
+  const entradasReal = round2(movs.filter((m) => m.tipo === 'entrada' && m.realizado).reduce((a, m) => a + m.valor, 0));
+  const saidasReal = round2(movs.filter((m) => m.tipo === 'saida' && m.realizado).reduce((a, m) => a + m.valor, 0));
+  return { movs, marco, hoje, entradasReal, saidasReal, saldoHoje: round2(entradasReal - saidasReal) };
+}
 
-  const grid = document.createElement('div');
-  grid.className = 'scurve-grid';
-  grid.appendChild(renderSaldoContaPanel({
-    title: 'Saldo em conta (realizado)',
-    subtitle: `Liberações do CAIXA já realizadas menos o custo total já realizado (coluna "Custo total" de Contas a Pagar), contando de ${dateBR(marco)} até a quinzena escolhida — antes do marco, Maio e Junho/1ª foram cobertos por recurso próprio.`,
-    filtroLabel: 'Contar até',
-    getFiltro: () => FILTRO_SALDO_CONTA_REALIZADO_ATE,
-    setFiltro: (v) => { FILTRO_SALDO_CONTA_REALIZADO_ATE = v; },
-    incluirPlanejado: false,
-    marco, periodos,
-    liberacoesCaixa: VIEW.liberacoesCaixa, parcelas: VIEW.parcelas,
-    rerender: renderPainel,
-  }));
-  grid.appendChild(renderSaldoContaPanel({
-    title: 'Saldo em conta projetado (com planejado)',
-    subtitle: 'Mesmo cálculo, mas somando também o que está PLANEJADO — medições do CAIXA planejadas e custos (parcelas) planejados — até a quinzena escolhida.',
-    filtroLabel: 'Projetar até',
-    getFiltro: () => FILTRO_SALDO_CONTA_ATE,
-    setFiltro: (v) => { FILTRO_SALDO_CONTA_ATE = v; },
-    incluirPlanejado: true,
-    padrao: proximaQuinzena(periodos, r.dataReferenciaCronograma),
-    marco, periodos,
-    liberacoesCaixa: VIEW.liberacoesCaixa, parcelas: VIEW.parcelas,
-    rerender: renderPainel,
-  }));
-  return grid;
+// Saldo projetado numa data: tudo até ela, realizado ou planejado.
+function saldoProjetadoEm(movs, ateData) {
+  let ultimo = 0;
+  for (const m of movs) { if (m.data <= ateData) ultimo = m.saldoProjetado; }
+  return ultimo;
+}
+
+function abrirExtratoConta() {
+  const { movs, marco, hoje, entradasReal, saidasReal, saldoHoje } = movimentosConta();
+  openModal('Extrato da conta da obra', (body) => {
+    const topo = document.createElement('div');
+    topo.className = `extrato-total-line${saldoHoje < 0 ? ' negativo' : ''}`;
+    topo.innerHTML = `<span>Saldo em ${dateBR(hoje)} — entradas ${money(entradasReal)} − saídas ${money(saidasReal)}</span><strong>${money(saldoHoje)}</strong>`;
+    body.appendChild(topo);
+
+    const acoes = document.createElement('div');
+    acoes.className = 'conf-acoes no-print';
+    acoes.style.margin = '10px 0';
+    const btnPrint = document.createElement('button');
+    btnPrint.type = 'button';
+    btnPrint.className = 'btn primary small filter-control';
+    btnPrint.textContent = 'Imprimir extrato';
+    btnPrint.onclick = () => window.print();
+    const nota = document.createElement('span');
+    nota.className = 'muted';
+    nota.textContent = `Conta a partir de ${dateBR(marco)} (marco em Parâmetros). Linhas cinza são previstas — ainda não aconteceram.`;
+    acoes.append(btnPrint, nota);
+    body.appendChild(acoes);
+
+    const tw = document.createElement('div');
+    tw.className = 'table-scroll';
+    let saldoFinal = movs.length ? movs[movs.length - 1].saldoProjetado : 0;
+    tw.innerHTML = `<table class="extrato-table extrato-conta">
+      <thead><tr><th>Data</th><th>Movimento</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo</th></tr></thead>
+      <tbody>
+        <tr class="extrato-grupo"><td colspan="5">Saldo inicial em ${dateBR(marco)}: ${money(0)} — antes do marco a obra foi bancada por recurso próprio</td></tr>
+        ${movs.map((m) => `<tr class="${m.realizado ? '' : 'mov-previsto'}${m.data > hoje ? ' mov-futuro' : ''}">
+          <td>${dateBR(m.data)}${m.realizado ? '' : ' <span class="badge gray">previsto</span>'}</td>
+          <td>${esc(m.descricao)}<br><span class="muted cf-sub">${esc(m.origem)}</span></td>
+          <td class="num mov-entrada">${m.tipo === 'entrada' ? money(m.valor) : ''}</td>
+          <td class="num mov-saida">${m.tipo === 'saida' ? money(m.valor) : ''}</td>
+          <td class="num ${m.saldoProjetado < 0 ? 'cf-atraso' : ''}"><strong>${money(m.saldoProjetado)}</strong></td>
+        </tr>`).join('') || '<tr><td colspan="5" class="muted">Nenhuma movimentação a partir do marco.</td></tr>'}
+        <tr class="extrato-residuo"><td colspan="2"><strong>Saldo hoje (só realizado)</strong></td><td class="num"><strong>${money(entradasReal)}</strong></td><td class="num"><strong>${money(saidasReal)}</strong></td><td class="num"><strong>${money(saldoHoje)}</strong></td></tr>
+        <tr class="extrato-residuo"><td colspan="4"><strong>Saldo ao fim do que está lançado (realizado + previsto)</strong></td><td class="num ${saldoFinal < 0 ? 'cf-atraso' : ''}"><strong>${money(saldoFinal)}</strong></td></tr>
+      </tbody></table>`;
+    body.appendChild(tw);
+  }, { wide: true });
+}
+
+function renderSaldoContaGrid() {
+  const r = VIEW.resumo;
+  const { movs, hoje, entradasReal, saidasReal, saldoHoje } = movimentosConta();
+  const periodos = buildQuinzenaPeriods(VIEW.meta?.dataInicio, VIEW.meta?.previsaoTermino).filter((p) => p.vencPlanejado >= r.marcoSaldoConta);
+  const proxima = FILTRO_SALDO_CONTA_ATE || proximaQuinzena(periodos, hoje);
+  const saldoProx = proxima ? saldoProjetadoEm(movs, proxima.vencPlanejado) : saldoHoje;
+
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  panel.innerHTML = `
+    <div class="panel-header"><div>
+      <h2>Saldo em conta</h2>
+      <div class="muted">Como no banco: entradas (liberações do CAIXA) menos saídas (custo de cada quinzena de Contas a Pagar), a partir de ${dateBR(r.marcoSaldoConta)}. O extrato lista movimento a movimento, com saldo corrente, e pode ser impresso.</div>
+    </div></div>
+    <div class="saldo-grid">
+      <div class="saldo-bloco">
+        <div class="card-label">Saldo hoje · ${dateBR(hoje)}</div>
+        <button type="button" class="value-drill small filter-control" data-acao="extrato-conta" title="Clique para ver o extrato — movimento a movimento">
+          <span class="drill-value card-value" style="color:${saldoHoje < 0 ? 'var(--danger)' : 'var(--good)'}">${money(saldoHoje)}</span><span class="drill-hint">ver extrato</span>
+        </button>
+        <div class="card-sub"><span class="mov-entrada">Entradas ${money(entradasReal)}</span> − <span class="mov-saida">Saídas ${money(saidasReal)}</span> · só o realizado</div>
+      </div>
+      <div class="saldo-bloco">
+        <div class="card-label">Saldo previsto em <span class="saldo-prox-slot"></span></div>
+        <div class="card-value" style="color:${saldoProx < 0 ? 'var(--danger)' : 'var(--good)'}">${money(saldoProx)}</div>
+        <div class="card-sub">Realizado + o que está planejado até essa quinzena</div>
+      </div>
+      <div class="saldo-acoes">
+        <button type="button" class="btn small filter-control" data-acao="extrato-conta">Ver extrato</button>
+        <button type="button" class="btn small filter-control" data-acao="imprimir-conta">Imprimir extrato</button>
+      </div>
+    </div>
+  `;
+  // Seletor da quinzena da projeção — dentro do rótulo, discreto.
+  const sel = document.createElement('select');
+  sel.className = 'cell-input filter-control saldo-prox-select';
+  for (const p of periodos) {
+    const o = document.createElement('option');
+    o.value = `${p.mes}|${p.quinzena}`; o.textContent = p.label;
+    o.selected = proxima && p.mes === proxima.mes && p.quinzena === proxima.quinzena;
+    sel.appendChild(o);
+  }
+  sel.onchange = () => {
+    const [mes, q] = sel.value.split('|');
+    FILTRO_SALDO_CONTA_ATE = periodos.find((p) => p.mes === mes && p.quinzena === Number(q)) || null;
+    renderPainel();
+  };
+  panel.querySelector('.saldo-prox-slot').appendChild(sel);
+
+  panel.querySelectorAll('[data-acao="extrato-conta"]').forEach((b) => { b.onclick = abrirExtratoConta; });
+  panel.querySelector('[data-acao="imprimir-conta"]').onclick = () => { abrirExtratoConta(); setTimeout(() => window.print(), 300); };
+
+  /* Saldo previsto negativo: a obra vai consumir recurso próprio nessa
+     quinzena. Dizemos quanto e quanto sobraria — a decisão real por trás
+     do sinal. (Mesma mensagem que já existia; só mudou de lugar.) */
+  if (saldoProx < 0) {
+    const falta = round2(Math.abs(saldoProx));
+    const disponivel = Number(r.saldoRecursoDisponivel) || 0;
+    const sobra = round2(disponivel - falta);
+    const aviso = document.createElement('div');
+    aviso.className = `saldo-negativo${sobra < 0 ? ' critico' : ''}`;
+    aviso.innerHTML = sobra < 0
+      ? `<strong>Faltam ${money(falta)} em ${proxima ? esc(proxima.label) : 'nessa data'}.</strong> O recurso próprio disponível (${money(disponivel)}) não cobre — ficariam ${money(Math.abs(sobra))} descobertos. É preciso antecipar medição da CAIXA ou remanejar parcelas.`
+      : `<strong>Faltam ${money(falta)} em ${proxima ? esc(proxima.label) : 'nessa data'}</strong>, que serão consumidos da verba de recurso próprio. Restariam ${money(sobra)} dos ${money(disponivel)} disponíveis hoje.`;
+    panel.appendChild(aviso);
+  }
+  return panel;
 }
 
 // "Custo total do período": soma o "Custo total" (mesma coluna de Contas a
