@@ -331,7 +331,9 @@
     .extrato-table th, .extrato-table td { font-size: 11px !important; }
     .rel-table th, .rel-table td { font-size: 9.5px !important; padding: 3px 5px !important; }
     .rel-table thead th { position: static !important; }
-    .rel-table tr, .viab-secao { break-inside: avoid; }
+    .rel-table tr, .extrato-table tr { break-inside: avoid; }
+    .viab-destaques { break-after: auto; }
+    .viab-secao > summary { break-after: avoid; }
     .viab-secao { border: none !important; }
     .viab-secao > :not(summary) { display: block !important; }
     details.viab-secao > summary { list-style: none; }
@@ -451,6 +453,10 @@
   .viab-valor.ruim { color: var(--danger); }
   .viab-nota { font-size: 10.5px; color: var(--muted); line-height: 1.35; }
   .viab-cenario { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; font-size: 12px; }
+  .viab-vgv-edit { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
+  .viab-vgv-edit > span { white-space: nowrap; }
+  .viab-vgv-edit input { border: 1px solid var(--accent) !important; background: var(--surface) !important; border-radius: 7px; padding: 5px 9px; font-weight: 700; color: var(--accent-ink); }
+  .viab-cenario { row-gap: 6px; }
   .viab-cenario-rotulo { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
   .viab-secao { border: 1px solid var(--border); border-radius: 9px; margin-top: 10px; background: var(--surface); }
   .viab-secao > summary { cursor: pointer; padding: 8px 12px; font-weight: 700; font-size: 13px; color: var(--ink); list-style: none; display: flex; align-items: center; gap: 8px; }
@@ -4863,15 +4869,66 @@ function abrirExtratoViabilidade(secaoInicial = null) {
     cen.className = 'viab-cenario';
     cen.innerHTML = `<span class="viab-cenario-rotulo">Cenário de venda</span>
       <button type="button" class="btn small ${v.cenarioVgv !== 'projetado' ? 'primary' : ''}" data-cen="atual">Atual — VGV hoje ${money(v.vgvAtual)}</button>
-      <button type="button" class="btn small ${v.cenarioVgv === 'projetado' ? 'primary' : ''}" data-cen="projetado">Saída projetada — VGV ${money(v.vgvProjetado)} em ${v.prazoVendaMeses || '—'} meses</button>
-      <span class="muted">Todos os números abaixo usam o ${cenarioRotulo}.</span>`;
+      <button type="button" class="btn small ${v.cenarioVgv === 'projetado' ? 'primary' : ''}" data-cen="projetado">Saída projetada — VGV ${money(v.vgvProjetado)} em ${v.prazoVendaMeses || '—'} meses</button>`;
     cen.querySelectorAll('button[data-cen]').forEach((b) => {
       b.addEventListener('click', () => {
         if (READONLY || SIMULACAO.ativa) { simularParametros({ cenarioVgv: b.dataset.cen }); abrirExtratoViabilidade(secaoInicial); return; }
         updateParametros({ cenarioVgv: b.dataset.cen }); reabrir();
       });
     });
+    /* Valor de venda editável aqui mesmo: digitou, todo o resultado
+       recalcula na hora. Sem senha, a mudança entra como simulação e nada
+       é gravado; com sessão aberta, grava no cenário selecionado. */
+    {
+      const chaveVgv = v.cenarioVgv === 'projetado' ? 'vgvProjetado' : 'vgv';
+      const lab = document.createElement('label');
+      lab.className = 'viab-vgv-edit';
+      lab.innerHTML = '<span>Valor de venda</span>';
+      lab.title = 'Altere e veja lucro, margens e ROI recalcularem na hora.';
+      const inp = moneyInput({
+        value: v.vgvSelecionado,
+        onSave: (x) => {
+          if (READONLY || SIMULACAO.ativa) { simularParametros({ [chaveVgv]: x }); abrirExtratoViabilidade(secaoInicial); return; }
+          updateParametros({ [chaveVgv]: x }); reabrir();
+        },
+      });
+      inp.classList.add('filter-control');
+      inp.style.maxWidth = '170px';
+      lab.appendChild(inp);
+      cen.appendChild(lab);
+      const dica = document.createElement('span');
+      dica.className = 'muted';
+      dica.textContent = `${READONLY || SIMULACAO.ativa ? 'Editar aqui simula, não grava. ' : ''}Todos os números abaixo usam o ${cenarioRotulo}.`;
+      cen.appendChild(dica);
+    }
     body.appendChild(cen);
+
+    /* Ações: imprimir a análise inteira (vira PDF pelo "Salvar como PDF" do
+       navegador) e baixar a DRE em planilha. */
+    {
+      const acoes = document.createElement('div');
+      acoes.className = 'rel-acoes no-print';
+      const bImp = document.createElement('button');
+      bImp.type = 'button';
+      bImp.className = 'btn small primary filter-control';
+      bImp.textContent = 'Imprimir análise / PDF';
+      bImp.title = 'Abre todas as seções e manda para a impressão — escolha "Salvar como PDF".';
+      bImp.onclick = () => { body.querySelectorAll('details').forEach((d) => { d.open = true; }); setTimeout(() => window.print(), 80); };
+      acoes.appendChild(bImp);
+      const bCsv = document.createElement('button');
+      bCsv.type = 'button';
+      bCsv.className = 'btn small filter-control';
+      bCsv.textContent = 'Planilha da análise (CSV)';
+      bCsv.title = 'Baixa a DRE com fórmula de soma na linha de total — abre no Excel e no Google Planilhas.';
+      bCsv.onclick = () => {
+        const rel = relatoriosDisponiveis().find((x) => x.id === 'dre');
+        if (!rel) return;
+        const ls = rel.linhas();
+        baixarArquivo(`viabilidade-dre-${new Date().toISOString().slice(0, 10)}.csv`, csvDoRelatorio(rel, ls, totaisRelatorio(rel, ls)), 'text/csv;charset=utf-8');
+      };
+      acoes.appendChild(bCsv);
+      body.appendChild(acoes);
+    }
 
     /* Card executivo — oito números, nenhum deles "fonte somada como custo". */
     const painel = document.createElement('div');
@@ -4886,7 +4943,9 @@ function abrirExtratoViabilidade(secaoInicial = null) {
       card('Capital próprio necessário', money(f.capitalProprioNecessario), `custo que o financiamento não banca · aportado ${money(f.capitalProprioAportado)} · falta ${money(f.capitalProprioAindaNecessario)}`),
       card('ROI líquido do investidor', pct(v.roiInvestidor), `resultado do investidor ${money(v.resultadoInvestidor)} ÷ capital próprio necessário`, cls(v.resultadoInvestidor)),
       card('Financiamento × capital próprio', `${pct(f.participacaoFinanciamento)} · ${pct(f.participacaoCapitalProprio)}`, `do custo econômico: CAIXA ${money(f.creditoAplicado)} · próprio ${money(f.capitalProprioNecessario)}`),
-      card('Capital de giro disponível', moneyCurto(f.giroDisponivel), `Orçado ${moneyCurto(f.giroOrcado)} · ${f.giroGap >= 0 ? `sobram ${moneyCurto(f.giroGap)}` : `faltam ${moneyCurto(-f.giroGap)}`}`, f.giroGap < 0 ? 'ruim' : ''),
+      // Card informativo: mostra o giro PLANEJADO. A folga real das fontes
+      // fica na nota — a conta detalhada está no bloco Fontes e Aplicações.
+      card('Capital de giro planejado', moneyCurto(f.giroOrcado), `Folga das fontes hoje: ${moneyCurto(f.giroDisponivel)} · não é custo`),
     ].join('');
     body.appendChild(painel);
 
