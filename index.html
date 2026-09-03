@@ -262,6 +262,17 @@
   .saldo-bloco .card-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
   .saldo-bloco .card-value { font-size: 28px; font-weight: 700; font-family: "IBM Plex Mono", monospace; line-height: 1.1; }
   .saldo-bloco .card-sub { font-size: 12px; color: var(--ink-soft); }
+  .panel.recolhivel .panel-header { margin-bottom: 6px; }
+  .panel.recolhivel.fechado .panel-header { margin-bottom: 0; }
+  .panel.recolhivel.fechado > :not(.panel-header):not(.painel-resumo) { display: none !important; }
+  .panel.recolhivel.fechado .panel-header .muted { display: none; }
+  .painel-titulo-clicavel { cursor: pointer; }
+  .painel-toggle { margin-left: auto; }
+  .painel-resumo { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 16px; font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; }
+  .painel-resumo strong { font-family: "IBM Plex Mono", monospace; font-size: 15px; color: var(--ink); }
+  .painel-resumo .neg { color: var(--danger); }
+  .painel-resumo .pos { color: var(--good); }
+  .panel.recolhivel:not(.fechado) .painel-resumo { display: none; }
   .saldo-fora-conta { font-size: 11.5px; color: var(--ink-soft); background: var(--surface-2); border: 1px dashed var(--border); border-radius: 7px; padding: 6px 9px; margin-top: 6px; line-height: 1.45; }
   .saldo-ponte { display: flex; flex-direction: column; gap: 3px; font-size: 12px; margin-top: 4px; }
   .saldo-ponte > div { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: baseline; }
@@ -622,6 +633,8 @@
     .cf-tabela td:first-child .cf-sub { display: block; }
     .cf-tabela td, .cf-tabela th { padding-left: 6px; padding-right: 6px; font-size: 11.5px; }
   }
+  .qz-chip.vazia { opacity: .55; border-style: dotted; }
+  .qz-chip.vazia.on { opacity: 1; }
   .qz-split { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 12px; margin-top: 4px; }
   .qz-split-real { color: var(--good); font-weight: 700; }
   .qz-split-plan { color: var(--accent-ink); font-weight: 700; }
@@ -2037,6 +2050,10 @@ function renderSaldoContaGrid() {
       : `<strong>Faltam ${money(falta)} em ${proxima ? esc(proxima.label) : 'nessa data'}</strong>, que serão consumidos da verba de recurso próprio. Restariam ${money(sobra)} dos ${money(disponivel)} disponíveis hoje.`;
     panel.appendChild(aviso);
   }
+  tornarRecolhivel(panel, 'saldo-conta', {
+    resumo: `<span>Hoje</span><strong class="${saldoHoje < 0 ? 'neg' : 'pos'}">${money(saldoHoje)}</strong><span>Previsto em ${proxima ? esc(proxima.label) : '—'}</span><strong class="${saldoProx < 0 ? 'neg' : 'pos'}">${money(saldoProx)}</strong>`,
+    rerender: renderPainel,
+  });
   return panel;
 }
 
@@ -2067,7 +2084,14 @@ function quinzenaCorrenteKey(periods) {
 
 function renderCustoTotalPeriodoPanel() {
   const parcelas = VIEW.parcelas || [];
+  /* O calendário é o do CONTRATO inteiro (início → previsão de término),
+     não só os meses que já têm parcela lançada. Assim Dezembro e todo o
+     2027 aparecem para seleção, com R$ 0,00 enquanto não houver lançamento,
+     e nenhuma quinzena com parcela fica de fora. */
   const periodsMap = new Map();
+  for (const p of buildQuinzenaPeriods(VIEW.meta?.dataInicio, VIEW.meta?.previsaoTermino)) {
+    periodsMap.set(`${p.mes}|${p.quinzena}`, { mes: p.mes, quinzena: p.quinzena, label: p.label });
+  }
   for (const p of parcelas) {
     if (!p.mesReferencia) continue;
     const key = `${p.mesReferencia}|${p.quinzena || 1}`;
@@ -2177,9 +2201,12 @@ function renderCustoTotalPeriodoPanel() {
       const on = FILTRO_CUSTO_TOTAL_QUINZENAS.has(key);
       const chip = document.createElement('button');
       chip.type = 'button';
-      chip.className = `qz-chip filter-control${on ? ' on' : ''}${statusDe(key) === 'PLANEJADO' ? ' planejada' : ''}`;
+      const temParcela = parcelas.some((x) => x.mesReferencia && `${x.mesReferencia}|${x.quinzena || 1}` === key);
+      chip.className = `qz-chip filter-control${on ? ' on' : ''}${statusDe(key) === 'PLANEJADO' ? ' planejada' : ''}${temParcela ? '' : ' vazia'}`;
       chip.textContent = `${p.quinzena}ª`;
-      chip.title = `${p.label} · ${money(valorDe(key))} · ${statusDe(key) === 'REALIZADO' ? 'realizada' : 'planejada'}`;
+      chip.title = temParcela
+        ? `${p.label} · ${money(valorDe(key))} · ${statusDe(key) === 'REALIZADO' ? 'realizada' : 'planejada'}`
+        : `${p.label} · sem parcela lançada ainda (R$ 0,00)`;
       chip.onclick = () => {
         const atual = new Set(FILTRO_CUSTO_TOTAL_QUINZENAS);
         if (on) atual.delete(key); else atual.add(key);
@@ -2211,6 +2238,13 @@ function renderCustoTotalPeriodoPanel() {
     drill.insertAdjacentElement('afterend', split);
   }
 
+  const rotuloSel = chaveCorrente && FILTRO_CUSTO_TOTAL_QUINZENAS.size === 1 && FILTRO_CUSTO_TOTAL_QUINZENAS.has(chaveCorrente)
+    ? (periods.find((p) => `${p.mes}|${p.quinzena}` === chaveCorrente)?.label || 'quinzena atual')
+    : `${FILTRO_CUSTO_TOTAL_QUINZENAS.size} de ${allKeys.length} quinzenas`;
+  tornarRecolhivel(panel, 'custo-periodo', {
+    resumo: `<span>${esc(rotuloSel)}</span><strong>${money(total)}</strong><span class="muted">Expandir para escolher outras quinzenas</span>`,
+    rerender: renderPainel,
+  });
   return panel;
 }
 
@@ -4933,6 +4967,54 @@ function celulaAvanco(c) {
     </div>`;
 }
 
+/* Painel recolhível.
+   -------------------------------------------------------------------------
+   Certos painéis nascem fechados: só o título (e, quando faz sentido, um
+   resumo de uma linha) fica visível; um clique abre o resto. É o jeito de
+   compactar o Dashboard sem esconder informação — ela está a um clique, e a
+   escolha de deixar aberto fica lembrada enquanto a aba estiver aberta. */
+const PAINEIS_ABERTOS = new Set();
+(function restaurarPaineisAbertos() {
+  try { JSON.parse(sessionStorage.getItem('lct_paineis_abertos') || '[]').forEach((k) => PAINEIS_ABERTOS.add(k)); } catch (e) { /* ignore */ }
+})();
+function tornarRecolhivel(panel, chave, { resumo = null, rerender = null } = {}) {
+  const header = panel.querySelector('.panel-header');
+  if (!header) return panel;
+  const aberto = PAINEIS_ABERTOS.has(chave);
+  panel.classList.add('recolhivel');
+  panel.classList.toggle('fechado', !aberto);
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'btn small filter-control painel-toggle';
+  btn.textContent = aberto ? 'Recolher' : 'Expandir';
+  btn.title = aberto ? 'Esconder o detalhe deste painel' : 'Mostrar o detalhe deste painel';
+  btn.setAttribute('aria-expanded', String(aberto));
+  btn.onclick = () => {
+    if (PAINEIS_ABERTOS.has(chave)) PAINEIS_ABERTOS.delete(chave); else PAINEIS_ABERTOS.add(chave);
+    try { sessionStorage.setItem('lct_paineis_abertos', JSON.stringify([...PAINEIS_ABERTOS])); } catch (e) { /* ignore */ }
+    if (rerender) rerender(); else {
+      const agora = PAINEIS_ABERTOS.has(chave);
+      panel.classList.toggle('fechado', !agora);
+      btn.textContent = agora ? 'Recolher' : 'Expandir';
+      btn.setAttribute('aria-expanded', String(agora));
+      requestAnimationFrame(ajustarGrids);
+    }
+  };
+  // O título inteiro também abre/fecha — alvo maior, principalmente no celular.
+  const h2 = header.querySelector('h2');
+  if (h2) { h2.classList.add('painel-titulo-clicavel'); h2.onclick = () => btn.click(); }
+  header.appendChild(btn);
+
+  if (resumo) {
+    const linha = document.createElement('div');
+    linha.className = 'painel-resumo';
+    if (typeof resumo === 'string') linha.innerHTML = resumo; else linha.appendChild(resumo);
+    header.insertAdjacentElement('afterend', linha);
+  }
+  return panel;
+}
+
 /* Aviso de rascunho local em uso.
    -------------------------------------------------------------------------
    Só aparece quando a tela está mostrando uma cópia guardada neste navegador
@@ -5199,6 +5281,7 @@ function renderPainel() {
     selBody.classList.add('sem-detalhe');
   }
   selPanel.appendChild(selBody);
+  tornarRecolhivel(selPanel, 'pci-categorias', { rerender: renderPainel });
   root.appendChild(selPanel);
 }
 
