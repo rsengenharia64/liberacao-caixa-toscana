@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260903T231443">
+<meta name="app-version" content="20260903T233548">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1913,7 +1913,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260903T231443';
+const APP_VERSAO = '20260903T233548';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -2945,7 +2945,7 @@ function setStatus(kind) {
   const text = document.getElementById('statusChipText');
   if (!chip || !text) return;
   chip.className = `status-chip ${kind}`;
-  const labels = { saving: 'Salvando…', saved: 'Sincronizado', error: 'Erro ao salvar', readonly: 'Somente leitura', local: 'Salvo neste navegador' };
+  const labels = { saving: 'Salvando…', saved: NUVEM.conectada ? 'Sincronizado · nuvem' : 'Sincronizado', error: 'Erro ao salvar', readonly: NUVEM.conectada ? 'Somente leitura · nuvem' : 'Somente leitura', local: 'Salvo neste navegador' };
   text.textContent = labels[kind] || kind;
 }
 
@@ -3321,7 +3321,279 @@ function restoreViewState() {
   } catch (e) { /* ignore */ }
 }
 
+/* ==========================================================================
+   NUVEM (Supabase): dados compartilhados em tempo real
+   --------------------------------------------------------------------------
+   No site publicado (GitHub Pages) o estado da obra deixa de morar só no
+   navegador de quem lançou: ele fica numa linha da tabela `obras` no
+   Supabase (projeto casa-newton-toscana, região São Paulo). Quem abre o app
+   recebe a versão da nuvem; quem lança (sessão aberta) grava lá; quem está
+   com o app aberto recebe a mudança na hora (websocket do Realtime, com
+   consulta periódica de segurança).
+
+   Regras:
+   - Leitura é pública (a chave "anon" abaixo só lê). Gravação completa só
+     pela função `salvar_obra`, que exige o token da sessão de lançamento
+     (o mesmo hash usuário+senha do app). Sem sessão, só o Controle Mensal
+     CAIXA grava, pela função `salvar_controle_mensal`.
+   - Controle de versão: cada gravação envia a versão que conhece; se outra
+     pessoa gravou antes, a nuvem devolve o estado dela e a tela é atualizada
+     (nada é sobrescrito às cegas).
+   - Dentro do Claude (artifact) a rede externa é bloqueada, então ali o app
+     continua publicando no próprio artifact. Cópia aberta como arquivo
+     local (file://) também não sincroniza.
+   - O histórico das últimas 300 gravações fica em `obras_historico`.
+   ========================================================================== */
+const NUVEM_CFG = {
+  url: 'https://iyposryvzqswcwawnyzd.supabase.co',
+  chave: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5cG9zcnl2enFzd2N3YXdueXpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NzMwNTIsImV4cCI6MjEwNDA0OTA1Mn0.paXwRFXHnhlJgkS3021i8lWOY8KU06Y0at_Nv8Q_jpI',
+  obraId: 'casa-newton-toscana',
+  pollMs: 30000,
+};
+const NUVEM = {
+  habilitada: false, conectada: false, versao: 0, salvando: false, erro: null,
+  atualizadoEm: null, atualizadoPor: null, pendenteLocal: null,
+  ws: null, wsTentativas: 0, heartbeat: null, poll: null, adiar: null, refs: 0,
+};
+
+function nuvemHabilitada() {
+  if (window.__SEM_NUVEM) return false;
+  if (window.claude && typeof window.claude.use === 'function') return false; // artifact: rede bloqueada
+  if (typeof fetch !== 'function') return false;
+  return /^https?:$/.test(location.protocol);
+}
+
+function nuvemHeaders(extra) {
+  return Object.assign({ apikey: NUVEM_CFG.chave, Authorization: `Bearer ${NUVEM_CFG.chave}`, 'Content-Type': 'application/json' }, extra || {});
+}
+
+async function nuvemBuscar(campos) {
+  const sel = campos || 'estado,versao,atualizado_em,atualizado_por';
+  const r = await fetch(`${NUVEM_CFG.url}/rest/v1/obras?id=eq.${encodeURIComponent(NUVEM_CFG.obraId)}&select=${encodeURIComponent(sel)}`, { headers: nuvemHeaders(), cache: 'no-store' });
+  if (!r.ok) throw new Error(`nuvem ${r.status}`);
+  const rows = await r.json();
+  return Array.isArray(rows) && rows.length ? rows[0] : null;
+}
+
+async function nuvemRpc(nome, params) {
+  const r = await fetch(`${NUVEM_CFG.url}/rest/v1/rpc/${nome}`, { method: 'POST', headers: nuvemHeaders(), body: JSON.stringify(params) });
+  if (!r.ok) throw new Error(`nuvem rpc ${nome} ${r.status}`);
+  return r.json();
+}
+
+// Guarda uma cópia local (cache para abrir sem rede), sem mexer no chip.
+function nuvemGuardarCache() {
+  try { localStorage.setItem(CHAVE_RASCUNHO, JSON.stringify({ salvoEm: new Date().toISOString(), nuvemVersao: NUVEM.versao, estado: STATE })); } catch (e) { /* sem storage */ }
+}
+
+function nuvemQuandoPor() {
+  const quando = NUVEM.atualizadoEm ? new Date(NUVEM.atualizadoEm) : null;
+  const hora = quando ? quando.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+  return `${NUVEM.atualizadoPor ? `por ${NUVEM.atualizadoPor}` : ''}${hora ? ` em ${hora}` : ''}`.trim();
+}
+
+function nuvemAtualizarChip() {
+  const chip = document.getElementById('statusChip');
+  if (!chip) return;
+  if (NUVEM.conectada) chip.title = `Nuvem: versão ${NUVEM.versao}${NUVEM.atualizadoEm ? ` · última gravação ${nuvemQuandoPor()}` : ''} · atualiza em tempo real`;
+  else if (NUVEM.habilitada) chip.title = NUVEM.erro ? `Sem conexão com a nuvem (${NUVEM.erro}). Lançamentos ficam neste navegador até a conexão voltar.` : 'Conectando à nuvem…';
+}
+
+// Troca o estado da tela pelo da nuvem. `motivo` = 'inicio' | 'tempo-real' | 'conflito' | 'escolha'.
+function nuvemAdotarEstado(row, motivo) {
+  if (!row || !row.estado) return false;
+  // Não puxa o tapete de quem está digitando: espera o campo perder o foco.
+  if (motivo === 'tempo-real') {
+    const ativo = document.activeElement;
+    const digitando = ativo && /^(INPUT|TEXTAREA|SELECT)$/.test(ativo.tagName) && ativo.closest('#app, .modal');
+    if (digitando) {
+      clearTimeout(NUVEM.adiar);
+      NUVEM.adiar = setTimeout(() => nuvemVerificar(true), 4000);
+      return false;
+    }
+  }
+  for (const k of Object.keys(STATE)) delete STATE[k];
+  Object.assign(STATE, row.estado);
+  normalizarEstadoCarregado();
+  NUVEM.versao = Number(row.versao) || NUVEM.versao;
+  NUVEM.atualizadoEm = row.atualizado_em || NUVEM.atualizadoEm;
+  NUVEM.atualizadoPor = row.atualizado_por || NUVEM.atualizadoPor;
+  NUVEM.pendenteLocal = null;
+  RASCUNHO_RESTAURADO = null;
+  // Mesma sequência da carga inicial: as derivações (cartão, PIX dos
+  // avanços) leem VIEW, então recalcula antes e depois delas.
+  VIEW = recompute(STATE);
+  let mexeu = false;
+  if (STATE.parametros.cartaoAutoSync && aplicarCartaoDerivado()) mexeu = true;
+  if (aplicarPixDerivadoDosAvancos()) mexeu = true;
+  if (mexeu) VIEW = recompute(STATE);
+  renderAll();
+  nuvemGuardarCache();
+  nuvemAtualizarChip();
+  if (motivo === 'tempo-real') toast(`Dados atualizados ${nuvemQuandoPor() || 'na nuvem'}.`);
+  return true;
+}
+
+// Consulta a versão na nuvem; se houver algo mais novo, adota.
+async function nuvemVerificar(silencioso) {
+  if (!NUVEM.conectada || NUVEM.salvando) return;
+  try {
+    const cab = await nuvemBuscar('versao');
+    if (!cab) return;
+    if ((Number(cab.versao) || 0) > NUVEM.versao) {
+      const row = await nuvemBuscar();
+      if (row && (Number(row.versao) || 0) > NUVEM.versao) nuvemAdotarEstado(row, 'tempo-real');
+    }
+    if (NUVEM.erro) { NUVEM.erro = null; nuvemAtualizarChip(); if (!READONLY) setStatus('saved'); }
+  } catch (e) {
+    if (!silencioso) { NUVEM.erro = 'rede'; nuvemAtualizarChip(); }
+  }
+}
+
+function nuvemLigarTempoReal() {
+  if (!NUVEM.conectada || typeof WebSocket !== 'function') return;
+  try {
+    const host = NUVEM_CFG.url.replace(/^https?:\/\//, '');
+    const ws = new WebSocket(`wss://${host}/realtime/v1/websocket?apikey=${encodeURIComponent(NUVEM_CFG.chave)}&vsn=1.0.0`);
+    NUVEM.ws = ws;
+    const enviar = (msg) => { try { ws.send(JSON.stringify(msg)); } catch (e) { /* fechado */ } };
+    ws.onopen = () => {
+      NUVEM.wsTentativas = 0;
+      enviar({ topic: `realtime:obras-${NUVEM_CFG.obraId}`, event: 'phx_join', ref: String(++NUVEM.refs), payload: { config: { broadcast: { self: false }, presence: { key: '' }, postgres_changes: [{ event: '*', schema: 'public', table: 'obras', filter: `id=eq.${NUVEM_CFG.obraId}` }] } } });
+      clearInterval(NUVEM.heartbeat);
+      NUVEM.heartbeat = setInterval(() => enviar({ topic: 'phoenix', event: 'heartbeat', payload: {}, ref: String(++NUVEM.refs) }), 25000);
+    };
+    ws.onmessage = (ev) => {
+      let msg = null;
+      try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      if (!msg || msg.event !== 'postgres_changes') return;
+      const rec = msg.payload && msg.payload.data && msg.payload.data.record;
+      const versao = rec ? Number(rec.versao) || 0 : 0;
+      if (versao > NUVEM.versao && !NUVEM.salvando) nuvemVerificar(true);
+    };
+    ws.onclose = () => {
+      clearInterval(NUVEM.heartbeat);
+      if (NUVEM.ws !== ws) return;
+      NUVEM.ws = null;
+      const espera = Math.min(60000, 3000 * Math.pow(2, NUVEM.wsTentativas++));
+      setTimeout(() => { if (NUVEM.conectada && !NUVEM.ws) nuvemLigarTempoReal(); }, espera);
+    };
+    ws.onerror = () => { try { ws.close(); } catch (e) { /* ignore */ } };
+  } catch (e) { /* sem websocket: fica na consulta periódica */ }
+}
+
+async function nuvemIniciar() {
+  NUVEM.habilitada = nuvemHabilitada();
+  if (!NUVEM.habilitada) return false;
+  nuvemAtualizarChip();
+  let row = null;
+  try {
+    row = await nuvemBuscar();
+  } catch (e) {
+    NUVEM.erro = 'rede';
+    nuvemAtualizarChip();
+    // Tenta de novo quando a rede voltar.
+    setTimeout(() => { if (!NUVEM.conectada) nuvemIniciar(); }, 15000);
+    return false;
+  }
+  if (!row) { NUVEM.erro = 'obra não cadastrada na nuvem'; nuvemAtualizarChip(); return false; }
+  NUVEM.conectada = true;
+  NUVEM.erro = null;
+  PODE_PUBLICAR = true;
+  const localMaisNovo = RASCUNHO_RESTAURADO && STATE.updatedAt && row.estado && row.estado.updatedAt && STATE.updatedAt > row.estado.updatedAt;
+  if (localMaisNovo) {
+    // Este navegador tem lançamentos que nunca chegaram à nuvem: não descarta
+    // sozinho. Mostra as duas opções no Dashboard (renderAvisoRascunho).
+    NUVEM.versao = Number(row.versao) || 0;
+    NUVEM.atualizadoEm = row.atualizado_em; NUVEM.atualizadoPor = row.atualizado_por;
+    NUVEM.pendenteLocal = { salvoEm: STATE.updatedAt, servidor: row };
+    renderAll();
+    toast('Este navegador tem lançamentos que ainda não foram para a nuvem. Veja o aviso no Dashboard.', true);
+  } else {
+    nuvemAdotarEstado(row, 'inicio');
+  }
+  aplicarModo();
+  nuvemAtualizarChip();
+  nuvemLigarTempoReal();
+  clearInterval(NUVEM.poll);
+  NUVEM.poll = setInterval(() => nuvemVerificar(true), NUVEM_CFG.pollMs);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') nuvemVerificar(true); });
+  window.addEventListener('online', () => nuvemVerificar(true));
+  return true;
+}
+
+// Grava na nuvem. Com sessão aberta grava tudo; sem sessão, só o Controle Mensal CAIXA.
+async function nuvemSalvar() {
+  if (!NUVEM.conectada) { salvarRascunhoLocal(); return false; }
+  if (NUVEM.salvando) { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 1500); return false; }
+  NUVEM.salvando = true;
+  setStatus('saving');
+  try {
+    let r;
+    if (SESSAO) {
+      r = await nuvemRpc('salvar_obra', { p_id: NUVEM_CFG.obraId, p_estado: STATE, p_versao_base: NUVEM.versao, p_token: CREDENCIAL_HASH, p_usuario: SESSAO.usuario });
+    } else {
+      r = await nuvemRpc('salvar_controle_mensal', { p_id: NUVEM_CFG.obraId, p_controle: STATE.controleMensalCaixa || {}, p_usuario: 'cliente (Controle Mensal)' });
+    }
+    if (r && r.ok) {
+      NUVEM.versao = Number(r.versao) || NUVEM.versao;
+      NUVEM.atualizadoEm = r.atualizado_em || new Date().toISOString();
+      NUVEM.atualizadoPor = SESSAO ? SESSAO.usuario : 'cliente';
+      NUVEM.pendenteLocal = null;
+      RASCUNHO_RESTAURADO = null;
+      if (!SESSAO && r.estado && r.estado.updatedAt) STATE.updatedAt = r.estado.updatedAt;
+      nuvemGuardarCache();
+      setStatus(SESSAO ? 'saved' : 'readonly');
+      nuvemAtualizarChip();
+      return true;
+    }
+    if (r && r.erro === 'conflito') {
+      NUVEM.salvando = false;
+      nuvemAdotarEstado(r, 'conflito');
+      toast(`Outra pessoa gravou antes (${nuvemQuandoPor()}). A tela foi atualizada com a versão dela; confira e refaça o seu lançamento se preciso.`, true);
+      setStatus(SESSAO ? 'saved' : 'readonly');
+      return false;
+    }
+    if (r && r.erro === 'nao_autorizado') {
+      setStatus('error');
+      toast('A nuvem não aceitou a credencial desta sessão. Saia e entre de novo para lançar.', true);
+      salvarRascunhoLocal();
+      return false;
+    }
+    throw new Error((r && r.erro) || 'resposta inesperada');
+  } catch (e) {
+    NUVEM.erro = 'rede';
+    setStatus('error');
+    salvarRascunhoLocal();
+    nuvemAtualizarChip();
+    toast('Sem conexão com a nuvem agora. O lançamento ficou guardado neste navegador; tentando de novo…', true);
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(doSave, 8000);
+    return false;
+  } finally {
+    NUVEM.salvando = false;
+  }
+}
+
+// Botões do aviso "lançamentos locais ainda não enviados".
+async function nuvemEnviarLocal() {
+  if (!NUVEM.conectada) { toast('Sem conexão com a nuvem agora.', true); return; }
+  if (!SESSAO) { toast('Entre para lançar e clique de novo em "Enviar para a nuvem".', true); abrirLogin(); return; }
+  const ok = await nuvemSalvar();
+  if (ok) { toast('Lançamentos deste navegador enviados para a nuvem.'); renderAll(); }
+}
+async function nuvemUsarServidor() {
+  if (!NUVEM.pendenteLocal) return;
+  if (!await confirmDialog('Os lançamentos que estavam só neste navegador serão descartados e a tela passa a mostrar a versão da nuvem. Continuar?', { title: 'Usar a versão da nuvem', okLabel: 'Usar a nuvem', danger: true })) return;
+  try {
+    const row = await nuvemBuscar();
+    if (row) { nuvemAdotarEstado(row, 'escolha'); toast('Tela atualizada com a versão da nuvem.'); }
+  } catch (e) { toast('Sem conexão com a nuvem agora.', true); }
+}
+
 async function doSave() {
+  // Na nuvem (site publicado), gravar é gravar no Supabase.
+  if (NUVEM.conectada) { await nuvemSalvar(); return; }
   const ns = await ARTIFACT_NS_PROMISE;
   if (!ns) { PODE_PUBLICAR = false; salvarRascunhoLocal(); aplicarModo(); return; }
   try {
@@ -6482,7 +6754,7 @@ function renderConciliacaoEmpreiteiro() {
 }
 
 function renderAvisoRascunho() {
-  if (!RASCUNHO_RESTAURADO) return null;
+  if (!RASCUNHO_RESTAURADO && !NUVEM.pendenteLocal) return null;
   const wrap = document.createElement('div');
   wrap.className = 'conf-cartao';
   const quando = typeof RASCUNHO_RESTAURADO === 'string'
@@ -6492,6 +6764,17 @@ function renderAvisoRascunho() {
   topo.className = 'conf-topo';
   topo.innerHTML = `<div><div class="conf-titulo">Este navegador guarda lançamentos próprios${quando}</div>
     <div class="conf-texto">Lançamentos feitos aqui (Controle Mensal CAIXA, ou edições de quem entrou para lançar e não publicou) ficam guardados neste navegador, por cima da versão publicada. Enquanto isso, correções feitas na versão publicada podem não aparecer nesta tela. Descartar apaga só o que está neste navegador — nada do que já foi publicado.</div></div>`;
+  if (NUVEM.pendenteLocal) {
+    topo.innerHTML = `<div><div class="conf-titulo">Este navegador tem lançamentos que ainda não foram para a nuvem</div>
+      <div class="conf-texto">O que está na tela foi gravado neste navegador em ${esc(dateBR(String(NUVEM.pendenteLocal.salvoEm).slice(0, 10)))} e é mais novo que a versão da nuvem (${esc(nuvemQuandoPor() || 'sem data')}). Escolha: enviar estes lançamentos para a nuvem (precisa entrar para lançar) ou descartá-los e usar a versão da nuvem.</div></div>`;
+    const acoes = document.createElement('div');
+    acoes.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap';
+    const b1 = document.createElement('button'); b1.type = 'button'; b1.className = 'btn primary small filter-control'; b1.textContent = 'Enviar para a nuvem'; b1.onclick = nuvemEnviarLocal;
+    const b2 = document.createElement('button'); b2.type = 'button'; b2.className = 'btn small filter-control'; b2.textContent = 'Usar a versão da nuvem'; b2.onclick = nuvemUsarServidor;
+    acoes.appendChild(b1); acoes.appendChild(b2);
+    wrap.appendChild(topo); wrap.appendChild(acoes);
+    return wrap;
+  }
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'btn primary small';
@@ -11463,9 +11746,18 @@ function abrirApresentacaoMercado() {
   }, { wide: true, fullscreen: true });
 }
 
+function painelNuvemHtml() {
+  const estado = NUVEM.conectada ? `<span class="badge green">conectado</span> versão ${NUVEM.versao}${NUVEM.atualizadoEm ? ` · última gravação ${esc(nuvemQuandoPor())}` : ''}`
+    : (NUVEM.habilitada ? `<span class="badge amber">${esc(NUVEM.erro || 'conectando')}</span>` : '<span class="badge gray">não se aplica nesta cópia</span>');
+  return `<div class="panel"><div class="panel-header"><div><h2>Onde os dados moram</h2>
+    <div class="muted">No site publicado, o estado da obra fica na nuvem (Supabase, tabela <code>obras</code>, projeto casa-newton-toscana, São Paulo). Quem entra para lançar grava lá; quem está com o app aberto recebe a mudança na hora. Sem sessão, só o Controle Mensal CAIXA grava. Cada gravação guarda uma versão em <code>obras_historico</code> (últimas 300), com quem gravou e quando. Dentro do Claude o app continua publicando no próprio artifact.</div></div></div>
+    <div class="mk-texto">Situação agora: ${estado}.</div></div>`;
+}
+
 function renderRastreabilidade() {
   const root = document.getElementById('tab-rastreabilidade');
   root.innerHTML = '';
+  root.insertAdjacentHTML('beforeend', painelNuvemHtml());
   const panel = document.createElement('div');
   panel.className = 'panel';
   panel.innerHTML = `<div class="panel-header">
@@ -11937,14 +12229,19 @@ function startInfoObserver() {
    ========================================================================== */
 restoreViewState();
 prepararInstalacaoApp();
-normalizarParametros();
-migrarMesFaturaDaPlanilha();
-migrarItensCartaoSemVinculo();
-migrarBaseAdm();
+// Toda carga de estado (semente, rascunho local, nuvem) passa pelas mesmas
+// normalizações e migrações, para que o cálculo não dependa da origem.
+function normalizarEstadoCarregado() {
+  normalizarParametros();
+  migrarMesFaturaDaPlanilha();
+  migrarItensCartaoSemVinculo();
+  migrarBaseAdm();
+}
+normalizarEstadoCarregado();
 SESSAO = lerSessao();
 // O rascunho deste navegador é restaurado com ou sem sessão: o cliente lança
 // o Controle Mensal CAIXA sem senha e precisa reencontrar o que digitou.
-restaurarRascunhoLocal();
+if (restaurarRascunhoLocal()) { normalizarEstadoCarregado(); VIEW = recompute(STATE); }
 // Com a sincronização automática ligada, a coluna Cartão já entra derivada
 // dos itens do Detalhamento na primeira renderização, sem esperar por uma
 // edição. Roda depois do rascunho para valer sobre o estado que será exibido;
@@ -11956,6 +12253,8 @@ document.getElementById('btnSessao').onclick = () => { if (SESSAO) sairDaSessao(
 aplicarModo();
 renderAll();
 applyInfoIcons(document.getElementById('app'));
+// Nuvem (Supabase): busca a versão compartilhada e liga o tempo real.
+nuvemIniciar();
 ajustarGrids();
 startInfoObserver();
 ARTIFACT_NS_PROMISE.then((ns) => {
