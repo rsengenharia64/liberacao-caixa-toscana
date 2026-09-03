@@ -1511,7 +1511,7 @@ function saldoContaAte(liberacoesCaixa, parcelas, marco, ateData, incluirPlaneja
 // filtro independente (getFiltro/setFiltro apontam para variáveis
 // diferentes), então dá pra comparar, por exemplo, "o que já foi realizado
 // até Julho" com "o projetado até Dezembro" ao mesmo tempo.
-function renderSaldoContaPanel({ title, subtitle, filtroLabel, getFiltro, setFiltro, incluirPlanejado, marco, periodos, liberacoesCaixa, parcelas, rerender }) {
+function renderSaldoContaPanel({ title, subtitle, filtroLabel, getFiltro, setFiltro, incluirPlanejado, marco, periodos, liberacoesCaixa, parcelas, rerender, padrao }) {
   const panel = document.createElement('div');
   panel.className = 'panel';
   panel.innerHTML = `
@@ -1526,7 +1526,7 @@ function renderSaldoContaPanel({ title, subtitle, filtroLabel, getFiltro, setFil
   `;
 
   const ultimoPeriodo = periodos[periodos.length - 1] || null;
-  const selecionado = getFiltro() || ultimoPeriodo;
+  const selecionado = getFiltro() || padrao || ultimoPeriodo;
 
   const filtroWrap = document.createElement('div');
   filtroWrap.className = 'form-grid';
@@ -1558,6 +1558,15 @@ function renderSaldoContaPanel({ title, subtitle, filtroLabel, getFiltro, setFil
 // REALIZADO, a outra também soma o PLANEJADO (medições CAIXA planejadas e
 // custos planejados) — cada uma com seu próprio filtro "até qual quinzena",
 // do marco (Junho/2ª) até o fim do contrato.
+/* A janela projetada abre sempre na próxima quinzena a vencer — uma
+   quinzena à frente de hoje. Ver o saldo no fim do contrato é informação de
+   planejamento; o que se decide no dia a dia é a posição de caixa da
+   quinzena que está chegando. Trocar o filtro na mão continua valendo e a
+   escolha se mantém enquanto a aba estiver aberta. */
+function proximaQuinzena(periodos, hoje) {
+  return periodos.find((p) => p.vencPlanejado > hoje) || periodos[periodos.length - 1] || null;
+}
+
 function renderSaldoContaGrid() {
   const r = VIEW.resumo;
   const marco = r.marcoSaldoConta;
@@ -1583,6 +1592,7 @@ function renderSaldoContaGrid() {
     getFiltro: () => FILTRO_SALDO_CONTA_ATE,
     setFiltro: (v) => { FILTRO_SALDO_CONTA_ATE = v; },
     incluirPlanejado: true,
+    padrao: proximaQuinzena(periodos, r.dataReferenciaCronograma),
     marco, periodos,
     liberacoesCaixa: VIEW.liberacoesCaixa, parcelas: VIEW.parcelas,
     rerender: renderPainel,
