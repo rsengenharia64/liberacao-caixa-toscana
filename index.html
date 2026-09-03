@@ -132,6 +132,7 @@
     display: inline-flex; align-items: center; gap: 6px;
   }
   .status-chip.saving { background: rgba(199,107,28,0.25); color: #ffd7ab; }
+  .status-chip.simulando { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); }
   .status-chip.saved { background: rgba(31,122,77,0.25); color: #a8e6c4; }
   .status-chip.readonly { background: rgba(179,38,30,0.25); color: #ffb3ae; }
   .status-chip.local { background: rgba(199,107,28,0.28); color: #ffd7ab; }
@@ -317,14 +318,43 @@
   .extrato-conta tr.mov-futuro td:first-child { border-left: 3px solid var(--border); }
   @media (max-width: 860px) { .saldo-grid { grid-template-columns: 1fr; } .saldo-acoes { flex-direction: row; } }
   @media print {
+    html, body { height: auto !important; min-height: 0 !important; background: #fff !important; }
+    #app, .titleblock, .modo-banner, #toast { display: none !important; }
     body * { visibility: hidden !important; }
     .modal-backdrop, .modal-backdrop * { visibility: visible !important; }
-    .modal-backdrop { position: absolute !important; inset: 0 !important; background: #fff !important; padding: 0 !important; display: block !important; }
-    .modal { max-width: none !important; max-height: none !important; overflow: visible !important; box-shadow: none !important; border: none !important; width: 100% !important; }
-    .modal-close, .no-print, .drill-hint { display: none !important; }
+    .modal-backdrop { position: static !important; inset: auto !important; height: auto !important; background: #fff !important; padding: 0 !important; display: block !important; }
+    .modal { max-width: none !important; max-height: none !important; height: auto !important; overflow: visible !important; box-shadow: none !important; border: none !important; width: 100% !important; border-radius: 0 !important; }
+    .modal.fullscreen { height: auto !important; }
+    .modal-body { overflow: visible !important; padding: 0 !important; }
+    .modal-close, .modal-full, .modal-acoes, .no-print, .drill-hint, .info-btn { display: none !important; }
     .table-scroll { max-height: none !important; overflow: visible !important; }
     .extrato-table th, .extrato-table td { font-size: 11px !important; }
+    .rel-table th, .rel-table td { font-size: 9.5px !important; padding: 3px 5px !important; }
+    .rel-table thead th { position: static !important; }
+    .rel-table tr, .viab-secao { break-inside: avoid; }
+    .viab-secao { border: none !important; }
+    .viab-secao > :not(summary) { display: block !important; }
+    details.viab-secao > summary { list-style: none; }
   }
+  /* ---------- Relatórios ---------- */
+  .rel-grupo { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 12px 0 6px; }
+  .rel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 260px), 1fr)); gap: 10px; }
+  .rel-card { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); cursor: pointer; font: inherit; color: var(--ink); }
+  .rel-card:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .rel-card-nome { font-weight: 700; font-size: 13px; }
+  .rel-card-resumo { font-family: "IBM Plex Mono", monospace; font-size: 12px; color: var(--accent-ink); }
+  .rel-card-desc { font-size: 11px; color: var(--muted); line-height: 1.4; }
+  .rel-card-abrir { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-top: 2px; }
+  .rel-cabecalho { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 2px solid var(--accent); padding-bottom: 8px; }
+  .rel-obra { font-weight: 700; font-size: 14px; }
+  .rel-periodo { font-size: 11px; margin-top: 2px; }
+  .rel-acoes { display: flex; gap: 8px; flex-wrap: wrap; }
+  .rel-table th, .rel-table td { font-size: 11.5px; padding: 5px 7px; white-space: nowrap; }
+  .rel-table tfoot td { background: var(--accent-soft); color: var(--accent-ink); }
+  .rel-table tfoot tr.rel-sub td { background: var(--surface-2); color: var(--ink-soft); font-weight: 600; }
+  .rel-table tfoot tr.rel-total td { border-top: 2px solid var(--accent); }
+  .rel-notas { font-size: 11.5px; line-height: 1.45; display: flex; flex-direction: column; gap: 4px; }
+  .rel-rodape { font-size: 10.5px; border-top: 1px solid var(--border); padding-top: 6px; }
   .saldo-conta-linha { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
   .saldo-conta-linha .saldoContaFiltroSlot { flex: 1; min-width: 190px; }
   .saldo-conta-valor { font-size: 24px; font-weight: 700; white-space: nowrap; }
@@ -795,7 +825,14 @@
   .modal { background: var(--surface); border-radius: 12px; width: 100%; max-width: 480px; max-height: 90vh; overflow: auto; box-shadow: 0 20px 50px rgba(0,0,0,.35); border: 1px solid var(--border); }
   .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--border); }
   .modal-header h3 { margin: 0; font-size: 15px; }
-  .modal-close { border: none; background: none; font-size: 16px; cursor: pointer; color: var(--muted); }
+  .modal-close, .modal-full { border: none; background: none; font-size: 16px; cursor: pointer; color: var(--muted); padding: 2px 6px; border-radius: 6px; line-height: 1; }
+  .modal-close:hover, .modal-full:hover { background: var(--surface-2); color: var(--ink); }
+  .modal-acoes { display: flex; align-items: center; gap: 2px; }
+  .modal.fullscreen { max-width: none !important; width: 100%; height: 100%; max-height: none; border-radius: 10px; display: flex; flex-direction: column; }
+  .modal.fullscreen .modal-body { flex: 1; overflow: auto; }
+  .modal.fullscreen .table-scroll { max-height: none !important; }
+  .modal-backdrop.fullscreen { padding: 10px; }
+  @media (max-width: 620px) { .modal-backdrop.fullscreen { padding: 0; } .modal.fullscreen { border-radius: 0; height: 100vh; } }
   .modal-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
 
   .toast { position: fixed; bottom: 18px; right: 18px; background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 13px; z-index: 200; box-shadow: 0 8px 24px rgba(0,0,0,.3); }
@@ -905,6 +942,7 @@
     <button class="tab-btn" data-tab="fluxo">Fluxo de Caixa</button>
     <button class="tab-btn" data-tab="pci">Liberação PCI</button>
     <button class="tab-btn" data-tab="controle-caixa">Controle Mensal CAIXA</button>
+    <button class="tab-btn" data-tab="relatorios">Relatórios</button>
     <button class="tab-btn" data-tab="rastreabilidade">Rastreabilidade</button>
     <button class="tab-btn" data-tab="parametros">Parâmetros</button>
   </nav>
@@ -920,6 +958,7 @@
   <section id="tab-fluxo" class="tab-panel" hidden=""></section>
   <section id="tab-pci" class="tab-panel" hidden=""></section>
   <section id="tab-controle-caixa" class="tab-panel" hidden=""></section>
+  <section id="tab-relatorios" class="tab-panel" hidden=""></section>
   <section id="tab-rastreabilidade" class="tab-panel" hidden=""></section>
   <section id="tab-parametros" class="tab-panel" hidden=""></section>
 </main>
@@ -929,7 +968,10 @@
     <div class="modal">
       <div class="modal-header">
         <h3></h3>
-        <button class="modal-close">✕</button>
+        <div class="modal-acoes">
+          <button class="modal-full no-print" title="Expandir para tela cheia (F)" aria-label="Tela cheia">⛶</button>
+          <button class="modal-close no-print" title="Fechar" aria-label="Fechar">✕</button>
+        </div>
       </div>
       <div class="modal-body"></div>
     </div>
@@ -1308,7 +1350,32 @@ function calcularViabilidade(ctx) {
   };
 }
 
+/* Modo simulação — "e se?" sem tocar nos dados
+   --------------------------------------------------------------------------
+   Guarda apenas os parâmetros trocados; o recompute aplica esses valores por
+   cima dos oficiais. Nada é salvo: sair da simulação devolve os números
+   reais. Fica liberado sem senha, porque não altera lançamento nenhum. */
+const SIMULACAO = { ativa: false, params: {} };
+
+function simularParametros(patch) {
+  SIMULACAO.ativa = true;
+  Object.assign(SIMULACAO.params, patch);
+  VIEW = recompute(STATE);
+  renderAll();
+}
+
+function sairDaSimulacao() {
+  SIMULACAO.ativa = false;
+  SIMULACAO.params = {};
+  VIEW = recompute(STATE);
+  renderAll();
+  toast('Simulação encerrada — de volta aos números reais.');
+}
+
 function recompute(state) {
+  if (SIMULACAO.ativa && Object.keys(SIMULACAO.params).length) {
+    state = { ...state, parametros: { ...(state.parametros || {}), ...SIMULACAO.params } };
+  }
   const dataRef = (state.meta && state.meta.dataReferenciaCronograma) || new Date().toISOString().slice(0, 10);
   // Teto de medição por categoria (padrão 100%) — parâmetro configurável em
   // Parâmetros > Regras de cálculo; ausente/limpo no estado = comportamento
@@ -1594,6 +1661,8 @@ function recompute(state) {
     verbaDisponivelFutura,
     saldoParaFuturos: round2(verbaDisponivelFutura - totalPlanejadoFuturo),
     marcoSaldoConta: MARCO_SALDO_CONTA,
+    simulando: SIMULACAO.ativa && Object.keys(SIMULACAO.params).length > 0,
+    simulacaoParams: { ...SIMULACAO.params },
     saldoContaRealizado,
     tetoAvancoEfetivo,
   };
@@ -2655,6 +2724,27 @@ function toastAjuste(ajuste) {
 function newId(prefix) {
   const rand = (window.crypto && crypto.randomUUID) ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10);
   return `${prefix}-${rand}`;
+}
+
+function marcarSimulacaoNoCabecalho() {
+  const chip = document.getElementById('statusChip');
+  if (!chip) return;
+  const simulando = SIMULACAO.ativa && Object.keys(SIMULACAO.params).length > 0;
+  chip.classList.toggle('simulando', simulando);
+  let bt = document.getElementById('btnSairSimulacao');
+  if (simulando && !bt) {
+    bt = document.createElement('button');
+    bt.id = 'btnSairSimulacao';
+    bt.type = 'button';
+    bt.className = 'btn-sessao filter-control';
+    bt.textContent = 'Simulação · sair';
+    bt.title = 'Voltar aos números reais da obra';
+    bt.onclick = sairDaSimulacao;
+    chip.parentElement.insertBefore(bt, chip);
+  } else if (!simulando && bt) {
+    bt.remove();
+  }
+  if (simulando) { const t = document.getElementById('statusChipText'); if (t) t.textContent = 'Simulação'; }
 }
 
 function setStatus(kind) {
@@ -3947,8 +4037,10 @@ function renderAll() {
   renderFluxo();
   renderPCI();
   renderControleCaixa();
+  renderRelatorios();
   renderRastreabilidade();
   renderParametros();
+  marcarSimulacaoNoCabecalho();
 
   if (READONLY) {
     // Trava tudo que edita dados (campos, +Novo/excluir, restaurar dados) —
@@ -3958,6 +4050,10 @@ function renderAll() {
     document.querySelectorAll('#app input:not(.filter-control), #app select:not(.filter-control), #app textarea, #app button:not(.filter-control)').forEach((el) => { el.disabled = true; });
     // O Controle Mensal CAIXA é área do cliente: fica livre, sem senha.
     document.querySelectorAll('#tab-controle-caixa input, #tab-controle-caixa select, #tab-controle-caixa button').forEach((el) => { el.disabled = false; });
+    // Relatórios são leitura e simulação: liberados sem senha.
+    document.querySelectorAll('#tab-relatorios input, #tab-relatorios select, #tab-relatorios button').forEach((el) => { el.disabled = false; });
+    const bs = document.getElementById('btnSairSimulacao');
+    if (bs) bs.disabled = false;
   }
 }
 
@@ -4564,6 +4660,19 @@ function abrirExtratoViabilidade(secaoInicial = null) {
       abrirExtratoViabilidade(secao);
     };
 
+    if (v.simulando || SIMULACAO.ativa) {
+      const sim = document.createElement('div');
+      sim.className = 'modo-banner local no-print';
+      sim.innerHTML = '<span><strong>Modo simulação</strong> — os números abaixo usam premissas de teste e <strong>nada está sendo salvo</strong>. Os lançamentos reais continuam intactos.</span>';
+      const bt = document.createElement('button');
+      bt.type = 'button';
+      bt.className = 'btn small modo-acao filter-control';
+      bt.textContent = 'Voltar aos números reais';
+      bt.onclick = () => { sairDaSimulacao(); const bd = body.closest('.modal-backdrop'); if (bd) bd.remove(); abrirExtratoViabilidade(secaoInicial); };
+      sim.appendChild(bt);
+      body.appendChild(sim);
+    }
+
     /* Cenário de venda: um único VGV alimenta corretagem, IR, resultado e
        margens. Nunca mistura VGV atual com futuro. */
     const cen = document.createElement('div');
@@ -4573,7 +4682,10 @@ function abrirExtratoViabilidade(secaoInicial = null) {
       <button type="button" class="btn small ${v.cenarioVgv === 'projetado' ? 'primary' : ''}" data-cen="projetado">Saída projetada — VGV ${money(v.vgvProjetado)} em ${v.prazoVendaMeses || '—'} meses</button>
       <span class="muted">Todos os números abaixo usam o ${cenarioRotulo}.</span>`;
     cen.querySelectorAll('button[data-cen]').forEach((b) => {
-      b.addEventListener('click', () => { if (READONLY) { toast('Entre para lançar para trocar o cenário.', true); return; } updateParametros({ cenarioVgv: b.dataset.cen }); reabrir(); });
+      b.addEventListener('click', () => {
+        if (READONLY || SIMULACAO.ativa) { simularParametros({ cenarioVgv: b.dataset.cen }); abrirExtratoViabilidade(secaoInicial); return; }
+        updateParametros({ cenarioVgv: b.dataset.cen }); reabrir();
+      });
     });
     body.appendChild(cen);
 
@@ -4788,7 +4900,12 @@ function abrirExtratoViabilidade(secaoInicial = null) {
       label.appendChild(el);
       grid.appendChild(label);
     };
-    const salvar = (patch) => { updateParametros(patch); reabrir('premissas'); };
+    // Sem senha (ou já simulando), mexer nas premissas entra em SIMULAÇÃO:
+    // recalcula tudo na hora e não grava nada. Com sessão aberta, grava.
+    const salvar = (patch) => {
+      if (READONLY || SIMULACAO.ativa) { simularParametros(patch); abrirExtratoViabilidade('premissas'); return; }
+      updateParametros(patch); reabrir('premissas');
+    };
     const P = VIEW.parametros;
     campo('VGV atual (R$)', moneyInput({ value: v.vgvAtual, onSave: (x) => salvar({ vgv: x }) }));
     campo('VGV projetado (R$)', moneyInput({ value: v.vgvProjetado, onSave: (x) => salvar({ vgvProjetado: x }) }));
@@ -4808,8 +4925,21 @@ function abrirExtratoViabilidade(secaoInicial = null) {
     prem.appendChild(grid);
     const nota = document.createElement('div');
     nota.className = 'muted viab-explica';
-    nota.innerHTML = 'Crédito CAIXA, recurso próprio planejado, contrato do empreiteiro, taxa de administração e custo do lote executado ficam em <strong>Parâmetros › Parâmetros financeiros</strong> — são compartilhados com o resto do app.';
+    nota.innerHTML = `${READONLY || SIMULACAO.ativa
+      ? 'Você está <strong>simulando</strong>: mude qualquer premissa acima e veja o efeito na hora — nada é gravado. Para alterar de verdade, entre com usuário e senha.'
+      : 'Alterações aqui são <strong>gravadas</strong> nos parâmetros da obra. Para testar cenários sem gravar, saia da sessão ou use o botão abaixo.'}<br>
+      Crédito CAIXA, recurso próprio planejado, contrato do empreiteiro, taxa de administração e custo do lote executado ficam em <strong>Parâmetros › Parâmetros financeiros</strong> — são compartilhados com o resto do app.`;
     prem.appendChild(nota);
+    if (!READONLY && !SIMULACAO.ativa) {
+      const btSim = document.createElement('button');
+      btSim.type = 'button';
+      btSim.className = 'btn small filter-control';
+      btSim.style.alignSelf = 'flex-start';
+      btSim.textContent = 'Simular sem gravar';
+      btSim.title = 'Entra no modo simulação: daqui em diante as premissas mudam só na tela.';
+      btSim.onclick = () => { SIMULACAO.ativa = true; toast('Modo simulação ligado — nada será salvo.'); reabrir('premissas'); };
+      prem.appendChild(btSim);
+    }
     body.appendChild(prem);
   }, { wide: true });
 }
@@ -8018,6 +8148,597 @@ function glossarioItens() {
   ];
 }
 
+/* ==========================================================================
+   Relatórios — rastreabilidade de ponta a ponta
+   --------------------------------------------------------------------------
+   Um relatório é só uma DESCRIÇÃO (colunas + linhas + totais) construída a
+   partir do mesmo VIEW que alimenta as telas — nunca de um cálculo paralelo.
+   A partir dessa descrição o app monta a tabela na tela, a folha de
+   impressão (que vira PDF pelo "Salvar como PDF" do navegador) e a planilha
+   CSV, esta com FÓRMULAS de verdade na linha de total, para quem quiser
+   conferir ou continuar a conta no Excel.
+   ========================================================================== */
+
+// Filtro de período comum a todos os relatórios (vazio = tudo).
+const RELATORIO_PERIODO = { de: null, ate: null };
+
+function dentroDoPeriodo(data) {
+  if (!data) return !RELATORIO_PERIODO.de && !RELATORIO_PERIODO.ate;
+  const d = String(data).slice(0, 10);
+  if (RELATORIO_PERIODO.de && d < RELATORIO_PERIODO.de) return false;
+  if (RELATORIO_PERIODO.ate && d > RELATORIO_PERIODO.ate) return false;
+  return true;
+}
+
+// col: { k, t (título), tipo: 'texto'|'money'|'pct'|'data'|'num', total: true }
+function colunasMoney(cols) { return cols.filter((c) => c.total).map((c) => c.k); }
+
+function dataDaParcela(p) { return p.vencimento || p.vencPlanejado || null; }
+
+/* ---------------- Definição dos relatórios ---------------- */
+function relatoriosDisponiveis() {
+  const r = VIEW.resumo;
+  const v = r.viabilidade || {};
+  const f = v.fontes || {};
+  const parcelas = (VIEW.parcelas || []).filter((p) => dentroDoPeriodo(dataDaParcela(p)));
+  const realizadas = parcelas.filter((p) => p.status === 'REALIZADO');
+
+  const lista = [];
+
+  /* 1. Pagamento ao empreiteiro */
+  lista.push({
+    id: 'empreiteiro',
+    nome: 'Pagamento ao empreiteiro',
+    grupo: 'Pagamentos',
+    resumo: `Consumido ${money(r.totalConsumidoContrato)} de ${money(r.contratoTotalEmpreiteiro)} (${pct(r.percValorTotalPago)})`,
+    descricao: 'Quinzena a quinzena: PIX, cartão e o acumulado contra o contrato. É o que a construtora recebeu.',
+    colunas: [
+      { k: 'quinzena', t: 'Quinzena' }, { k: 'data', t: 'Data', tipo: 'data' }, { k: 'status', t: 'Status' },
+      { k: 'pix', t: 'PIX', tipo: 'money', total: true },
+      { k: 'cartao', t: 'Cartão', tipo: 'money', total: true },
+      { k: 'total', t: 'Pago ao empreiteiro', tipo: 'money', total: true },
+      { k: 'acumulado', t: 'Acumulado', tipo: 'money' },
+      { k: 'percContrato', t: '% do contrato', tipo: 'pct' },
+    ],
+    linhas: () => {
+      let acc = 0;
+      return parcelas.map((p) => {
+        const pix = Number(p.totalEmpreiteiroPix) || 0;
+        const cartao = Number(p.gastoCartao) || 0;
+        acc = round2(acc + pix + cartao);
+        return { quinzena: p.label || p.mesReferenciaLabel || '', data: dataDaParcela(p), status: p.status, pix, cartao, total: round2(pix + cartao), acumulado: acc, percContrato: r.contratoTotalEmpreiteiro ? acc / r.contratoTotalEmpreiteiro : 0 };
+      });
+    },
+    notas: () => [
+      `Contrato total: ${money(r.contratoTotalEmpreiteiro)} · consumido ${money(r.totalConsumidoContrato)} · saldo ${money(r.saldoContratoAPagarEmpreiteiro)}.`,
+      `Medido pelo cronograma físico: ${money(r.totalMedido)} — a diferença para o consumido (${money(r.totalConsumidoContrato - r.totalMedido)}) é adiantamento.`,
+    ],
+  });
+
+  /* 2. RS Engenharia — administração */
+  lista.push({
+    id: 'adm',
+    nome: 'Administração — RS Engenharia',
+    grupo: 'Pagamentos',
+    resumo: `Realizado ${money(r.totalAdmPago)} · projetado ${money((v.rubricas || []).find((x) => x.id === 'administracao')?.projetado || 0)}`,
+    descricao: `Taxa de administração de ${pct(r.taxaAdministracaoPercent ?? (VIEW.parametros || {}).taxaAdministracaoPercent)} sobre a base contratada, quinzena a quinzena.`,
+    colunas: [
+      { k: 'quinzena', t: 'Quinzena' }, { k: 'data', t: 'Data', tipo: 'data' }, { k: 'status', t: 'Status' },
+      { k: 'base', t: 'Base (PIX + cartão)', tipo: 'money', total: true },
+      { k: 'adm', t: 'Administração', tipo: 'money', total: true },
+      { k: 'taxa', t: 'Taxa efetiva', tipo: 'pct' },
+      { k: 'origem', t: 'Origem' },
+      { k: 'acumulado', t: 'Acumulado', tipo: 'money' },
+    ],
+    linhas: () => {
+      let acc = 0;
+      return parcelas.map((p) => {
+        const base = round2((Number(p.totalEmpreiteiroPix) || 0) + (Number(p.gastoCartao) || 0));
+        const adm = Number(p.totalAdmPix) || 0;
+        acc = round2(acc + adm);
+        return { quinzena: p.label || '', data: dataDaParcela(p), status: p.status, base, adm, taxa: base ? adm / base : 0, origem: (p.overrides && p.overrides.totalAdmPix) ? 'digitada à mão' : 'calculada', acumulado: acc };
+      });
+    },
+    notas: () => ['Base configurável em Parâmetros › Base da taxa de administração. Linhas "digitada à mão" não seguem a fórmula — o botão ↺ no Demonstrativo devolve o cálculo.'],
+  });
+
+  /* 3. Cartão de crédito */
+  lista.push({
+    id: 'cartao',
+    nome: 'Cartão de crédito — faturas e compras',
+    grupo: 'Pagamentos',
+    resumo: (() => { const fs = faturasCartao(); return `${fs.length} fatura(s) · ${money(round2(sum(fs, (x) => x.total)))}`; })(),
+    descricao: `Cada compra na fatura em que ela cai. Fecha dia ${diaFechamentoCartao()}, vence dia ${diaVencimentoCartao()}.`,
+    colunas: [
+      { k: 'fatura', t: 'Fatura' }, { k: 'vencimento', t: 'Vencimento', tipo: 'data' },
+      { k: 'categoria', t: 'Categoria' }, { k: 'item', t: 'Compra' },
+      { k: 'compra', t: 'Data da compra', tipo: 'data' },
+      { k: 'valor', t: 'Valor', tipo: 'money', total: true },
+    ],
+    linhas: () => {
+      const out = [];
+      for (const fat of faturasCartao()) {
+        if (!dentroDoPeriodo(fat.vencimento)) continue;
+        for (const it of fat.itens) {
+          out.push({ fatura: mesQuinzenaLabel(fat.mes, 1), vencimento: fat.vencimento, categoria: it.categoriaNome || '', item: it.descricao || '', compra: it.dataPagamento ? String(it.dataPagamento).slice(0, 10) : null, valor: Number(it.valor) || 0 });
+        }
+        out.push({ fatura: mesQuinzenaLabel(fat.mes, 1), vencimento: fat.vencimento, categoria: '', item: 'TOTAL DA FATURA', compra: null, valor: fat.total, _subtotal: true });
+      }
+      return out;
+    },
+    notas: () => ['Toda compra vem do Detalhamento FC. A soma de cada fatura alimenta a coluna Cartão do Demonstrativo automaticamente.'],
+  });
+
+  /* 4. Global de desembolso */
+  lista.push({
+    id: 'desembolso',
+    nome: 'Global de desembolso',
+    grupo: 'Caixa',
+    resumo: `Saídas realizadas ${money(r.gastoAcumuladoPLS + r.totalPagoDiretoProprietario)}`,
+    descricao: 'Todo dinheiro que saiu, por quinzena e por natureza: empreiteiro, cartão, administração e evolução CAIXA — mais o que foi pago direto pelo proprietário.',
+    colunas: [
+      { k: 'quinzena', t: 'Quinzena' }, { k: 'data', t: 'Data', tipo: 'data' }, { k: 'status', t: 'Status' },
+      { k: 'pix', t: 'Empreiteiro (PIX)', tipo: 'money', total: true },
+      { k: 'cartao', t: 'Cartão', tipo: 'money', total: true },
+      { k: 'adm', t: 'Administração', tipo: 'money', total: true },
+      { k: 'evolucao', t: 'Evolução CAIXA', tipo: 'money', total: true },
+      { k: 'custoTotal', t: 'Custo total', tipo: 'money', total: true },
+      { k: 'acumulado', t: 'Acumulado', tipo: 'money' },
+    ],
+    linhas: () => {
+      let acc = 0;
+      const out = parcelas.map((p) => {
+        acc = round2(acc + (Number(p.custoTotal) || 0));
+        return { quinzena: p.label || '', data: dataDaParcela(p), status: p.status, pix: Number(p.totalEmpreiteiroPix) || 0, cartao: Number(p.gastoCartao) || 0, adm: Number(p.totalAdmPix) || 0, evolucao: Number(p.parcelaEvolucaoCaixa) || 0, custoTotal: Number(p.custoTotal) || 0, acumulado: acc };
+      });
+      const lote = Number((VIEW.parametros || {}).custoLoteExecutado) || 0;
+      if (lote && !RELATORIO_PERIODO.de) out.unshift({ quinzena: 'Lote (etapa 1 do PCI)', data: null, status: 'REALIZADO', pix: 0, cartao: 0, adm: 0, evolucao: 0, custoTotal: lote, acumulado: lote });
+      return out;
+    },
+    notas: () => [
+      `Gasto PLS acumulado (lote + quinzenas realizadas): ${money(r.gastoAcumuladoPLS)}.`,
+      `Pago direto pelo proprietário, fora das quinzenas: ${money(r.totalPagoDiretoProprietario)}.`,
+    ],
+  });
+
+  /* 5. Cronograma físico */
+  lista.push({
+    id: 'cronograma',
+    nome: 'Cronograma físico — planejado × realizado',
+    grupo: 'Obra',
+    resumo: `Realizado ${pct(r.percObraGeral)} · planejado ${pct(r.percPrevistoGeral)}`,
+    descricao: 'Etapa a etapa: peso no orçamento, avanço previsto pelo cronograma e avanço medido.',
+    semPeriodo: true,
+    colunas: [
+      { k: 'n', t: '#' }, { k: 'etapa', t: 'Etapa' },
+      { k: 'orcado', t: 'Orçado', tipo: 'money', total: true },
+      { k: 'peso', t: 'Peso', tipo: 'pct' },
+      { k: 'previsto', t: '% previsto', tipo: 'pct' },
+      { k: 'realizado', t: '% realizado', tipo: 'pct' },
+      { k: 'valorPrevisto', t: 'Valor previsto', tipo: 'money', total: true },
+      { k: 'valorMedido', t: 'Valor medido', tipo: 'money', total: true },
+      { k: 'desvio', t: 'Desvio (pp)', tipo: 'num' },
+      { k: 'situacao', t: 'Situação' },
+    ],
+    linhas: () => (VIEW.categorias || []).map((c) => {
+      const prev = c.valorOrcado ? (Number(c.valorPrevisto) || 0) / c.valorOrcado : 0;
+      const real = Number(c.percAvancoEfetivo) || 0;
+      return { n: c.numero, etapa: c.nome, orcado: Number(c.valorOrcado) || 0, peso: Number(c.peso) || 0, previsto: prev, realizado: real, valorPrevisto: Number(c.valorPrevisto) || 0, valorMedido: Number(c.valorMedido) || 0, desvio: round2((real - prev) * 100), situacao: c.situacao || '' };
+    }),
+    notas: () => [`Data de referência do cronograma: ${dateBR(r.dataReferenciaCronograma)}. O avanço medido vem da aba Lançar Avanços.`],
+  });
+
+  /* 6. Recebíveis PLS CAIXA */
+  lista.push({
+    id: 'pls',
+    nome: 'Recebíveis PLS CAIXA',
+    grupo: 'Caixa',
+    resumo: `Liberado ${money(r.caixaLiberadaAcumulada)} de ${money(r.creditoCaixaTotalPCI)} (${pct(r.percCaixaLiberada)})`,
+    descricao: 'Cada medição do banco na data em que caiu, mais as previstas, contra o crédito contratado.',
+    colunas: [
+      { k: 'medicao', t: 'Medição' }, { k: 'data', t: 'Data', tipo: 'data' }, { k: 'status', t: 'Status' },
+      { k: 'valor', t: 'Valor liberado', tipo: 'money', total: true },
+      { k: 'acumulado', t: 'Acumulado', tipo: 'money' },
+      { k: 'aLiberar', t: 'Saldo a liberar', tipo: 'money' },
+    ],
+    linhas: () => {
+      const total = Number(r.creditoCaixaTotalPCI) || 0;
+      const lote = Number((VIEW.parametros || {}).custoLoteExecutado) || 0;
+      let acc = 0;
+      const out = [];
+      if (lote && !RELATORIO_PERIODO.de) { acc = lote; out.push({ medicao: 'Lote — etapa 1 do PCI', data: null, status: 'REALIZADO', valor: lote, acumulado: acc, aLiberar: round2(total - acc) }); }
+      for (const l of (VIEW.liberacoesCaixa || [])) {
+        if (!dentroDoPeriodo(l.data)) continue;
+        acc = round2(acc + (Number(l.valor) || 0));
+        out.push({ medicao: l.obs || 'Medição', data: l.data, status: l.status || 'REALIZADO', valor: Number(l.valor) || 0, acumulado: acc, aLiberar: round2(total - acc) });
+      }
+      return out;
+    },
+    notas: () => [
+      `Crédito contratado (PCI): ${money(r.creditoCaixaTotalPCI)} · a liberar ${money(r.saldoCaixaDisponivel)}.`,
+      'Só medições com status Realizado contam como liberadas; as Planejadas aparecem para projeção de caixa.',
+    ],
+  });
+
+  /* 7. Gastos com recursos próprios */
+  lista.push({
+    id: 'proprios',
+    nome: 'Gastos com recursos próprios',
+    grupo: 'Caixa',
+    resumo: `Aportado ${money(r.totalConsumoRecursoProprio)} · saldo ${money(r.saldoRecursoDisponivel)}`,
+    descricao: 'Cada desembolso feito do bolso do proprietário, com saldo remanescente.',
+    colunas: [
+      { k: 'descricao', t: 'Descrição' }, { k: 'data', t: 'Data', tipo: 'data' },
+      { k: 'valor', t: 'Valor', tipo: 'money', total: true },
+      { k: 'acumulado', t: 'Acumulado', tipo: 'money' },
+      { k: 'saldo', t: 'Saldo remanescente', tipo: 'money' },
+    ],
+    linhas: () => {
+      const planejado = Number(r.recursoProprioPlanejado) || 0;
+      let acc = 0;
+      return [...(VIEW.consumosRecursoProprio || [])].sort(ordenarConsumos).filter((c) => dentroDoPeriodo(c.data) || !c.data).map((c) => {
+        acc = round2(acc + (Number(c.valor) || 0));
+        return { descricao: c.descricao || '', data: c.data, valor: Number(c.valor) || 0, acumulado: acc, saldo: round2(planejado - acc) };
+      });
+    },
+    notas: () => [
+      `Recurso próprio planejado: ${money(r.recursoProprioPlanejado)}.`,
+      `Capital próprio necessário pela viabilidade: ${money(f.capitalProprioNecessario)} — ainda a aportar ${money(f.capitalProprioAindaNecessario)}.`,
+    ],
+  });
+
+  /* 8. DFC */
+  lista.push({
+    id: 'dfc',
+    nome: 'DFC — Demonstrativo de Fluxo de Caixa',
+    grupo: 'Demonstrações',
+    resumo: `Saldo em conta hoje ${money(r.saldoContaRealizado)}`,
+    descricao: 'Entradas e saídas por quinzena, com saldo acumulado. Dinheiro entrando e saindo — não é resultado.',
+    colunas: [
+      { k: 'periodo', t: 'Período' },
+      { k: 'entradaCaixa', t: 'Entrada — CAIXA/PLS', tipo: 'money', total: true },
+      { k: 'entradaPropria', t: 'Entrada — recurso próprio', tipo: 'money', total: true },
+      { k: 'entradaTotal', t: 'Total de entradas', tipo: 'money', total: true },
+      { k: 'saidaTotal', t: 'Total de saídas', tipo: 'money', total: true },
+      { k: 'resultado', t: 'Entradas − saídas', tipo: 'money', total: true },
+      { k: 'acumulado', t: 'Saldo acumulado', tipo: 'money' },
+    ],
+    linhas: () => (VIEW.fluxoCaixaMensal || []).map((m) => ({
+      periodo: m.label, entradaCaixa: m.entradaCaixaPCI, entradaPropria: round2(m.entradaRecursoProprio + m.entradaAjusteManual),
+      entradaTotal: m.entradaTotal, saidaTotal: m.saidaTotal, resultado: round2(m.entradaTotal - m.saidaTotal), acumulado: m.saldoAcumuladoMes,
+    })),
+    notas: () => [
+      'Liberação CAIXA e aporte próprio são ENTRADAS DE CAIXA, nunca receita. Pagamento a fornecedor é saída e baixa de obrigação, não custo novo — o custo está na DRE.',
+      `Atenção à leitura: o recurso próprio entra aqui como <strong>dotação inicial</strong> no primeiro período (${money(r.recursoProprioPlanejado)} planejados), igual à aba Fluxo de Caixa. O que de fato já foi aportado é ${money(r.totalConsumoRecursoProprio)} — veja o relatório "Gastos com recursos próprios".`,
+      `Saldo em conta realizado, contado a partir de ${dateBR(r.marcoSaldoConta)}: ${money(r.saldoContaRealizado)}.`,
+    ],
+  });
+
+  /* 9. DRE */
+  lista.push({
+    id: 'dre',
+    nome: 'DRE — Demonstração do Resultado',
+    grupo: 'Demonstrações',
+    resumo: `Custo ${money(v.custoEconomicoProjetado)} · lucro líquido ${money(v.lucroLiquido)}`,
+    descricao: 'Resultado econômico do empreendimento: custo por rubrica, quem banca cada uma e o que sobra na venda.',
+    semPeriodo: true,
+    colunas: [
+      { k: 'rubrica', t: 'Rubrica' },
+      { k: 'orcado', t: 'Orçado', tipo: 'money', total: true },
+      { k: 'realizado', t: 'Realizado', tipo: 'money', total: true },
+      { k: 'comprometido', t: 'Comprometido', tipo: 'money', total: true },
+      { k: 'projetado', t: 'Projetado', tipo: 'money', total: true },
+      { k: 'porCaixa', t: 'Bancado pelo CAIXA', tipo: 'money', total: true },
+      { k: 'porProprio', t: 'Recurso próprio', tipo: 'money', total: true },
+    ],
+    linhas: () => (v.rubricas || []).map((rb) => ({ rubrica: rb.nome, orcado: rb.orcado, realizado: rb.realizado, comprometido: rb.comprometido, projetado: rb.projetado, porCaixa: rb.porCaixa, porProprio: rb.porProprio })),
+    blocos: () => [
+      { titulo: `Resultado da operação — ${v.cenarioVgv === 'projetado' ? 'cenário de saída projetada' : 'cenário atual'}`, itens: [
+        ['VGV', v.vgvSelecionado], ['Custo econômico total projetado', -v.custoEconomicoProjetado], ['Resultado bruto', v.resultadoBruto, true],
+      ] },
+      { titulo: 'Do bruto ao líquido', itens: [
+        [`Corretagem sobre o VGV (${pct(v.corretagemPercent)})`, -v.corretagemValor],
+        [`IR sobre o ganho (${pct(v.irPercent)})`, -v.irValor],
+        ['Lucro líquido do empreendimento', v.lucroLiquido, true],
+      ] },
+      { titulo: 'Resultado do investidor', itens: [
+        ['Participação do incorporador', -v.participacaoIncorporador],
+        ['Resultado líquido do investidor', v.resultadoInvestidor, true],
+      ] },
+      { titulo: 'Indicadores', itens: [
+        ['Margem líquida sobre VGV', pct(v.margemLiquidaSobreVgv)], ['Retorno líquido sobre custo', pct(v.retornoLiquidoSobreCusto)],
+        ['ROI líquido do investidor', pct(v.roiInvestidor)], ['Capital próprio necessário', f.capitalProprioNecessario],
+        ['Verba de contingência', f.contingenciaTotal],
+      ] },
+    ],
+    notas: () => ['Custo ≠ fonte: crédito CAIXA e capital próprio bancam o custo, não o compõem. A folga entre fontes contratadas e custo é verba de contingência.'],
+  });
+
+  /* 10. Planilha avançada */
+  lista.push({
+    id: 'planilha',
+    nome: 'Planilha avançada — todos os lançamentos',
+    grupo: 'Demonstrações',
+    resumo: 'Base completa para conferência no Excel',
+    descricao: 'Um lançamento por linha, com origem e fórmula de cada valor. Exporte em CSV: a linha de total sai com fórmula de soma.',
+    colunas: [
+      { k: 'tipo', t: 'Tipo' }, { k: 'referencia', t: 'Referência' }, { k: 'data', t: 'Data', tipo: 'data' },
+      { k: 'status', t: 'Status' }, { k: 'natureza', t: 'Natureza' },
+      { k: 'entrada', t: 'Entrada', tipo: 'money', total: true },
+      { k: 'saida', t: 'Saída', tipo: 'money', total: true },
+      { k: 'origem', t: 'Origem do número' },
+    ],
+    linhas: () => {
+      const out = [];
+      const lote = Number((VIEW.parametros || {}).custoLoteExecutado) || 0;
+      if (lote) out.push({ tipo: 'Financiamento', referencia: 'Lote — etapa 1 do PCI', data: null, status: 'REALIZADO', natureza: 'Entrada de caixa', entrada: lote, saida: 0, origem: 'Parâmetros › custo do lote executado' });
+      for (const l of (VIEW.liberacoesCaixa || [])) {
+        if (!dentroDoPeriodo(l.data)) continue;
+        out.push({ tipo: 'Liberação CAIXA', referencia: l.obs || 'Medição', data: l.data, status: l.status || 'REALIZADO', natureza: 'Entrada de caixa (principal, não é receita)', entrada: Number(l.valor) || 0, saida: 0, origem: 'Aba Liberação PCI › liberações reais' });
+      }
+      for (const c of (VIEW.consumosRecursoProprio || [])) {
+        if (c.data && !dentroDoPeriodo(c.data)) continue;
+        out.push({ tipo: 'Aporte próprio', referencia: c.descricao || '', data: c.data, status: 'REALIZADO', natureza: 'Entrada de caixa (capital próprio)', entrada: Number(c.valor) || 0, saida: 0, origem: 'Parâmetros › consumos de recurso próprio' });
+      }
+      for (const p of parcelas) {
+        const d = dataDaParcela(p);
+        const ref = p.label || '';
+        const add = (nat, val, org) => { if (val) out.push({ tipo: 'Quinzena', referencia: ref, data: d, status: p.status, natureza: nat, entrada: 0, saida: val, origem: org }); };
+        add('Empreiteiro (PIX)', Number(p.totalEmpreiteiroPix) || 0, 'Contas a Pagar › coluna PIX');
+        add('Cartão', Number(p.gastoCartao) || 0, 'Detalhamento FC › itens de cartão da fatura do mês');
+        add('Administração', Number(p.totalAdmPix) || 0, (p.overrides && p.overrides.totalAdmPix) ? 'Contas a Pagar › ADM digitada à mão' : 'Calculada: taxa × (PIX + cartão)');
+        add('Evolução CAIXA (juros/seguro)', Number(p.parcelaEvolucaoCaixa) || 0, 'Contas a Pagar › coluna Evolução CAIXA');
+        if (p.overrides && p.overrides.custoTotal) {
+          const soma = round2((Number(p.totalEmpreiteiroPix) || 0) + (Number(p.totalAdmPix) || 0) + (Number(p.gastoCartao) || 0) + (Number(p.parcelaEvolucaoCaixa) || 0));
+          const dif = round2((Number(p.custoTotal) || 0) - soma);
+          if (dif) out.push({ tipo: 'Quinzena', referencia: ref, data: d, status: p.status, natureza: `Ajuste manual do custo total (${dif > 0 ? 'acréscimo' : 'redução'} sobre a soma das colunas)`, entrada: 0, saida: dif, origem: 'Contas a Pagar › custo total sobrescrito' });
+        }
+      }
+      for (const cat of (VIEW.categorias || [])) {
+        if (!cat.pagoDiretoProprietario) continue;
+        for (const it of (cat.itens || [])) {
+          if (!(Number(it.valorRealizado) > 0)) continue;
+          out.push({ tipo: 'Pago direto', referencia: `${cat.nome} · ${it.descricao || ''}`, data: it.dataPagamento ? String(it.dataPagamento).slice(0, 10) : null, status: 'REALIZADO', natureza: 'Saída — projetos, registros e ITBI', entrada: 0, saida: Number(it.valorRealizado) || 0, origem: 'Detalhamento FC › categoria paga direto pelo proprietário' });
+        }
+      }
+      return out.sort((a, b) => (a.data || '9999-12-31').localeCompare(b.data || '9999-12-31'));
+    },
+    notas: () => ['Cada linha aponta a tela onde o número é lançado — abra lá para corrigir. Entradas de financiamento e aportes são caixa, não receita.'],
+  });
+
+  return lista;
+}
+
+/* ---------------- Renderização ---------------- */
+function formatarCelula(valor, tipo) {
+  if (valor === null || valor === undefined || valor === '') return '';
+  if (tipo === 'money') return money(valor);
+  if (tipo === 'pct') return pct(valor);
+  if (tipo === 'data') return dateBR(valor);
+  if (tipo === 'num') return fmtNum.format(Number(valor) || 0);
+  return String(valor);
+}
+
+function totaisRelatorio(rel, linhas) {
+  const t = {};
+  for (const c of rel.colunas) {
+    if (!c.total) continue;
+    t[c.k] = round2(sum(linhas.filter((l) => !l._subtotal), (l) => l[c.k]));
+  }
+  return t;
+}
+
+function tabelaRelatorioHtml(rel, linhas, totais) {
+  const cols = rel.colunas;
+  return `<table class="extrato-table rel-table">
+    <thead><tr>${cols.map((c) => `<th class="${c.tipo && c.tipo !== 'texto' && c.tipo !== 'data' ? 'num' : ''}">${esc(c.t)}</th>`).join('')}</tr></thead>
+    <tbody>
+      ${linhas.length ? linhas.map((l) => `<tr class="${l._subtotal ? 'extrato-residuo' : ''}">${cols.map((c) => {
+        const num = c.tipo === 'money' || c.tipo === 'pct' || c.tipo === 'num';
+        return `<td class="${num ? 'num' : ''}">${esc(formatarCelula(l[c.k], c.tipo))}</td>`;
+      }).join('')}</tr>`).join('') : `<tr><td colspan="${cols.length}" class="muted">Nenhum lançamento no período escolhido.</td></tr>`}
+    </tbody>
+    <tfoot>
+      ${(() => {
+        // Quando o relatório tem status, separa REALIZADO de PLANEJADO: o
+        // total cheio sozinho já confundiu antes ("não é a mesma análise").
+        const temStatus = cols.some((c) => c.k === 'status') && linhas.some((l) => l.status);
+        const linhaTot = (rot, ls, classe) => `<tr class="${classe || ''}">${cols.map((c, i) => {
+          if (i === 0) return `<td><strong>${rot}</strong></td>`;
+          if (!c.total) return '<td></td>';
+          return `<td class="num"><strong>${money(round2(sum(ls.filter((l) => !l._subtotal), (l) => l[c.k])))}</strong></td>`;
+        }).join('')}</tr>`;
+        const cheio = `<tr class="rel-total">${cols.map((c, i) => {
+          if (i === 0) return '<td><strong>TOTAL</strong></td>';
+          if (!c.total) return '<td></td>';
+          return `<td class="num"><strong>${money(totais[c.k])}</strong></td>`;
+        }).join('')}</tr>`;
+        if (!temStatus) return cheio;
+        const real = linhas.filter((l) => l.status === 'REALIZADO');
+        const plan = linhas.filter((l) => l.status && l.status !== 'REALIZADO');
+        return `${real.length ? linhaTot('REALIZADO', real, 'rel-sub') : ''}${plan.length ? linhaTot('PLANEJADO', plan, 'rel-sub') : ''}${cheio}`;
+      })()}
+    </tfoot>
+  </table>`;
+}
+
+function blocosRelatorioHtml(rel) {
+  if (typeof rel.blocos !== 'function') return '';
+  return `<div class="table-scroll" style="margin-top:10px"><table class="extrato-table"><tbody>
+    ${rel.blocos().map((b) => `<tr class="extrato-grupo"><td colspan="2">${esc(b.titulo)}</td></tr>
+      ${b.itens.map(([rot, val, forte]) => `<tr class="${forte ? 'extrato-residuo' : ''}"><td>${forte ? `<strong>${esc(rot)}</strong>` : esc(rot)}</td><td class="num">${forte ? '<strong>' : ''}${typeof val === 'number' ? ((val < 0 ? '− ' : '') + money(Math.abs(val))) : esc(val)}${forte ? '</strong>' : ''}</td></tr>`).join('')}`).join('')}
+  </tbody></table></div>`;
+}
+
+// CSV com ; (padrão pt-BR), BOM para o Excel abrir acentuado e FÓRMULA de
+// soma na linha de total — a planilha continua "viva" para quem for conferir.
+function csvDoRelatorio(rel, linhas, totais) {
+  const cols = rel.colunas;
+  const esc2 = (x) => `"${String(x === null || x === undefined ? '' : x).replace(/"/g, '""')}"`;
+  const numeroBr = (v) => String(round2(Number(v) || 0)).replace('.', ',');
+  const out = [];
+  out.push(esc2(`${VIEW.meta?.obra || 'Obra'} — ${rel.nome}`));
+  out.push(esc2(`Gerado em ${dateBR(new Date().toISOString().slice(0, 10))}${RELATORIO_PERIODO.de || RELATORIO_PERIODO.ate ? ` · período ${RELATORIO_PERIODO.de ? dateBR(RELATORIO_PERIODO.de) : 'início'} a ${RELATORIO_PERIODO.ate ? dateBR(RELATORIO_PERIODO.ate) : 'hoje'}` : ' · período completo'}`));
+  out.push('');
+  const header = 3; // linha 1-based onde começa o cabeçalho
+  out.push(cols.map((c) => esc2(c.t)).join(';'));
+  for (const l of linhas) {
+    out.push(cols.map((c) => {
+      const v = l[c.k];
+      if (c.tipo === 'money' || c.tipo === 'num') return numeroBr(v);
+      if (c.tipo === 'pct') return numeroBr((Number(v) || 0) * 100);
+      if (c.tipo === 'data') return esc2(v ? dateBR(v) : '');
+      return esc2(v);
+    }).join(';'));
+  }
+  const primeira = header + 1;
+  const ultima = header + linhas.length;
+  out.push(cols.map((c, i) => {
+    if (i === 0) return esc2('TOTAL');
+    if (!c.total) return '';
+    const letra = String.fromCharCode(65 + i);
+    return linhas.length ? `=SOMA(${letra}${primeira}:${letra}${ultima})` : numeroBr(0);
+  }).join(';'));
+  out.push('');
+  for (const n of (typeof rel.notas === 'function' ? rel.notas() : [])) out.push(esc2(n.replace(/<[^>]+>/g, '')));
+  return '﻿' + out.join('\r\n');
+}
+
+async function baixarArquivo(filename, data, mime) {
+  const ns = (window.claude && typeof window.claude.use === 'function')
+    ? await window.claude.use('downloads').catch(() => null)
+    : null;
+  if (ns && typeof ns.save === 'function') {
+    try { await ns.save({ filename, data }); toast('Arquivo salvo.'); return; }
+    catch (e) { if (e && e.code === 'declined') return; }
+  }
+  try {
+    const blob = new Blob([data], { type: mime || 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast('Arquivo gerado.');
+  } catch {
+    toast('Não foi possível gerar o arquivo aqui.', true);
+  }
+}
+
+function abrirRelatorio(id) {
+  const rel = relatoriosDisponiveis().find((x) => x.id === id);
+  if (!rel) return;
+  const linhas = rel.linhas();
+  const totais = totaisRelatorio(rel, linhas);
+  openModal(rel.nome, (body) => {
+    const cab = document.createElement('div');
+    cab.className = 'rel-cabecalho';
+    cab.innerHTML = `<div>
+        <div class="rel-obra">${esc(VIEW.meta?.obra || 'Obra')}</div>
+        <div class="muted">${esc(rel.descricao)}</div>
+        <div class="muted rel-periodo">${rel.semPeriodo ? 'Posição atual' : (RELATORIO_PERIODO.de || RELATORIO_PERIODO.ate
+          ? `Período: ${RELATORIO_PERIODO.de ? dateBR(RELATORIO_PERIODO.de) : 'início'} a ${RELATORIO_PERIODO.ate ? dateBR(RELATORIO_PERIODO.ate) : 'hoje'}`
+          : 'Período completo')} · emitido em ${dateBR(new Date().toISOString().slice(0, 10))}${VIEW.resumo.simulando ? ' · <strong>SIMULAÇÃO (dados não oficiais)</strong>' : ''}</div>
+      </div>`;
+    body.appendChild(cab);
+
+    const acoes = document.createElement('div');
+    acoes.className = 'rel-acoes no-print';
+    const btn = (txt, titulo, fn, primaria) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `btn small filter-control${primaria ? ' primary' : ''}`;
+      b.textContent = txt; b.title = titulo; b.onclick = fn;
+      acoes.appendChild(b);
+      return b;
+    };
+    btn('Imprimir / PDF', 'Abre a impressão do navegador — escolha "Salvar como PDF" para gerar o arquivo.', () => window.print(), true);
+    btn('Planilha (CSV)', 'Baixa a tabela em CSV, com fórmula de soma na linha de total — abre no Excel e no Google Planilhas.', () => {
+      baixarArquivo(`${rel.id}-${new Date().toISOString().slice(0, 10)}.csv`, csvDoRelatorio(rel, linhas, totais), 'text/csv;charset=utf-8');
+    });
+    body.appendChild(acoes);
+
+    const wrap = document.createElement('div');
+    wrap.className = 'table-scroll';
+    wrap.innerHTML = tabelaRelatorioHtml(rel, linhas, totais);
+    body.appendChild(wrap);
+
+    if (typeof rel.blocos === 'function') body.insertAdjacentHTML('beforeend', blocosRelatorioHtml(rel));
+
+    const notas = (typeof rel.notas === 'function' ? rel.notas() : []);
+    if (notas.length) {
+      const nd = document.createElement('div');
+      nd.className = 'muted rel-notas';
+      nd.innerHTML = notas.map((n) => `<div>${n}</div>`).join('');
+      body.appendChild(nd);
+    }
+
+    const rodape = document.createElement('div');
+    rodape.className = 'muted rel-rodape';
+    rodape.innerHTML = `${linhas.length} lançamento(s) · ${esc(VIEW.meta?.incorporador ? 'Incorporador: ' + VIEW.meta.incorporador : '')} ${esc(VIEW.meta?.responsavelTecnico ? '· Resp. técnico: ' + VIEW.meta.responsavelTecnico : '')}`;
+    body.appendChild(rodape);
+  }, { wide: true, fullscreen: true });
+}
+
+function renderRelatorios() {
+  const root = document.getElementById('tab-relatorios');
+  if (!root) return;
+  root.innerHTML = '';
+
+  const painel = document.createElement('div');
+  painel.className = 'panel';
+  painel.innerHTML = `<div class="panel-header"><div><h2>Relatórios</h2>
+    <div class="muted">Cada relatório sai do mesmo dado que alimenta as telas — nada é recalculado por fora. Todos abrem em tela cheia, com totalizadores, botão de imprimir (que vira PDF) e planilha CSV com fórmula de soma. O filtro de período abaixo vale para todos.</div></div>`;
+
+  // Filtro de período comum
+  const filtro = document.createElement('div');
+  filtro.className = 'consumo-filtro';
+  const campoData = (rotulo, chave) => {
+    const l = document.createElement('label');
+    l.textContent = rotulo;
+    const i = document.createElement('input');
+    i.type = 'date';
+    i.className = 'filter-control';
+    i.value = RELATORIO_PERIODO[chave] || '';
+    i.addEventListener('change', () => { RELATORIO_PERIODO[chave] = i.value || null; renderRelatorios(); });
+    l.appendChild(i);
+    filtro.appendChild(l);
+  };
+  campoData('De', 'de');
+  campoData('Até', 'ate');
+  const limpar = document.createElement('button');
+  limpar.type = 'button';
+  limpar.className = 'btn small filter-control';
+  limpar.textContent = 'Período completo';
+  limpar.onclick = () => { RELATORIO_PERIODO.de = null; RELATORIO_PERIODO.ate = null; renderRelatorios(); };
+  filtro.appendChild(limpar);
+  painel.appendChild(filtro);
+
+  const lista = relatoriosDisponiveis();
+  const grupos = [...new Set(lista.map((x) => x.grupo))];
+  for (const g of grupos) {
+    const h = document.createElement('div');
+    h.className = 'rel-grupo';
+    h.textContent = g;
+    painel.appendChild(h);
+    const grid = document.createElement('div');
+    grid.className = 'rel-grid';
+    for (const rel of lista.filter((x) => x.grupo === g)) {
+      const card = document.createElement('button');
+      card.type = 'button';
+      card.className = 'rel-card filter-control';
+      card.innerHTML = `<span class="rel-card-nome">${esc(rel.nome)}</span>
+        <span class="rel-card-resumo">${esc(rel.resumo)}</span>
+        <span class="rel-card-desc">${esc(rel.descricao)}</span>
+        <span class="rel-card-abrir">abrir relatório</span>`;
+      card.onclick = () => abrirRelatorio(rel.id);
+      grid.appendChild(card);
+    }
+    painel.appendChild(grid);
+  }
+  root.appendChild(painel);
+}
+
 function renderRastreabilidade() {
   const root = document.getElementById('tab-rastreabilidade');
   root.innerHTML = '';
@@ -8275,18 +8996,44 @@ function confirmDialog(message, { title = 'Confirmar', okLabel = 'Remover', dang
   });
 }
 
+/* Tela cheia dos modais: preferência do usuário, lembrada enquanto a aba
+   estiver aberta. Relatórios e extratos largos já nascem expandidos. */
+let MODAL_FULLSCREEN = (() => { try { return sessionStorage.getItem('modalFullscreen') === '1'; } catch { return false; } })();
+
 function openModal(title, buildBody, opts = {}) {
   const tpl = document.getElementById('tpl-modal');
   const node = tpl.content.cloneNode(true);
   const backdrop = node.querySelector('.modal-backdrop');
-  if (opts.wide) node.querySelector('.modal').classList.add('wide');
+  const modal = node.querySelector('.modal');
+  if (opts.wide) modal.classList.add('wide');
   node.querySelector('h3').textContent = title;
   const body = node.querySelector('.modal-body');
-  const close = () => backdrop.remove();
+  const close = () => { document.removeEventListener('keydown', onKey); backdrop.remove(); };
   node.querySelector('.modal-close').onclick = close;
+
+  const btnFull = node.querySelector('.modal-full');
+  const aplicarFull = (on, lembrar) => {
+    modal.classList.toggle('fullscreen', on);
+    backdrop.classList.toggle('fullscreen', on);
+    btnFull.textContent = on ? '⤡' : '⛶';
+    btnFull.title = on ? 'Voltar ao tamanho normal (F)' : 'Expandir para tela cheia (F)';
+    if (lembrar) { MODAL_FULLSCREEN = on; try { sessionStorage.setItem('modalFullscreen', on ? '1' : '0'); } catch { /* sem storage */ } }
+  };
+  btnFull.onclick = () => aplicarFull(!modal.classList.contains('fullscreen'), true);
+  const onKey = (e) => {
+    if (!document.body.contains(backdrop)) { document.removeEventListener('keydown', onKey); return; }
+    if (e.key === 'Escape') { close(); return; }
+    const alvo = e.target;
+    const digitando = alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' || alvo.tagName === 'SELECT' || alvo.isContentEditable);
+    if (!digitando && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); btnFull.click(); }
+  };
+  document.addEventListener('keydown', onKey);
+  aplicarFull(opts.fullscreen !== undefined ? opts.fullscreen : MODAL_FULLSCREEN, false);
+
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
   buildBody(body, close);
   document.body.appendChild(node);
+  return { backdrop, modal, body, close };
 }
 
 /* ==========================================================================
