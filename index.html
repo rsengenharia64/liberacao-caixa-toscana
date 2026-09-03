@@ -575,6 +575,23 @@
   :root[data-theme="dark"] .controle-tabela td.edit .cell-input { background: #3d3410; border-color: #6b5a1c; color: var(--ink); }
   :root[data-theme="dark"] .controle-tabela td.edit .cell-input::placeholder { color: #a3924f; }
 
+  .cf-resumo { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+  .cf-resumo > div { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-2); font-size: 11.5px; }
+  .cf-resumo strong { font-size: 18px; font-family: "IBM Plex Mono", monospace; color: var(--ink); }
+  .cf-resumo > div.ok strong { color: var(--good); }
+  .cf-resumo > div.atraso strong { color: var(--danger); }
+  .cf-sub { font-size: 11px; }
+  .cf-tabela td { vertical-align: top; }
+  .cf-tabela td.num { white-space: nowrap; }
+  .cf-ok { color: var(--good); font-weight: 700; }
+  .cf-atraso { color: var(--danger); font-weight: 700; }
+  @media (max-width: 560px) {
+    .cf-resumo { grid-template-columns: 1fr; }
+    .cf-tabela td:first-child, .cf-tabela th:first-child { max-width: 128px; min-width: 128px; white-space: normal; overflow-wrap: anywhere; }
+    .cf-tabela .cf-orcado { display: none; }
+    .cf-tabela td:first-child .cf-sub { display: block; }
+    .cf-tabela td, .cf-tabela th { padding-left: 6px; padding-right: 6px; font-size: 11.5px; }
+  }
   .qz-split { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 12px; margin-top: 4px; }
   .qz-split-real { color: var(--good); font-weight: 700; }
   .qz-split-plan { color: var(--accent-ink); font-weight: 700; }
@@ -3698,7 +3715,7 @@ function abrirExtratoCartaoMes() {
       det.appendChild(tw);
       body.appendChild(det);
     }
-  });
+  }, { wide: true });
 }
 
 /* Extrato do que já foi pago ao empreiteiro.
@@ -3764,7 +3781,7 @@ function abrirExtratoEmpreiteiro() {
     saldo.style.marginTop = '10px';
     saldo.innerHTML = `Do que já foi <strong>medido</strong> (${money(r.totalMedido)}), o empreiteiro já recebeu ${money(round2(somaPix + somaCartao))} — ${r.saldoAPagarEmpreiteiro >= 0 ? `restam <strong>${money(r.saldoAPagarEmpreiteiro)}</strong> a pagar` : `há <strong>${money(Math.abs(r.saldoAPagarEmpreiteiro))}</strong> pagos além do medido (adiantamento)`}.`;
     body.appendChild(saldo);
-  });
+  }, { wide: true });
 }
 
 /* Extrato do crédito CAIXA (PCI): as etapas que compõem os R$ 1,5 milhão,
@@ -3796,7 +3813,7 @@ function abrirExtratoCreditoPCI() {
       <tr class="extrato-residuo"><td colspan="3"><strong>Total</strong></td><td class="num"><strong>${money(total)}</strong></td><td></td></tr>
       </tbody></table>`;
     body.appendChild(tw);
-  });
+  }, { wide: true });
 }
 
 /* Extrato do recurso próprio planejado: de onde sai o número e como ele se
@@ -3836,36 +3853,53 @@ function abrirExtratoRecursoPlanejado() {
 function abrirExtratoObraRealPrevisto() {
   const r = VIEW.resumo;
   const cats = [...(VIEW.categorias || [])].sort((a, b) => (a.numero || 0) - (b.numero || 0));
-  openModal('Extrato — % Obra: real x previsto', (body) => {
+  const desvioGeral = round2((r.percObraGeral - r.percPrevistoGeral) * 10000) / 100;
+  openModal('Cronograma físico — planejado × realizado', (body) => {
     const topo = document.createElement('div');
-    topo.className = 'extrato-total-line';
-    topo.innerHTML = `<span>Medido ${money(r.totalMedido)} · previsto p/ hoje ${money(r.totalPrevistoCronograma)} · orçado ${money(r.totalOrcadoCategorias)}</span><strong>${pct(r.percObraGeral)} / ${pct(r.percPrevistoGeral)}</strong>`;
+    topo.className = `extrato-total-line${desvioGeral < -0.005 ? ' negativo' : ''}`;
+    topo.innerHTML = `<span>Avanço físico da obra em ${dateBR(r.dataReferenciaCronograma)}</span><strong>realizado ${pct(r.percObraGeral)} · planejado ${pct(r.percPrevistoGeral)}</strong>`;
     body.appendChild(topo);
+
+    const resumo = document.createElement('div');
+    resumo.className = 'cf-resumo';
+    resumo.innerHTML = `
+      <div><span class="muted">Planejado até hoje</span><strong>${pct(r.percPrevistoGeral)}</strong><span class="muted">${money(r.totalPrevistoCronograma)}</span></div>
+      <div><span class="muted">Realizado (medido)</span><strong>${pct(r.percObraGeral)}</strong><span class="muted">${money(r.totalMedido)}</span></div>
+      <div class="${desvioGeral >= 0 ? 'ok' : 'atraso'}"><span class="muted">Desvio</span><strong>${desvioGeral >= 0 ? '+' : ''}${desvioGeral.toFixed(2).replace('.', ',')} p.p.</strong><span class="muted">${desvioGeral >= 0 ? 'adiantada' : 'atrasada'} em relação ao cronograma</span></div>`;
+    body.appendChild(resumo);
+
     const nota = document.createElement('div');
     nota.className = 'muted';
-    nota.style.margin = '6px 0 12px';
-    nota.textContent = `Real = valor medido ÷ orçado total. Previsto = o que o cronograma esperava até ${dateBR(r.dataReferenciaCronograma)}. Cada linha é uma categoria; o peso é a parte dela no orçado.`;
+    nota.style.margin = '8px 0 12px';
+    nota.textContent = 'Planejado = quanto de cada etapa o cronograma esperava pronto até hoje (pela janela de datas da etapa). Realizado = quanto foi medido nas vistorias. O peso é a parte da etapa no orçado total — é ele que pondera o avanço geral da obra.';
     body.appendChild(nota);
+
     const tw = document.createElement('div');
     tw.className = 'table-scroll';
-    tw.innerHTML = `<table class="extrato-table">
-      <thead><tr><th>Categoria</th><th class="num">Orçado</th><th class="num">Peso</th><th class="num">Medido</th><th class="num">% real</th><th class="num">% previsto</th><th>Situação</th></tr></thead>
+    tw.innerHTML = `<table class="extrato-table cf-tabela">
+      <thead><tr><th>Etapa</th><th class="num">Planejado</th><th class="num">Realizado</th><th class="num">Desvio</th><th>Situação</th></tr></thead>
       <tbody>${cats.map((c) => {
         const info = STATUS_CRONOGRAMA_INFO[c.statusCronograma] || STATUS_CRONOGRAMA_INFO['sem-dados'];
+        const desvio = round2((c.percAvancoEfetivo - c.percPrevisto) * 10000) / 100;
+        const janela = c.cronogramaPrevisto ? `${dateBR(c.cronogramaPrevisto.inicio)} – ${dateBR(c.cronogramaPrevisto.termino)}` : 'sem janela no cronograma';
         return `<tr>
-          <td>${c.numero}. ${esc(c.nome)}</td>
-          <td class="num">${money(c.valorOrcado)}</td>
-          <td class="num">${pct(c.peso)}</td>
-          <td class="num">${money(c.valorMedido)}</td>
-          <td class="num"><strong>${pct(c.percAvancoEfetivo)}</strong></td>
-          <td class="num">${pct(c.percPrevisto)}</td>
+          <td><strong>${c.numero}. ${esc(c.nome)}</strong><br><span class="muted cf-sub">peso ${pct(c.peso)} · ${janela}</span></td>
+          <td class="num">${pct(c.percPrevisto)}<br><span class="muted cf-sub">${money(c.valorPrevisto)}</span></td>
+          <td class="num"><strong>${pct(c.percAvancoEfetivo)}</strong><br><span class="muted cf-sub">${money(c.valorMedido)}<span class="cf-orcado"> de ${money(c.valorOrcado)}</span></span></td>
+          <td class="num ${desvio < -0.005 ? 'cf-atraso' : (desvio > 0.005 ? 'cf-ok' : '')}">${desvio > 0 ? '+' : ''}${desvio.toFixed(1).replace('.', ',')} p.p.</td>
           <td><span class="badge ${info.badge}">${info.label}</span></td>
         </tr>`;
       }).join('')}
-      <tr class="extrato-residuo"><td><strong>Obra</strong></td><td class="num"><strong>${money(r.totalOrcadoCategorias)}</strong></td><td class="num">100%</td><td class="num"><strong>${money(r.totalMedido)}</strong></td><td class="num"><strong>${pct(r.percObraGeral)}</strong></td><td class="num"><strong>${pct(r.percPrevistoGeral)}</strong></td><td></td></tr>
+      <tr class="extrato-residuo">
+        <td><strong>Obra inteira</strong><br><span class="muted cf-sub">orçado ${money(r.totalOrcadoCategorias)}</span></td>
+        <td class="num"><strong>${pct(r.percPrevistoGeral)}</strong><br><span class="muted cf-sub">${money(r.totalPrevistoCronograma)}</span></td>
+        <td class="num"><strong>${pct(r.percObraGeral)}</strong><br><span class="muted cf-sub">${money(r.totalMedido)}</span></td>
+        <td class="num"><strong>${desvioGeral > 0 ? '+' : ''}${desvioGeral.toFixed(1).replace('.', ',')} p.p.</strong></td>
+        <td></td>
+      </tr>
       </tbody></table>`;
     body.appendChild(tw);
-  });
+  }, { wide: true });
 }
 
 /* Verba total disponível: o que ainda pode entrar do CAIXA mais o que ainda
@@ -4843,8 +4877,8 @@ function renderPainel() {
       <div class="card-sub">Executado: ${money(r.totalConsumidoContrato)} · ${pct(r.percValorTotalPago)}</div>
     </div>
     <div class="card ${r.percObraGeral + 0.0001 >= r.percPrevistoGeral ? 'good' : 'warn'}">
-      <div class="card-label">% Obra: real x previsto</div>
-      <button type="button" class="value-drill small filter-control" data-drill="obraRealPrevisto" title="Clique para ver o extrato — categoria a categoria"><span class="drill-value card-value">${pct(r.percObraGeral)} <span class="muted" style="font-size:13px">/ ${pct(r.percPrevistoGeral)}</span></span><span class="drill-hint">ver extrato</span></button>
+      <div class="card-label">Cronograma físico — realizado × planejado</div>
+      <button type="button" class="value-drill small filter-control" data-drill="obraRealPrevisto" title="Clique para ver o cronograma físico — etapa a etapa, planejado × realizado"><span class="drill-value card-value">${pct(r.percObraGeral)} <span class="muted" style="font-size:13px">/ ${pct(r.percPrevistoGeral)}</span></span><span class="drill-hint">ver extrato</span></button>
       <div class="card-sub">${r.percObraGeral + 0.0001 >= r.percPrevistoGeral ? 'No prazo ou adiantada' : 'Atrasada vs. cronograma'} · medido ${money(r.totalMedido)}</div>
     </div>
     <div class="card accent">
