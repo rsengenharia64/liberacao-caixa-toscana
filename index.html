@@ -1935,6 +1935,16 @@ const fmtBRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BR
 const fmtNum = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 });
 function money(v) { return fmtBRL.format(Number(v) || 0); }
 function pct(v) { return `${fmtNum.format((Number(v) || 0) * 100)}%`; }
+/* Valor "de conversa": R$ 120 mil, R$ 1,44 mi. Para cartões e frases onde o
+   centavo só atrapalha a leitura — o valor exato continua no extrato. */
+function moneyCurto(v) {
+  const n = Number(v) || 0;
+  const abs = Math.abs(n);
+  const sinal = n < 0 ? '-' : '';
+  if (abs >= 1000000) return `${sinal}R$ ${fmtNum.format(Math.round(abs / 10000) / 100)} mi`;
+  if (abs >= 1000) return `${sinal}R$ ${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(Math.round(abs / 1000))} mil`;
+  return money(n);
+}
 function dateBR(iso) {
   if (!iso) return '—';
   const s = String(iso).slice(0, 10);
@@ -4876,7 +4886,7 @@ function abrirExtratoViabilidade(secaoInicial = null) {
       card('Capital próprio necessário', money(f.capitalProprioNecessario), `custo que o financiamento não banca · aportado ${money(f.capitalProprioAportado)} · falta ${money(f.capitalProprioAindaNecessario)}`),
       card('ROI líquido do investidor', pct(v.roiInvestidor), `resultado do investidor ${money(v.resultadoInvestidor)} ÷ capital próprio necessário`, cls(v.resultadoInvestidor)),
       card('Financiamento × capital próprio', `${pct(f.participacaoFinanciamento)} · ${pct(f.participacaoCapitalProprio)}`, `do custo econômico: CAIXA ${money(f.creditoAplicado)} · próprio ${money(f.capitalProprioNecessario)}`),
-      card('Capital de giro disponível', money(f.giroDisponivel), `orçado ${money(f.giroOrcado)} · ${f.giroGap >= 0 ? `sobra ${money(f.giroGap)}` : `faltam ${money(-f.giroGap)}`} · CAIXA ${money(f.giroCaixa)} + próprio ${money(f.giroProprio)}. Não é custo.`, f.giroGap < 0 ? 'ruim' : ''),
+      card('Capital de giro disponível', moneyCurto(f.giroDisponivel), `Orçado ${moneyCurto(f.giroOrcado)} · ${f.giroGap >= 0 ? `sobram ${moneyCurto(f.giroGap)}` : `faltam ${moneyCurto(-f.giroGap)}`}`, f.giroGap < 0 ? 'ruim' : ''),
     ].join('');
     body.appendChild(painel);
 
@@ -5070,7 +5080,7 @@ function abrirExtratoViabilidade(secaoInicial = null) {
     {
       const al = analiseAlavancagem();
       const secAl = secao('alavancagem', 'F · Alavancagem — o custo do crédito compensa?', `
-        <div class="muted viab-explica">O custo financeiro de <strong>${money(al.custoCredito)}</strong> (${pct(al.taxaCredito)} a.a. · ${pct(al.taxaCreditoMes)} a.m.) parece alto sozinho, mas ele existe porque a operação <strong>não imobilizou ${money(al.capitalAlavancado)}</strong> de capital próprio. Com crédito, o retorno sobre o dinheiro que saiu do bolso é <strong>${pct(al.comCredito.roi)}</strong>; sem crédito, seria ${pct(al.semCredito.roi)} — ${fmtNum.format(al.multiploRoi)}× menos. O capital livre precisa render <strong>${pct(al.equilibrioAA)} ao ano</strong> para pagar o crédito sozinho; no CDI de ${pct(al.cdi)} ele cobre ${pct(al.cdiCenario ? al.cdiCenario.liquido / Math.max(1, al.custoCredito) : 0)} do juro.</div>`, abrir('alavancagem', false));
+        <div class="muted viab-explica">O custo financeiro de <strong>${money(al.custoCredito)}</strong> (${pct(al.taxaCredito)} a.a. · ${pct(al.taxaCreditoMes)} a.m.) parece alto sozinho, mas ele existe porque a operação <strong>não imobilizou ${money(al.capitalAlavancado)}</strong> de capital próprio — o crédito CAIXA contratado por inteiro. Com crédito, o retorno sobre o dinheiro que saiu do bolso é <strong>${pct(al.comCredito.roi)}</strong>; sem crédito, seria ${pct(al.semCredito.roi)} — ${fmtNum.format(al.multiploRoi)}× menos. O capital livre precisa render <strong>${pct(al.equilibrioAA)} ao ano</strong> para pagar o crédito sozinho; no CDI de ${pct(al.cdi)} ele cobre ${pct(al.cdiCenario ? al.cdiCenario.liquido / Math.max(1, al.custoCredito) : 0)} do juro.</div>`, abrir('alavancagem', false));
       const btAl = document.createElement('button');
       btAl.type = 'button';
       btAl.className = 'btn small primary filter-control';
@@ -8900,7 +8910,15 @@ function analiseAlavancagem() {
   const rubricaFin = (v.rubricas || []).find((x) => x.id === 'financeiro');
   const custoCredito = num(rubricaFin ? rubricaFin.projetado : 0);
   const custoSemCredito = round2(custoTotal - custoCredito);
-  const capitalAlavancado = num(f.creditoAplicado);      // o que o banco banca
+  /* O capital que o proprietário deixou de imobilizar é o CRÉDITO
+     CONTRATADO inteiro — é dinheiro do banco à disposição da obra, não só a
+     parte que já foi alocada às rubricas de custo. A diferença entre o
+     contratado e o aplicado é o capital de giro do financiamento, que
+     também é dinheiro do banco. */
+  const creditoContratado = num(f.creditoContratado);
+  const creditoAplicado = num(f.creditoAplicado);
+  const giroDoCredito = round2(creditoContratado - creditoAplicado);
+  const capitalAlavancado = creditoContratado;
   const capitalProprio = num(f.capitalProprioNecessario); // o que sai do bolso
   const prazo = num(p.prazoAlavancagemMeses) || num(p.prazoVendaMeses) || 20;
   const fatorExp = num(p.fatorExposicaoCapital) || 0.6;
@@ -8966,6 +8984,7 @@ function analiseAlavancagem() {
 
   return {
     custoTotal, custoCredito, custoSemCredito, capitalAlavancado, capitalProprio,
+    creditoContratado, creditoAplicado, giroDoCredito,
     prazo, fatorExp, mesesExpostos, diasExpostos, aliquotaIR,
     taxaCredito, taxaCreditoMes: aoMes(taxaCredito), cdi, cdiMes: aoMes(cdi),
     custoCreditoSobreCapital: capitalAlavancado > 0 ? custoCredito / capitalAlavancado : 0,
@@ -9004,7 +9023,7 @@ function abrirAnaliseAlavancagem() {
     const card = (rot, val, nota, classe = '') => `<div class="viab-num"><span class="viab-rotulo">${rot}</span><strong class="viab-valor ${classe}">${val}</strong>${nota ? `<span class="viab-nota">${nota}</span>` : ''}</div>`;
     cards.innerHTML = [
       card('Custo do crédito no período', money(a.custoCredito), `${pct(a.taxaCredito)} ao ano · ${pct(a.taxaCreditoMes)} ao mês · juros, seguro e tarifas`),
-      card('Capital que deixou de ser imobilizado', money(a.capitalAlavancado), 'é o que o financiamento banca — dinheiro que ficou no seu caixa'),
+      card('Capital que deixou de ser imobilizado', money(a.capitalAlavancado), `crédito CAIXA contratado — ${money(a.creditoAplicado)} aplicados no custo e ${money(a.giroDoCredito)} de giro`),
       card(`Rende no CDI (${pct(a.cdi)} a.a.), líquido`, money(a.cdiCenario ? a.cdiCenario.liquido : 0), `${a.mesesExpostos} meses de exposição · já descontado IR de ${pct(a.aliquotaIR)}`),
       card('Saldo: rendimento − custo do crédito', money(a.cdiCenario ? a.cdiCenario.saldo : 0), a.cdiCenario && a.cdiCenario.cobre ? 'o rendimento do capital livre paga o crédito inteiro' : 'no CDI o rendimento não cobre todo o juro — mas veja o efeito no ROI abaixo', cls(a.cdiCenario ? a.cdiCenario.saldo : 0)),
       card('ROI do investidor — com crédito', pct(a.comCredito.roi), `sobre ${money(a.comCredito.desembolso)} desembolsados · ${pct(a.comCredito.roiAA)} ao ano`, 'bom'),
@@ -9034,7 +9053,7 @@ function abrirAnaliseAlavancagem() {
       <td>${c.cobre ? '<span class="badge green">paga o crédito</span>' : '<span class="badge gray">cobre parte</span>'}</td>
     </tr>`).join('');
     secao('1 · O capital livre aplicado — cenário a cenário', `
-      <div class="muted viab-explica">Se o dinheiro não fosse para a obra, estaria aplicado. A conta abaixo é sobre <strong>${money(a.capitalAlavancado)}</strong> (o que o banco banca) por <strong>${a.mesesExpostos} meses</strong> — ${pct(a.fatorExp)} do prazo de ${a.prazo} meses, porque o desembolso seria gradual, não de uma vez. IR de ${pct(a.aliquotaIR)} pela tabela regressiva (${a.diasExpostos} dias). Compare cada linha com o custo do crédito de <strong>${money(a.custoCredito)}</strong>.</div>
+      <div class="muted viab-explica">Se o dinheiro não fosse para a obra, estaria aplicado. A conta abaixo é sobre <strong>${money(a.capitalAlavancado)}</strong> — o <strong>crédito CAIXA contratado</strong> (${money(a.creditoAplicado)} aplicados nas rubricas de custo + ${money(a.giroDoCredito)} de capital de giro do financiamento) — por <strong>${a.mesesExpostos} meses</strong> — ${pct(a.fatorExp)} do prazo de ${a.prazo} meses, porque o desembolso seria gradual, não de uma vez. IR de ${pct(a.aliquotaIR)} pela tabela regressiva (${a.diasExpostos} dias). Compare cada linha com o custo do crédito de <strong>${money(a.custoCredito)}</strong>.</div>
       <div class="table-scroll"><table class="extrato-table rel-table">
         <thead><tr><th>Onde o dinheiro estaria</th><th class="num">Taxa a.a.</th><th class="num">Rende bruto</th><th class="num">IR</th><th class="num">Rende líquido</th><th class="num">× custo do crédito</th><th>Resultado</th></tr></thead>
         <tbody>${linhasCen}</tbody>
@@ -9305,7 +9324,7 @@ function renderRelatorios() {
     cardAl.className = 'rel-card filter-control';
     cardAl.innerHTML = `<span class="rel-card-nome">Alavancagem — o custo do crédito compensa?</span>
       <span class="rel-card-resumo">ROI ${pct(al.comCredito.roi)} com crédito × ${pct(al.semCredito.roi)} sem</span>
-      <span class="rel-card-desc">Compara os ${money(al.custoCredito)} de juros com o que o capital não imobilizado renderia no CDI, em LCI, em crédito privado ou num cenário agressivo — e mostra o ponto de equilíbrio.</span>
+      <span class="rel-card-desc">Compara os ${money(al.custoCredito)} de juros com o que os ${moneyCurto(al.capitalAlavancado)} de crédito contratado renderiam no CDI, em LCI, em crédito privado ou num cenário agressivo — e mostra o ponto de equilíbrio.</span>
       <span class="rel-card-abrir">abrir análise</span>`;
     cardAl.onclick = abrirAnaliseAlavancagem;
     grid.appendChild(cardAl);
