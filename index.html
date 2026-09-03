@@ -533,6 +533,9 @@
   td.forma-cell { min-width: 200px; }
   td.forma-cell > * { display: block; }
   td.forma-cell .fatura-input { margin-top: 4px; width: 100%; max-width: 170px; }
+  tfoot tr.total-realizado td { color: var(--good); }
+  tfoot tr.total-planejado td { color: var(--muted); font-weight: 500; }
+  tfoot tr.total-geral td { border-top: 2px solid var(--border); }
   .parcelar-box { display: flex; align-items: center; gap: 5px; margin-top: 4px; }
   .parcelar-box::before { content: 'Parcelar em'; font-size: 11px; color: var(--ink-soft); }
   .parcelar-x { font-size: 11px; color: var(--ink-soft); margin-left: -2px; }
@@ -2681,8 +2684,16 @@ function aplicarCartaoDerivado() {
     const delta = round2(linha.itens - (Number(parcela.gastoCartao) || 0));
     if (!delta) continue;
     parcela.gastoCartao = round2(linha.itens);
-    // recalcularCustoParcela já refaz a ADM sobre a nova base e propaga o
-    // efeito para o total a transferir e o custo da quinzena.
+    /* Um "Custo total" digitado à mão foi digitado ANTES de o cartão desta
+       fatura entrar na coluna — e quem digitou já sabia do gasto do cartão,
+       então ele quase sempre já estava embutido naquele número. Somar o
+       cartão por cima do valor sobrescrito contaria o mesmo gasto duas vezes.
+       Por isso a sincronização abre mão do valor sobrescrito: com todas as
+       colunas preenchidas, o custo da quinzena é a soma delas. Quem quiser
+       um total diferente da soma digita de novo, agora sobre a base completa. */
+    if (parcela.overrides && parcela.overrides.custoTotal) parcela.overrides.custoTotal = false;
+    // recalcularCustoParcela refaz a ADM sobre a nova base e recalcula o
+    // custo da quinzena pela soma das colunas.
     recalcularCustoParcela(parcela, delta);
     mexeu += 1;
   }
@@ -3794,10 +3805,25 @@ function abrirExtratoViabilidade() {
       </table>`;
     body.appendChild(wrap);
 
-    if (!r.custosFinanceiros) {
+    /* O custo financeiro do financiamento NÃO está fora da conta: ele entra
+       parcela a parcela pela coluna "Evolução CAIXA" de Contas a Pagar, que
+       é a prestação da evolução de obra com juros e seguro já embutidos. O
+       parâmetro "Custos financeiros" existe só para o que ficar DE FORA
+       dessa coluna (tarifas avulsas, por exemplo) — dizer que está tudo
+       zerado era errado e subestimava o que já foi lançado. */
+    const evolucaoLancada = round2((VIEW.parcelas || []).reduce((a, p) => a + (Number(p.parcelaEvolucaoCaixa) || 0), 0));
+    const evolucaoPaga = round2((VIEW.parcelas || []).filter((p) => p.status === 'REALIZADO').reduce((a, p) => a + (Number(p.parcelaEvolucaoCaixa) || 0), 0));
+    if (evolucaoLancada > 0 || r.custosFinanceiros) {
+      const info = document.createElement('div');
+      info.className = 'muted';
+      info.style.marginTop = '10px';
+      info.innerHTML = `<strong>Evolução CAIXA já lançada: ${money(evolucaoLancada)}</strong> (${money(evolucaoPaga)} já pago, o restante planejado) — é a prestação da evolução de obra, com juros e seguro embutidos, e ela já entra no custo das quinzenas em Contas a Pagar.<br>
+        Na conta de viabilidade acima o custo é <strong>crédito CAIXA (${money(r.creditoCaixaTotalPCI)}) + recurso próprio (${money(rp)})</strong>${r.custosFinanceiros ? ` + custos financeiros (${money(r.custosFinanceiros)})` : ''} — ou seja, o <em>principal</em> do financiamento. A parte da evolução que é juros e seguro fica <strong>acima</strong> desse principal: se quiser que ela reduza o ROI, lance só essa parcela de juros/seguro em "Custos financeiros", nos Parâmetros. Não lance a evolução inteira ali, senão o principal conta duas vezes.`;
+      body.appendChild(info);
+    } else if (!r.custosFinanceiros) {
       const alerta = document.createElement('div');
       alerta.className = 'modo-banner';
-      alerta.innerHTML = '<span>Os <strong>custos financeiros</strong> do financiamento — juros da evolução da obra, tarifas bancárias, seguros — ainda estão zerados. Enquanto não entrarem no custo total, este ROI é uma estimativa otimista, não o retorno final.</span>';
+      alerta.innerHTML = '<span>Nenhuma parcela de <strong>evolução CAIXA</strong> foi lançada ainda e o campo "Custos financeiros" está zerado. Enquanto o custo do financiamento não entrar por um dos dois, este ROI é uma estimativa otimista.</span>';
       body.appendChild(alerta);
     }
 
@@ -4459,6 +4485,64 @@ function celulaAvanco(c) {
    em vez da versão publicada. Traz o botão para descartá-la — é a saída
    quando um número corrigido na publicação não aparece porque o rascunho
    antigo está por cima. */
+/* Conciliação do empreiteiro.
+   -------------------------------------------------------------------------
+   A palavra "empreiteiro" aparece em quatro números diferentes na tela e eles
+   nunca vão ser iguais, porque respondem a perguntas diferentes: quanto foi
+   CONTRATADO, quanto de obra já foi MEDIDO, quanto ele já RECEBEU e o que
+   sobra de cada um. Sem ver os quatro lado a lado, a impressão é de erro.
+   Este quadro mostra a conta inteira e, principalmente, o número que importa:
+   a diferença entre o medido e o recebido — se ele recebeu adiantado ou se
+   ainda tem valor medido a receber. */
+function renderConciliacaoEmpreiteiro() {
+  const r = VIEW.resumo;
+  const parcelas = VIEW.parcelas || [];
+  const realizadas = parcelas.filter((p) => p.status === 'REALIZADO');
+  const planejadas = parcelas.filter((p) => p.status !== 'REALIZADO');
+  const som = (lista, f) => round2(lista.reduce((a, p) => a + (Number(p[f]) || 0), 0));
+  const pixReal = som(realizadas, 'totalEmpreiteiroPix');
+  const cartaoReal = som(realizadas, 'gastoCartao');
+  const pixPlan = som(planejadas, 'totalEmpreiteiroPix');
+  const cartaoPlan = som(planejadas, 'gastoCartao');
+  const adiantado = round2(r.totalConsumidoContrato - r.totalMedido);
+
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  panel.innerHTML = `
+    <div class="panel-header">
+      <div>
+        <h2>Conciliação do empreiteiro</h2>
+        <div class="muted">Os números de empreiteiro espalhados pela tela não são versões diferentes do mesmo valor — são perguntas diferentes. Aqui estão todos, com a conta que liga um ao outro.</div>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table class="extrato-table">
+        <tbody>
+          <tr class="extrato-grupo"><td colspan="3">Quanto ele já recebeu (só quinzenas REALIZADAS)</td></tr>
+          <tr><td>PIX de mão de obra</td><td class="num">${money(pixReal)}</td><td class="muted">soma da coluna "Empreiteiro (PIX)" nas quinzenas realizadas</td></tr>
+          <tr><td>+ Cartão (material descontado do que ele tem a receber)</td><td class="num">${money(cartaoReal)}</td><td class="muted">soma da coluna "Cartão" nas quinzenas realizadas</td></tr>
+          <tr class="extrato-residuo"><td><strong>= Consumido do contrato</strong></td><td class="num"><strong>${money(r.totalConsumidoContrato)}</strong></td><td class="muted">é o valor do card "Avanço empreiteiro (% pago)" e do extrato do Dashboard</td></tr>
+
+          <tr class="extrato-grupo"><td colspan="3">Quanto de obra ele já entregou</td></tr>
+          <tr><td>Medido (avanço das categorias)</td><td class="num">${money(r.totalMedido)}</td><td class="muted">${pct(r.percObraGeral)} do orçado — vem da aba Lançar Avanços, não das parcelas</td></tr>
+          <tr class="${adiantado > 0.02 ? 'extrato-residuo' : ''}"><td><strong>${adiantado > 0.02 ? 'Recebido além do medido (adiantamento)' : 'Medido ainda não pago'}</strong></td><td class="num"><strong>${money(Math.abs(adiantado))}</strong></td><td class="muted">consumido − medido${adiantado > 0.02 ? ' — ele está adiantado em relação à obra entregue' : ''}</td></tr>
+
+          <tr class="extrato-grupo"><td colspan="3">Quanto ainda cabe no contrato</td></tr>
+          <tr><td>Contrato total</td><td class="num">${money(r.contratoTotalEmpreiteiro)}</td><td class="muted">parâmetro fixo</td></tr>
+          <tr><td>− Consumido</td><td class="num">${money(r.totalConsumidoContrato)}</td><td class="muted">${pct(r.percValorTotalPago)} do contrato</td></tr>
+          <tr class="extrato-residuo"><td><strong>= Saldo do contrato</strong></td><td class="num"><strong>${money(r.saldoContratoAPagarEmpreiteiro)}</strong></td><td class="muted">é o card "Saldo empreiteiro (falta do contrato)"</td></tr>
+
+          <tr class="extrato-grupo"><td colspan="3">O que ainda está só planejado (não entra em nenhum card de valor pago)</td></tr>
+          <tr><td>PIX planejado</td><td class="num">${money(pixPlan)}</td><td class="muted">${planejadas.length} quinzena(s) com status PLANEJADO</td></tr>
+          <tr><td>Cartão planejado</td><td class="num">${money(cartaoPlan)}</td><td class="muted">faturas de cartão de quinzenas ainda não realizadas</td></tr>
+          <tr><td><strong>Total da tabela abaixo (realizado + planejado)</strong></td><td class="num"><strong>${money(round2(pixReal + pixPlan))}</strong></td><td class="muted">é o rodapé "TOTAL" de Contas a Pagar na coluna Empreiteiro — por isso ele é maior que o consumido</td></tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+  return panel;
+}
+
 function renderAvisoRascunho() {
   if (!RASCUNHO_RESTAURADO) return null;
   const wrap = document.createElement('div');
@@ -4665,7 +4749,7 @@ function renderDashboard() {
     <div class="card accent">
       <div class="card-label">Contrato total empreiteiro</div>
       <div class="card-value">${money(r.contratoTotalEmpreiteiro)}</div>
-      <div class="card-sub">Executado (medido): ${money(r.totalMedido)} · ${pct(r.percObraGeral)}</div>
+      <div class="card-sub">Medido (obra executada): ${money(r.totalMedido)} · ${pct(r.percObraGeral)}</div>
     </div>
     <div class="card good">
       <div class="card-label">Avanço empreiteiro (% pago)</div>
@@ -4717,6 +4801,7 @@ function renderDashboard() {
   `;
   ligarDrills(cards);
   root.appendChild(cards);
+  root.appendChild(renderConciliacaoEmpreiteiro());
   root.appendChild(renderVerbaFuturaBlock());
 
   const panel = document.createElement('div');
@@ -4811,18 +4896,35 @@ function renderDashboard() {
   }
 
   const tfoot = panel.querySelector('tfoot');
-  const sumF = (f) => parcelasFiltradas.reduce((a, p) => a + (Number(p[f]) || 0), 0);
-  tfoot.innerHTML = `<tr>
-    <td>${FILTRO_QUINZENA_PARCELAS ? 'TOTAL DA QUINZENA' : 'TOTAL'}</td>
+  /* O rodapé somava TODAS as linhas — realizadas e planejadas juntas. Os
+     cards do topo contam só o que já foi REALIZADO. Dava dois totais para a
+     mesma coluna na mesma tela, e não havia como saber qual estava certo:
+     estavam os dois, respondendo perguntas diferentes. Agora o rodapé separa
+     realizado, planejado e total, e a linha "REALIZADO" é a que fecha com os
+     cards. */
+  const COLUNAS_TOTAL = ['totalEmpreiteiroPix', 'totalAdmPix', 'gastoCartao', 'totalATransferir', 'parcelaEvolucaoCaixa', 'custoTotal'];
+  const somaDe = (f, filtro) => round2(parcelasFiltradas.filter(filtro).reduce((a, p) => a + (Number(p[f]) || 0), 0));
+  const ehReal = (p) => p.status === 'REALIZADO';
+  const ehPlan = (p) => p.status !== 'REALIZADO';
+  const temPlanejadas = parcelasFiltradas.some(ehPlan);
+  const temRealizadas = parcelasFiltradas.some(ehReal);
+  const escopo = FILTRO_QUINZENA_PARCELAS ? 'DA QUINZENA' : '';
+  const linhaTotal = (rotulo, filtro, cls, dica) => `<tr class="${cls}" title="${esc(dica)}">
+    <td>${esc(rotulo)}</td>
     <td></td>
-    <td class="num">${money(sumF('totalEmpreiteiroPix'))}</td>
-    <td class="num">${money(sumF('totalAdmPix'))}</td>
-    <td class="num">${money(sumF('gastoCartao'))}</td>
-    <td class="num">${money(sumF('totalATransferir'))}</td>
-    <td class="num">${money(sumF('parcelaEvolucaoCaixa'))}</td>
-    <td class="num">${money(sumF('custoTotal'))}</td>
+    ${COLUNAS_TOTAL.map((f) => `<td class="num">${money(somaDe(f, filtro))}</td>`).join('')}
     <td colspan="6"></td>
   </tr>`;
+
+  tfoot.innerHTML = [
+    temRealizadas && temPlanejadas
+      ? linhaTotal(`REALIZADO ${escopo}`.trim(), ehReal, 'total-realizado', 'Só as quinzenas com status REALIZADO. É esta linha que bate com os cards do topo da tela e com o Dashboard.')
+      : '',
+    temRealizadas && temPlanejadas
+      ? linhaTotal(`PLANEJADO ${escopo}`.trim(), ehPlan, 'total-planejado', 'Só as quinzenas ainda PLANEJADAS — dinheiro que ainda não saiu. Não entra nos cards de valores pagos.')
+      : '',
+    linhaTotal(`TOTAL ${escopo}`.trim() || 'TOTAL', () => true, 'total-geral', 'Realizado + planejado. Só coincide com os cards do topo quando não há nenhuma quinzena planejada na lista.'),
+  ].join('');
 
   document.getElementById('btnNovaParcela').onclick = () => openNovaParcelaModal();
 }
