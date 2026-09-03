@@ -129,9 +129,17 @@
 
   .tabs { display: flex; gap: 2px; margin-top: 12px; flex-wrap: wrap; }
   .tab-btn {
-    background: none; border: none; color: #b9c8dc; padding: 10px 14px 12px 14px;
-    cursor: pointer; font: inherit; font-size: 12.8px; font-weight: 600;
-    border-bottom: 2px solid transparent;
+    background: none; border: none; color: #b9c8dc; padding: 10px 12px 12px 12px;
+    cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 600;
+    border-bottom: 2px solid transparent; white-space: nowrap;
+  }
+  /* Dez abas: até ~1250px elas cabem numa linha; abaixo disso a fileira
+     rola para o lado em vez de quebrar — uma aba órfã na segunda linha
+     parecia um bug e empurrava o conteúdo para baixo. */
+  @media (max-width: 1340px) {
+    .tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab-btn { flex: none; }
   }
   .tab-btn:hover { color: #eef3fa; }
   .tab-btn.active { color: #eef3fa; border-bottom-color: var(--accent); }
@@ -533,6 +541,40 @@
   td.forma-cell { min-width: 200px; }
   td.forma-cell > * { display: block; }
   td.forma-cell .fatura-input { margin-top: 4px; width: 100%; max-width: 170px; }
+  /* ---------- Controle Mensal CAIXA ---------- */
+  .controle-ident { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px 16px; margin: 10px 0 12px; }
+  .controle-campo { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .controle-campo .cell-input { width: 100%; }
+  .controle-fixo { font-size: 13.5px; font-weight: 600; color: var(--ink); padding: 6px 0; }
+  .controle-ano { display: flex; align-items: center; gap: 6px; }
+  .controle-ano select { min-width: 170px; }
+  .controle-instrucoes {
+    border: 1px solid var(--border); background: var(--surface-2); border-radius: 9px;
+    padding: 10px 14px; margin-bottom: 12px; font-size: 12.5px; line-height: 1.5;
+  }
+  .controle-instrucoes-titulo { font-weight: 700; color: var(--accent-ink); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+  .controle-instrucoes ol { margin: 0; padding-left: 20px; }
+  .controle-instrucoes li { margin: 2px 0; }
+  .controle-tabela th.edit { background: #fff6cc; color: #6b4d00; }
+  .controle-tabela th.calc { background: var(--surface-2); }
+  .controle-tabela td.edit { background: #fffbe6; }
+  .controle-tabela td.edit .cell-input { background: #fff6cc; border-color: #e6cd6a; width: 100%; max-width: 160px; text-align: right; }
+  .controle-tabela td.edit .cell-input::placeholder { color: #9a8a4a; font-style: italic; }
+  .controle-tabela td.calc { background: var(--surface-2); color: var(--ink-soft); font-family: "IBM Plex Mono", monospace; }
+  .controle-tabela td.calc.diverge, .controle-tabela tfoot td.diverge { color: var(--danger); font-weight: 700; }
+  .controle-tabela tfoot td { font-weight: 700; background: var(--surface-2); }
+  .controle-resumo { margin-top: 14px; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .controle-tabela th.edit { background: #3d3410; color: #f3dc85; }
+    :root:not([data-theme="light"]) .controle-tabela td.edit { background: #2c2610; }
+    :root:not([data-theme="light"]) .controle-tabela td.edit .cell-input { background: #3d3410; border-color: #6b5a1c; color: var(--ink); }
+    :root:not([data-theme="light"]) .controle-tabela td.edit .cell-input::placeholder { color: #a3924f; }
+  }
+  :root[data-theme="dark"] .controle-tabela th.edit { background: #3d3410; color: #f3dc85; }
+  :root[data-theme="dark"] .controle-tabela td.edit { background: #2c2610; }
+  :root[data-theme="dark"] .controle-tabela td.edit .cell-input { background: #3d3410; border-color: #6b5a1c; color: var(--ink); }
+  :root[data-theme="dark"] .controle-tabela td.edit .cell-input::placeholder { color: #a3924f; }
+
   tfoot tr.total-realizado td { color: var(--good); }
   tfoot tr.total-planejado td { color: var(--muted); font-weight: 500; }
   tfoot tr.total-geral td { border-top: 2px solid var(--border); }
@@ -749,6 +791,7 @@
     <button class="tab-btn" data-tab="detalhamento">Detalhamento FC</button>
     <button class="tab-btn" data-tab="fluxo">Fluxo de Caixa</button>
     <button class="tab-btn" data-tab="pci">Liberação PCI</button>
+    <button class="tab-btn" data-tab="controle-caixa">Controle Mensal CAIXA</button>
     <button class="tab-btn" data-tab="rastreabilidade">Rastreabilidade</button>
     <button class="tab-btn" data-tab="parametros">Parâmetros</button>
   </nav>
@@ -763,6 +806,7 @@
   <section id="tab-detalhamento" class="tab-panel" hidden=""></section>
   <section id="tab-fluxo" class="tab-panel" hidden=""></section>
   <section id="tab-pci" class="tab-panel" hidden=""></section>
+  <section id="tab-controle-caixa" class="tab-panel" hidden=""></section>
   <section id="tab-rastreabilidade" class="tab-panel" hidden=""></section>
   <section id="tab-parametros" class="tab-panel" hidden=""></section>
 </main>
@@ -3341,6 +3385,7 @@ function renderAll() {
   renderDetalhamento();
   renderFluxo();
   renderPCI();
+  renderControleCaixa();
   renderRastreabilidade();
   renderParametros();
 
@@ -3702,9 +3747,162 @@ function abrirExtratoEmpreiteiro() {
   });
 }
 
+/* Extrato do crédito CAIXA (PCI): as etapas que compõem os R$ 1,5 milhão,
+   quanto de cada uma já foi liberado e o que ainda falta. */
+function abrirExtratoCreditoPCI() {
+  const r = VIEW.resumo;
+  const etapas = VIEW.liberacaoPCI || [];
+  const total = round2(etapas.reduce((a, e) => a + (Number(e.valor) || 0), 0));
+  openModal('Extrato — Recursos CAIXA (crédito PCI)', (body) => {
+    const topo = document.createElement('div');
+    topo.className = 'extrato-total-line';
+    topo.innerHTML = `<span>Crédito CAIXA total — soma das etapas do PCI</span><strong>${money(total)}</strong>`;
+    body.appendChild(topo);
+    const nota = document.createElement('div');
+    nota.className = 'muted';
+    nota.style.margin = '6px 0 12px';
+    nota.innerHTML = `Lote: <strong>${money(VIEW.parametros.financiamentoLoteCaixa)}</strong> · obra: <strong>${money(VIEW.parametros.financiamentoObraCaixa)}</strong>. Já liberado pelo banco: <strong>${money(r.caixaLiberadaAcumulada)}</strong> (${pct(r.percCaixaLiberada)}) — clique em "extrato" no card para ver lote e medições PLS. A liberar: <strong>${money(round2(total - r.caixaLiberadaAcumulada))}</strong>.`;
+    body.appendChild(nota);
+    const tw = document.createElement('div');
+    tw.className = 'table-scroll';
+    tw.innerHTML = `<table class="extrato-table">
+      <thead><tr><th>Etapa</th><th>Descrição</th><th class="num">Limite acum.</th><th class="num">Valor</th><th class="num">Mês prog.</th></tr></thead>
+      <tbody>${etapas.map((e) => `<tr>
+        <td>${e.etapa}</td><td>${esc(e.descricao)}</td>
+        <td class="num">${pct(e.percLimiteAcumulado)}</td>
+        <td class="num">${money(e.valor)}</td>
+        <td class="num">${e.mesProgramado ?? '—'}</td>
+      </tr>`).join('')}
+      <tr class="extrato-residuo"><td colspan="3"><strong>Total</strong></td><td class="num"><strong>${money(total)}</strong></td><td></td></tr>
+      </tbody></table>`;
+    body.appendChild(tw);
+  });
+}
+
+/* Extrato do recurso próprio planejado: de onde sai o número e como ele se
+   relaciona com o que já foi consumido e com o saldo disponível. */
+function abrirExtratoRecursoPlanejado() {
+  const r = VIEW.resumo;
+  const consumos = [...(STATE.consumosRecursoProprio || [])].sort(ordenarConsumos);
+  const consumido = round2(consumos.reduce((a, c) => a + (Number(c.valor) || 0), 0));
+  openModal('Extrato — Recursos próprios planejados', (body) => {
+    const topo = document.createElement('div');
+    topo.className = 'extrato-total-line';
+    topo.innerHTML = `<span>Capital próprio previsto para a obra</span><strong>${money(r.recursoProprioPlanejado)}</strong>`;
+    body.appendChild(topo);
+    const tw = document.createElement('div');
+    tw.className = 'table-scroll';
+    tw.style.marginTop = '12px';
+    tw.innerHTML = `<table class="extrato-table"><tbody>
+      <tr class="extrato-grupo"><td colspan="2">De onde vem</td></tr>
+      <tr><td>Parâmetro "Recurso próprio planejado"</td><td class="num">${money(r.recursoProprioPlanejado)}</td></tr>
+      <tr><td class="sub-item">${pct(r.investimentoTotal > 0 ? r.recursoProprioPlanejado / r.investimentoTotal : 0)} do investimento total de ${money(r.investimentoTotal)}</td><td class="num"></td></tr>
+      <tr class="extrato-grupo"><td colspan="2">Quanto já saiu do bolso (itens de consumo em Parâmetros)</td></tr>
+      ${consumos.map((c) => `<tr><td class="sub-item">${c.data ? dateBR(c.data) + ' · ' : ''}${esc(c.descricao || 'Consumo')}</td><td class="num">− ${money(c.valor)}</td></tr>`).join('') || '<tr><td class="sub-item muted">Nenhum consumo lançado</td><td></td></tr>'}
+      <tr><td><strong>Consumido</strong></td><td class="num"><strong>− ${money(consumido)}</strong></td></tr>
+      <tr class="extrato-residuo"><td><strong>Saldo de recurso próprio disponível</strong></td><td class="num"><strong>${money(r.saldoRecursoDisponivel)}</strong></td></tr>
+    </tbody></table>`;
+    body.appendChild(tw);
+    const nota = document.createElement('div');
+    nota.className = 'muted';
+    nota.style.marginTop = '10px';
+    nota.textContent = 'O saldo disponível tem extrato próprio no card ao lado, com o detalhe de cada consumo.';
+    body.appendChild(nota);
+  });
+}
+
+/* Extrato do % de obra: categoria a categoria, quanto foi medido contra o
+   que o cronograma previa para hoje. É daqui que sai o "real x previsto". */
+function abrirExtratoObraRealPrevisto() {
+  const r = VIEW.resumo;
+  const cats = [...(VIEW.categorias || [])].sort((a, b) => (a.numero || 0) - (b.numero || 0));
+  openModal('Extrato — % Obra: real x previsto', (body) => {
+    const topo = document.createElement('div');
+    topo.className = 'extrato-total-line';
+    topo.innerHTML = `<span>Medido ${money(r.totalMedido)} · previsto p/ hoje ${money(r.totalPrevistoCronograma)} · orçado ${money(r.totalOrcadoCategorias)}</span><strong>${pct(r.percObraGeral)} / ${pct(r.percPrevistoGeral)}</strong>`;
+    body.appendChild(topo);
+    const nota = document.createElement('div');
+    nota.className = 'muted';
+    nota.style.margin = '6px 0 12px';
+    nota.textContent = `Real = valor medido ÷ orçado total. Previsto = o que o cronograma esperava até ${dateBR(r.dataReferenciaCronograma)}. Cada linha é uma categoria; o peso é a parte dela no orçado.`;
+    body.appendChild(nota);
+    const tw = document.createElement('div');
+    tw.className = 'table-scroll';
+    tw.innerHTML = `<table class="extrato-table">
+      <thead><tr><th>Categoria</th><th class="num">Orçado</th><th class="num">Peso</th><th class="num">Medido</th><th class="num">% real</th><th class="num">% previsto</th><th>Situação</th></tr></thead>
+      <tbody>${cats.map((c) => {
+        const info = STATUS_CRONOGRAMA_INFO[c.statusCronograma] || STATUS_CRONOGRAMA_INFO['sem-dados'];
+        return `<tr>
+          <td>${c.numero}. ${esc(c.nome)}</td>
+          <td class="num">${money(c.valorOrcado)}</td>
+          <td class="num">${pct(c.peso)}</td>
+          <td class="num">${money(c.valorMedido)}</td>
+          <td class="num"><strong>${pct(c.percAvancoEfetivo)}</strong></td>
+          <td class="num">${pct(c.percPrevisto)}</td>
+          <td><span class="badge ${info.badge}">${info.label}</span></td>
+        </tr>`;
+      }).join('')}
+      <tr class="extrato-residuo"><td><strong>Obra</strong></td><td class="num"><strong>${money(r.totalOrcadoCategorias)}</strong></td><td class="num">100%</td><td class="num"><strong>${money(r.totalMedido)}</strong></td><td class="num"><strong>${pct(r.percObraGeral)}</strong></td><td class="num"><strong>${pct(r.percPrevistoGeral)}</strong></td><td></td></tr>
+      </tbody></table>`;
+    body.appendChild(tw);
+  });
+}
+
+/* Verba total disponível: o que ainda pode entrar do CAIXA mais o que ainda
+   sobra de recurso próprio — e quanto disso o planejado futuro já consome.
+   Este extrato estava prometido no card desde o início e nunca existiu:
+   o botão abria nada. */
+function abrirExtratoVerbaDisponivel() {
+  const r = VIEW.resumo;
+  const planejadas = (VIEW.parcelas || []).filter((p) => p.status !== 'REALIZADO')
+    .sort((a, b) => (a.vencPlanejado || a.vencimento || '').localeCompare(b.vencPlanejado || b.vencimento || ''));
+  const pciALiberar = round2(r.creditoCaixaTotalPCI - r.caixaLiberadaAcumulada);
+  openModal('Extrato — Verba total disponível', (body) => {
+    const topo = document.createElement('div');
+    topo.className = `extrato-total-line${r.saldoParaFuturos < 0 ? ' negativo' : ''}`;
+    topo.innerHTML = `<span>Verba disponível para o que falta da obra</span><strong>${money(r.verbaDisponivelFutura)}</strong>`;
+    body.appendChild(topo);
+    const tw = document.createElement('div');
+    tw.className = 'table-scroll';
+    tw.style.marginTop = '12px';
+    tw.innerHTML = `<table class="extrato-table"><tbody>
+      <tr class="extrato-grupo"><td colspan="2">De onde vem</td></tr>
+      <tr><td>Crédito CAIXA (PCI) total</td><td class="num">${money(r.creditoCaixaTotalPCI)}</td></tr>
+      <tr><td class="sub-item">− já liberado pelo banco</td><td class="num">− ${money(r.caixaLiberadaAcumulada)}</td></tr>
+      <tr><td><strong>= PCI ainda a liberar</strong></td><td class="num"><strong>${money(pciALiberar)}</strong></td></tr>
+      <tr><td>+ Saldo de recurso próprio disponível</td><td class="num">${money(r.saldoRecursoDisponivel)}</td></tr>
+      <tr class="extrato-residuo"><td><strong>= Verba total disponível</strong></td><td class="num"><strong>${money(r.verbaDisponivelFutura)}</strong></td></tr>
+      <tr class="extrato-grupo"><td colspan="2">O que já está comprometido (quinzenas PLANEJADAS)</td></tr>
+      ${planejadas.map((p) => `<tr><td class="sub-item">${esc(p.mesReferenciaLabel || p.label)}</td><td class="num">− ${money(p.custoTotal)}</td></tr>`).join('') || '<tr><td class="sub-item muted">Nenhuma quinzena planejada</td><td></td></tr>'}
+      <tr><td><strong>Planejado futuro</strong></td><td class="num"><strong>− ${money(r.totalPlanejadoFuturo)}</strong></td></tr>
+      <tr class="extrato-residuo"><td><strong>Margem para itens ainda não planejados</strong></td><td class="num"><strong>${money(r.saldoParaFuturos)}</strong></td></tr>
+    </tbody></table>`;
+    body.appendChild(tw);
+    const nota = document.createElement('div');
+    nota.className = 'muted';
+    nota.style.marginTop = '10px';
+    nota.textContent = r.saldoParaFuturos < 0
+      ? `O planejado já ultrapassa a verba em ${money(Math.abs(r.saldoParaFuturos))}. Ou entra mais liberação do CAIXA, ou o planejado tem de caber no recurso próprio.`
+      : 'Essa margem é o que sobra depois de pagar tudo que já está planejado — é o espaço para o que ainda não foi lançado.';
+    body.appendChild(nota);
+  });
+}
+
+/* Custo total realizado: todas as quinzenas REALIZADAS, no mesmo extrato do
+   "Custo total do período" — sem depender do filtro que estiver marcado. */
+function abrirExtratoCustoRealizado() {
+  const realizadas = (VIEW.parcelas || []).filter((p) => p.status === 'REALIZADO');
+  const total = round2(realizadas.reduce((a, p) => a + (Number(p.custoTotal) || 0), 0));
+  abrirExtratoCustoTotal(realizadas, total);
+}
+
 const DRILLS = {
   cartaoMes: () => abrirExtratoCartaoMes(),
   empreiteiro: () => abrirExtratoEmpreiteiro(),
+  creditoPCI: () => abrirExtratoCreditoPCI(),
+  recursoPlanejado: () => abrirExtratoRecursoPlanejado(),
+  obraRealPrevisto: () => abrirExtratoObraRealPrevisto(),
+  custoRealizado: () => abrirExtratoCustoRealizado(),
   recursoProprio: () => abrirExtratoRecursoProprio(),
   caixaLiberado: () => abrirExtratoCaixaLiberado(),
   verbaDisponivel: () => abrirExtratoVerbaDisponivel(),
@@ -4583,36 +4781,56 @@ function renderPainel() {
 
   const kpis = document.createElement('div');
   kpis.className = 'cards-grid';
+  const custoRealizado = round2((VIEW.parcelas || []).filter((p) => p.status === 'REALIZADO').reduce((a, p) => a + (Number(p.custoTotal) || 0), 0));
+  const qtdRealizadas = (VIEW.parcelas || []).filter((p) => p.status === 'REALIZADO').length;
+  /* Dez cards em duas fileiras de cinco. A primeira responde "de onde vem o
+     dinheiro e quanto vale a obra"; a segunda, "quanto já foi executado e o
+     que sobra". Todo valor grande tem extrato: clicar mostra de onde o
+     número saiu. Dez, e não nove, porque nove não divide por cinco e deixava
+     um buraco na segunda fileira. */
   kpis.innerHTML = `
     <div class="card accent">
       <div class="card-label">Investimento total</div>
       ${cardValueDrill('viabilidade', r.investimentoTotal)}
-      <div class="card-sub">Crédito CAIXA (PCI) + recurso próprio planejado — tudo que entra na obra</div>
+      <div class="card-sub">Crédito CAIXA (PCI) + recurso próprio planejado</div>
     </div>
     <div class="card accent">
       <div class="card-label">Recursos CAIXA — crédito PCI</div>
-      <div class="card-value">${money(r.creditoCaixaTotalPCI)}</div>
+      ${cardValueDrill('creditoPCI', r.creditoCaixaTotalPCI, 'ver etapas')}
       <div class="card-sub"><button type="button" class="value-drill tiny filter-control" data-drill="caixaLiberado" title="Clique para ver o extrato — lote e medições PLS"><span class="drill-value">Liberado: ${money(r.caixaLiberadaAcumulada)} · ${pct(r.percCaixaLiberada)}</span><span class="drill-hint">extrato</span></button></div>
     </div>
     <div class="card">
       <div class="card-label">Recursos próprios planejados</div>
-      <div class="card-value">${money(r.recursoProprioPlanejado)}</div>
+      ${cardValueDrill('recursoPlanejado', r.recursoProprioPlanejado)}
       <div class="card-sub">${pct(r.investimentoTotal > 0 ? r.recursoProprioPlanejado / r.investimentoTotal : 0)} do investimento total</div>
     </div>
     <div class="card ${r.margemBruta < 0 ? 'warn' : 'good'}">
       <div class="card-label">VGV estimado</div>
       ${cardValueDrill('viabilidade', r.vgv, 'ver viabilidade')}
-      <div class="card-sub">Margem s/ custo total: ${pct(r.margemSobreCusto)} · ROI líquido s/ capital próprio: ${pct(r.roiLiquidoCapitalProprio)}</div>
+      <div class="card-sub">Margem s/ custo: ${pct(r.margemSobreCusto)} · ROI líquido s/ capital próprio: ${pct(r.roiLiquidoCapitalProprio)}</div>
     </div>
     <div class="card accent">
+      <div class="card-label">Cartão — fatura ${fatCartao ? mesQuinzenaLabel(fatCartao.mes, 1) : 'do mês'}</div>
+      ${cardValueDrill('cartaoMes', fatCartao ? fatCartao.total : 0)}
+      <div class="card-sub">${fatCartao
+        ? `Vence ${dateBR(fatCartao.vencimento)} · ${fatCartao.itens.length} compra(s). Fecha dia ${diaFechamentoCartao()}.`
+        : 'Nenhuma compra no cartão lançada no Detalhamento FC.'}</div>
+    </div>
+
+    <div class="card accent">
       <div class="card-label">Contrato total empreiteiro</div>
-      <div class="card-value">${money(r.contratoTotalEmpreiteiro)}</div>
-      <div class="card-sub"><button type="button" class="value-drill tiny filter-control" data-drill="empreiteiro" title="Clique para ver o extrato — PIX, cartão e transferências ao empreiteiro"><span class="drill-value">Executado: ${money(r.totalConsumidoContrato)} · ${pct(r.percValorTotalPago)}</span><span class="drill-hint">extrato</span></button></div>
+      ${cardValueDrill('empreiteiro', r.contratoTotalEmpreiteiro)}
+      <div class="card-sub">Executado: ${money(r.totalConsumidoContrato)} · ${pct(r.percValorTotalPago)}</div>
     </div>
     <div class="card ${r.percObraGeral + 0.0001 >= r.percPrevistoGeral ? 'good' : 'warn'}">
       <div class="card-label">% Obra: real x previsto</div>
-      <div class="card-value">${pct(r.percObraGeral)} <span class="muted" style="font-size:13px">/ ${pct(r.percPrevistoGeral)}</span></div>
-      <div class="card-sub">${r.percObraGeral + 0.0001 >= r.percPrevistoGeral ? 'No prazo ou adiantada' : 'Atrasada vs. cronograma'}</div>
+      <button type="button" class="value-drill small filter-control" data-drill="obraRealPrevisto" title="Clique para ver o extrato — categoria a categoria"><span class="drill-value card-value">${pct(r.percObraGeral)} <span class="muted" style="font-size:13px">/ ${pct(r.percPrevistoGeral)}</span></span><span class="drill-hint">ver extrato</span></button>
+      <div class="card-sub">${r.percObraGeral + 0.0001 >= r.percPrevistoGeral ? 'No prazo ou adiantada' : 'Atrasada vs. cronograma'} · medido ${money(r.totalMedido)}</div>
+    </div>
+    <div class="card accent">
+      <div class="card-label">Custo total realizado</div>
+      ${cardValueDrill('custoRealizado', custoRealizado)}
+      <div class="card-sub">${qtdRealizadas} quinzena(s) realizada(s): empreiteiro + ADM + cartão + evolução CAIXA</div>
     </div>
     <div class="card ${r.saldoRecursoDisponivel < 0 ? 'warn' : 'good'}">
       <div class="card-label">Saldo de recurso próprio disponível</div>
@@ -4622,14 +4840,7 @@ function renderPainel() {
     <div class="card ${r.saldoParaFuturos < 0 ? 'warn' : 'good'}">
       <div class="card-label">Verba total disponível</div>
       ${cardValueDrill('verbaDisponivel', r.verbaDisponivelFutura)}
-      <div class="card-sub">Crédito PCI a liberar + saldo de recurso próprio. Margem após o planejado futuro: ${money(r.saldoParaFuturos)}</div>
-    </div>
-    <div class="card accent">
-      <div class="card-label">Cartão — fatura ${fatCartao ? mesQuinzenaLabel(fatCartao.mes, 1) : 'do mês'}</div>
-      ${cardValueDrill('cartaoMes', fatCartao ? fatCartao.total : 0)}
-      <div class="card-sub">${fatCartao
-        ? `Vence ${dateBR(fatCartao.vencimento)} · ${fatCartao.itens.length} compra(s) no Detalhamento FC. Fecha dia ${diaFechamentoCartao()}: compra do dia ${diaFechamentoCartao()} em diante cai na fatura seguinte.`
-        : 'Nenhuma compra no cartão lançada no Detalhamento FC.'}</div>
+      <div class="card-sub">PCI a liberar + saldo de recurso próprio. Margem após o planejado: ${money(r.saldoParaFuturos)}</div>
     </div>
   `;
   ligarDrills(kpis);
@@ -6072,6 +6283,307 @@ function openNovoAjusteModal() {
     });
     body.appendChild(form);
   });
+}
+
+/* ==========================================================================
+   TAB — Controle Mensal CAIXA
+   --------------------------------------------------------------------------
+   Conferência mensal, feita pelo cliente, entre o que o app da CAIXA mostra e
+   o que de fato entrou. Quatro campos são digitados (evolução de obra no app,
+   recebido no mês, saldo total no app, fatura do mês); o resto é calculado.
+   O que interessa é a DIFERENÇA: saldo que o app diz menos a soma do que foi
+   recebido mês a mês. Zero é OK; qualquer coisa fora disso é VERIFICAR.
+
+   Os lançamentos ficam guardados por cliente e por ano, em
+   STATE.controleMensalCaixa[cliente][ano][mes]. Trocar de ano não apaga
+   nada: cada ano é uma folha própria, como na planilha de origem.
+   ========================================================================== */
+const MESES_CONTROLE = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+const CAMPOS_CONTROLE = ['evolucaoApp', 'recebidoMes', 'saldoTotalApp', 'faturaMes'];
+let CONTROLE_ANO = null;
+
+function clienteControleKey() {
+  return String((STATE.meta && STATE.meta.proprietario) || 'cliente').trim() || 'cliente';
+}
+
+function anoControleAtual() {
+  if (CONTROLE_ANO) return CONTROLE_ANO;
+  const hoje = (VIEW.resumo && VIEW.resumo.dataReferenciaCronograma) || new Date().toISOString().slice(0, 10);
+  CONTROLE_ANO = Number(hoje.slice(0, 4));
+  return CONTROLE_ANO;
+}
+
+// Devolve (criando se preciso) a folha do cliente/ano: 12 meses, cada um com
+// os quatro campos digitáveis em null até alguém preencher.
+function folhaControle(cliente, ano, { criar = false } = {}) {
+  STATE.controleMensalCaixa = STATE.controleMensalCaixa || {};
+  const porCliente = STATE.controleMensalCaixa[cliente] || (criar ? (STATE.controleMensalCaixa[cliente] = { contratoCaixa: '', responsavel: '', anos: {} }) : null);
+  if (!porCliente) return null;
+  porCliente.anos = porCliente.anos || {};
+  const chaveAno = String(ano);
+  if (!porCliente.anos[chaveAno]) {
+    if (!criar) return null;
+    porCliente.anos[chaveAno] = { meses: {} };
+  }
+  const folha = porCliente.anos[chaveAno];
+  folha.meses = folha.meses || {};
+  for (let m = 1; m <= 12; m += 1) {
+    const k = String(m).padStart(2, '0');
+    if (!folha.meses[k]) folha.meses[k] = { evolucaoApp: null, recebidoMes: null, saldoTotalApp: null, faturaMes: null };
+  }
+  return folha;
+}
+
+function anosComLancamento(cliente) {
+  const reg = (STATE.controleMensalCaixa || {})[cliente];
+  const anos = new Set([anoControleAtual()]);
+  if (reg && reg.anos) {
+    for (const [ano, folha] of Object.entries(reg.anos)) {
+      const temAlgo = Object.values(folha.meses || {}).some((m) => CAMPOS_CONTROLE.some((c) => m[c] !== null && m[c] !== undefined && m[c] !== ''));
+      if (temAlgo) anos.add(Number(ano));
+    }
+  }
+  return [...anos].sort((a, b) => a - b);
+}
+
+function updateControleMes(cliente, ano, mes, patch) {
+  const folha = folhaControle(cliente, ano, { criar: true });
+  const reg = folha.meses[mes];
+  for (const c of CAMPOS_CONTROLE) {
+    if (patch[c] === undefined) continue;
+    const v = patch[c];
+    reg[c] = (v === null || v === '' || Number.isNaN(Number(v))) ? null : round2(Number(v));
+  }
+  afterMutation();
+}
+
+function updateControleCliente(cliente, patch) {
+  folhaControle(cliente, anoControleAtual(), { criar: true });
+  const reg = STATE.controleMensalCaixa[cliente];
+  if (patch.contratoCaixa !== undefined) reg.contratoCaixa = String(patch.contratoCaixa || '');
+  if (patch.responsavel !== undefined) reg.responsavel = String(patch.responsavel || '');
+  afterMutation();
+}
+
+/* Cálculo da folha — espelha, coluna por coluna, as fórmulas da planilha de
+   origem (acumulado = SOMA dos recebidos até o mês; diferença = saldo do app
+   − acumulado; status em branco enquanto faltar lançamento). */
+function calcularControle(folha) {
+  const linhas = [];
+  let acumulado = 0;
+  for (let m = 1; m <= 12; m += 1) {
+    const k = String(m).padStart(2, '0');
+    const reg = folha.meses[k];
+    const temRecebido = reg.recebidoMes !== null && reg.recebidoMes !== undefined;
+    const temSaldo = reg.saldoTotalApp !== null && reg.saldoTotalApp !== undefined;
+    if (temRecebido) acumulado = round2(acumulado + reg.recebidoMes);
+    const acumuladoCalc = temRecebido ? acumulado : null;
+    const diferenca = (temSaldo && acumuladoCalc !== null) ? round2(reg.saldoTotalApp - acumuladoCalc) : null;
+    const status = (temSaldo && temRecebido) ? (Math.abs(diferenca) < 0.01 ? 'OK' : 'VERIFICAR') : '';
+    linhas.push({ mes: k, nome: MESES_CONTROLE[m - 1], ...reg, acumuladoCalc, diferenca, status });
+  }
+  const somaNum = (c) => round2(linhas.reduce((a, l) => a + (Number(l[c]) || 0), 0));
+  const totalEvolucao = somaNum('evolucaoApp');
+  const totalRecebido = somaNum('recebidoMes');
+  const totalFaturas = somaNum('faturaMes');
+  const saldosInformados = linhas.map((l) => l.saldoTotalApp).filter((v) => v !== null && v !== undefined);
+  const ultimoSaldo = saldosInformados.length ? saldosInformados[saldosInformados.length - 1] : null;
+  const diferencaAcumulada = ultimoSaldo !== null ? round2(ultimoSaldo - totalRecebido) : null;
+  const statusGeral = (totalRecebido === 0 && ultimoSaldo === null) ? '' : (diferencaAcumulada !== null && Math.abs(diferencaAcumulada) < 0.01 ? 'OK' : 'VERIFICAR');
+  return { linhas, totalEvolucao, totalRecebido, totalFaturas, ultimoSaldo, diferencaAcumulada, statusGeral };
+}
+
+// Sugestões vindas do próprio app: liberação do CAIXA lançada no mês e a
+// fatura do cartão daquele mês. Só aparecem como dica enquanto o campo está
+// vazio — o que vale é o que o cliente digitar.
+function sugestoesControle(ano) {
+  const recebidoPorMes = {};
+  for (const l of VIEW.liberacoesCaixa || []) {
+    if (!l.data || l.status === 'PLANEJADO') continue;
+    if (String(l.data).slice(0, 4) !== String(ano)) continue;
+    const k = String(l.data).slice(5, 7);
+    recebidoPorMes[k] = round2((recebidoPorMes[k] || 0) + (Number(l.valor) || 0));
+  }
+  const faturaPorMes = {};
+  for (const f of faturasCartao()) {
+    if (f.mes.slice(0, 4) !== String(ano)) continue;
+    faturaPorMes[f.mes.slice(5, 7)] = f.total;
+  }
+  return { recebidoPorMes, faturaPorMes };
+}
+
+function renderControleCaixa() {
+  const root = document.getElementById('tab-controle-caixa');
+  if (!root) return;
+  root.innerHTML = '';
+  const cliente = clienteControleKey();
+  const ano = anoControleAtual();
+  const folha = folhaControle(cliente, ano, { criar: false }) || folhaControle(cliente, ano, { criar: true });
+  const reg = STATE.controleMensalCaixa[cliente];
+  const calc = calcularControle(folha);
+  const sug = sugestoesControle(ano);
+  const anos = anosComLancamento(cliente);
+
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  panel.innerHTML = `
+    <div class="panel-header">
+      <div>
+        <h2>Controle Mensal CAIXA — lançamento do cliente</h2>
+        <div class="muted">Controle anual da evolução de obra, liberações da CAIXA e faturas. Preencha somente as células amarelas; as cinzas o sistema calcula. Os lançamentos ficam guardados por cliente e por ano.</div>
+      </div>
+    </div>
+  `;
+
+  // Identificação
+  const ident = document.createElement('div');
+  ident.className = 'controle-ident';
+  const campo = (rotulo, el) => {
+    const w = document.createElement('label');
+    w.className = 'controle-campo';
+    const t = document.createElement('span');
+    t.textContent = rotulo;
+    w.append(t, el);
+    return w;
+  };
+  const clienteEl = document.createElement('div');
+  clienteEl.className = 'controle-fixo';
+  clienteEl.textContent = cliente;
+  ident.appendChild(campo('Cliente', clienteEl));
+  const obraEl = document.createElement('div');
+  obraEl.className = 'controle-fixo';
+  obraEl.textContent = (STATE.meta && STATE.meta.obra) || '—';
+  ident.appendChild(campo('Empreendimento / imóvel', obraEl));
+  ident.appendChild(campo('Contrato CAIXA', textInput({ value: reg.contratoCaixa || '', onSave: (v) => updateControleCliente(cliente, { contratoCaixa: v }) })));
+  ident.appendChild(campo('Responsável', textInput({ value: reg.responsavel || ((STATE.meta && STATE.meta.responsavelTecnico) || ''), onSave: (v) => updateControleCliente(cliente, { responsavel: v }) })));
+
+  const anoWrap = document.createElement('div');
+  anoWrap.className = 'controle-ano';
+  const prev = document.createElement('button');
+  prev.type = 'button'; prev.className = 'btn small filter-control'; prev.textContent = '‹';
+  prev.title = 'Ano anterior';
+  prev.onclick = () => { CONTROLE_ANO = ano - 1; renderControleCaixa(); };
+  const sel = document.createElement('select');
+  sel.className = 'cell-input filter-control';
+  const opcoes = new Set([...anos, ano - 1, ano, ano + 1]);
+  for (const a of [...opcoes].sort((x, y) => x - y)) {
+    const o = document.createElement('option');
+    o.value = a; o.textContent = anos.includes(a) && a !== anoControleAtual() ? `${a} · com lançamentos` : String(a);
+    o.selected = a === ano;
+    sel.appendChild(o);
+  }
+  sel.onchange = () => { CONTROLE_ANO = Number(sel.value); renderControleCaixa(); };
+  const next = document.createElement('button');
+  next.type = 'button'; next.className = 'btn small filter-control'; next.textContent = '›';
+  next.title = 'Próximo ano';
+  next.onclick = () => { CONTROLE_ANO = ano + 1; renderControleCaixa(); };
+  anoWrap.append(prev, sel, next);
+  ident.appendChild(campo('Ano', anoWrap));
+  panel.appendChild(ident);
+
+  // Instruções
+  const instr = document.createElement('div');
+  instr.className = 'controle-instrucoes';
+  instr.innerHTML = `<div class="controle-instrucoes-titulo">Instruções ao cliente</div>
+    <ol>
+      <li>Consulte no app da CAIXA o valor da <strong>evolução de obra</strong> referente ao mês e informe na coluna amarela.</li>
+      <li>Informe o <strong>valor recebido da CAIXA</strong> naquele mês.</li>
+      <li>Acesse <strong>App CAIXA › Habitação › Contratos</strong> e informe o <strong>saldo total já recebido</strong>.</li>
+      <li>Informe o <strong>valor da fatura</strong> correspondente ao mês. Preencha somente as células em amarelo.</li>
+    </ol>`;
+  panel.appendChild(instr);
+
+  // Tabela
+  const wrap = document.createElement('div');
+  wrap.className = 'table-scroll';
+  const table = document.createElement('table');
+  table.className = 'data controle-tabela';
+  table.innerHTML = `<thead><tr>
+    <th>Mês</th>
+    <th class="num edit">Evolução de obra no app</th>
+    <th class="num edit">Recebido da CAIXA no mês</th>
+    <th class="num edit">Saldo total recebido no app</th>
+    <th class="num calc">Acumulado calculado</th>
+    <th class="num edit">Valor da fatura do mês</th>
+    <th class="num calc">Diferença</th>
+    <th class="calc">Status</th>
+  </tr></thead>`;
+  const tbody = document.createElement('tbody');
+  const celulaEdit = (linha, campoNome, dica) => {
+    const td = document.createElement('td');
+    td.className = 'edit num';
+    const inp = moneyInput({
+      value: linha[campoNome] === null || linha[campoNome] === undefined ? 0 : linha[campoNome],
+      onSave: (v) => updateControleMes(cliente, ano, linha.mes, { [campoNome]: v }),
+    });
+    if (linha[campoNome] === null || linha[campoNome] === undefined) {
+      inp.value = '';
+      inp.placeholder = dica !== undefined && dica !== null ? money(dica) : '—';
+      if (dica !== undefined && dica !== null) inp.title = `Sugestão do sistema: ${money(dica)}. Digite o valor que o app da CAIXA mostra; a sugestão só orienta.`;
+    }
+    td.appendChild(inp);
+    return td;
+  };
+  const celulaCalc = (texto, cls = '') => {
+    const td = document.createElement('td');
+    td.className = `calc num ${cls}`.trim();
+    td.textContent = texto;
+    return td;
+  };
+  for (const l of calc.linhas) {
+    const tr = document.createElement('tr');
+    const tdMes = document.createElement('td');
+    tdMes.innerHTML = `<strong>${l.nome}</strong>`;
+    tr.appendChild(tdMes);
+    tr.appendChild(celulaEdit(l, 'evolucaoApp'));
+    tr.appendChild(celulaEdit(l, 'recebidoMes', sug.recebidoPorMes[l.mes]));
+    tr.appendChild(celulaEdit(l, 'saldoTotalApp'));
+    tr.appendChild(celulaCalc(l.acumuladoCalc === null ? '' : money(l.acumuladoCalc)));
+    tr.appendChild(celulaEdit(l, 'faturaMes', sug.faturaPorMes[l.mes]));
+    tr.appendChild(celulaCalc(l.diferenca === null ? '' : money(l.diferenca), l.diferenca !== null && Math.abs(l.diferenca) >= 0.01 ? 'diverge' : ''));
+    const st = document.createElement('td');
+    st.className = 'calc';
+    st.innerHTML = l.status ? `<span class="badge ${l.status === 'OK' ? 'green' : 'amber'}">${l.status}</span>` : '';
+    tr.appendChild(st);
+    tbody.appendChild(tr);
+  }
+  table.appendChild(tbody);
+  const tfoot = document.createElement('tfoot');
+  tfoot.innerHTML = `<tr>
+    <td>TOTAL / POSIÇÃO ANUAL</td>
+    <td class="num">${money(calc.totalEvolucao)}</td>
+    <td class="num">${money(calc.totalRecebido)}</td>
+    <td class="num">${calc.ultimoSaldo === null ? '—' : money(calc.ultimoSaldo)}</td>
+    <td class="num">${money(calc.totalRecebido)}</td>
+    <td class="num">${money(calc.totalFaturas)}</td>
+    <td class="num ${calc.diferencaAcumulada !== null && Math.abs(calc.diferencaAcumulada) >= 0.01 ? 'diverge' : ''}">${calc.diferencaAcumulada === null ? '—' : money(calc.diferencaAcumulada)}</td>
+    <td>${calc.statusGeral ? `<span class="badge ${calc.statusGeral === 'OK' ? 'green' : 'amber'}">${calc.statusGeral}</span>` : ''}</td>
+  </tr>`;
+  table.appendChild(tfoot);
+  wrap.appendChild(table);
+  panel.appendChild(wrap);
+
+  // Resumo anual
+  const resumo = document.createElement('div');
+  resumo.className = 'cards-grid controle-resumo';
+  const cardR = (rotulo, valor, sub, cls = '') => `<div class="card ${cls}"><div class="card-label">${rotulo}</div><div class="card-value">${valor}</div>${sub ? `<div class="card-sub">${sub}</div>` : ''}</div>`;
+  resumo.innerHTML = [
+    cardR('Total da evolução de obra', money(calc.totalEvolucao), 'soma do que o app da CAIXA mostrou mês a mês'),
+    cardR('Total recebido da CAIXA', money(calc.totalRecebido), 'soma dos valores recebidos no ano'),
+    cardR('Último saldo total informado', calc.ultimoSaldo === null ? '—' : money(calc.ultimoSaldo), 'posição mais recente do app'),
+    cardR('Total das faturas', money(calc.totalFaturas), 'soma das faturas do ano'),
+    cardR('Diferença acumulada', calc.diferencaAcumulada === null ? '—' : money(calc.diferencaAcumulada), 'último saldo informado − total recebido', calc.diferencaAcumulada !== null && Math.abs(calc.diferencaAcumulada) >= 0.01 ? 'warn' : 'good'),
+    cardR('Status geral da conferência', calc.statusGeral ? `<span class="badge ${calc.statusGeral === 'OK' ? 'green' : 'amber'}" style="font-size:16px">${calc.statusGeral}</span>` : '<span class="muted">sem lançamento</span>', calc.statusGeral === 'VERIFICAR' ? 'Há divergência entre o saldo do app e a soma dos recebimentos — revise os lançamentos.' : 'OK quando o saldo do app bate com a soma dos recebimentos.', calc.statusGeral === 'VERIFICAR' ? 'warn' : (calc.statusGeral === 'OK' ? 'good' : '')),
+  ].join('');
+  panel.appendChild(resumo);
+
+  const rodape = document.createElement('div');
+  rodape.className = 'muted';
+  rodape.style.marginTop = '10px';
+  rodape.textContent = 'A diferença compara o saldo total informado no app com a soma dos valores recebidos no mês. Se aparecer “VERIFICAR”, revise os lançamentos.';
+  panel.appendChild(rodape);
+
+  root.appendChild(panel);
 }
 
 /* ==========================================================================
