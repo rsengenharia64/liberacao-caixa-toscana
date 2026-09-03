@@ -262,6 +262,13 @@
   .saldo-bloco .card-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
   .saldo-bloco .card-value { font-size: 28px; font-weight: 700; font-family: "IBM Plex Mono", monospace; line-height: 1.1; }
   .saldo-bloco .card-sub { font-size: 12px; color: var(--ink-soft); }
+  .saldo-ponte { display: flex; flex-direction: column; gap: 3px; font-size: 12px; margin-top: 4px; }
+  .saldo-ponte > div { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: baseline; }
+  .saldo-ponte > div em { grid-column: 1 / -1; font-style: normal; }
+  .saldo-ponte > div span { color: var(--ink-soft); }
+  .saldo-ponte > div strong { font-family: "IBM Plex Mono", monospace; text-align: right; }
+  .saldo-ponte > div.igual { border-top: 1px solid var(--border); padding-top: 3px; margin-top: 2px; font-weight: 700; }
+  .saldo-ponte > div.igual span { color: var(--ink); }
   .saldo-acoes { display: flex; flex-direction: column; gap: 6px; align-self: center; }
   .saldo-prox-select { font-size: 12px; padding: 2px 6px; margin-left: 4px; max-width: 220px; }
   .mov-entrada { color: var(--good); font-weight: 600; }
@@ -1935,6 +1942,18 @@ function renderSaldoContaGrid() {
   const periodos = buildQuinzenaPeriods(VIEW.meta?.dataInicio, VIEW.meta?.previsaoTermino).filter((p) => p.vencPlanejado >= r.marcoSaldoConta);
   const proxima = FILTRO_SALDO_CONTA_ATE || proximaQuinzena(periodos, hoje);
   const saldoProx = proxima ? saldoProjetadoEm(movs, proxima.vencPlanejado) : saldoHoje;
+  /* A ponte do saldo previsto: o que já está na conta, mais o que o CAIXA
+     ainda deve liberar via PLS até a quinzena escolhida, menos os custos
+     previstos das quinzenas até lá. É a visão rápida que o cliente precisa —
+     principalmente o valor da liberação PLS, que é o que muda o sinal. */
+  const ateData = proxima ? proxima.vencPlanejado : hoje;
+  const ate = movs.filter((m) => m.data <= ateData);
+  const ponte = {
+    realizadoAte: round2(ate.filter((m) => m.realizado).reduce((acc, m) => acc + (m.tipo === 'entrada' ? m.valor : -m.valor), 0)),
+    entradasPrev: round2(ate.filter((m) => !m.realizado && m.tipo === 'entrada').reduce((acc, m) => acc + m.valor, 0)),
+    saidasPrev: round2(ate.filter((m) => !m.realizado && m.tipo === 'saida').reduce((acc, m) => acc + m.valor, 0)),
+    plsPrevistas: (VIEW.liberacoesCaixa || []).filter((l) => l.status === 'PLANEJADO' && (l.data || '') >= r.marcoSaldoConta && (l.data || '') <= ateData).map((l) => ({ data: l.data, obs: l.obs, valor: Number(l.valor) || 0 })),
+  };
 
   const panel = document.createElement('div');
   panel.className = 'panel';
@@ -1952,9 +1971,14 @@ function renderSaldoContaGrid() {
         <div class="card-sub"><span class="mov-entrada">Entradas ${money(entradasReal)}</span> − <span class="mov-saida">Saídas ${money(saidasReal)}</span> · só o realizado</div>
       </div>
       <div class="saldo-bloco">
-        <div class="card-label">Saldo previsto em <span class="saldo-prox-slot"></span></div>
+        <div class="card-label">Saldo previsto em <span class="saldo-prox-slot"></span> <span class="saldo-prox-info"></span></div>
         <div class="card-value" style="color:${saldoProx < 0 ? 'var(--danger)' : 'var(--good)'}">${money(saldoProx)}</div>
-        <div class="card-sub">Realizado + o que está planejado até essa quinzena</div>
+        <div class="saldo-ponte">
+          <div><span>Saldo realizado</span><strong>${money(ponte.realizadoAte)}</strong></div>
+          <div class="mais"><span>+ Liberação CAIXA prevista (PLS)</span><strong class="mov-entrada">${money(ponte.entradasPrev)}</strong>${ponte.plsPrevistas.length ? `<em class="muted cf-sub">${ponte.plsPrevistas.map((l) => `${dateBR(l.data)}${l.obs ? ' · ' + esc(l.obs) : ''}: ${money(l.valor)}`).join(' · ')}</em>` : '<em class="muted cf-sub">nenhuma medição PLS planejada até essa quinzena — lance em Liberação PCI</em>'}</div>
+          <div class="menos"><span>− Custos previstos das quinzenas</span><strong class="mov-saida">${money(ponte.saidasPrev)}</strong></div>
+          <div class="igual"><span>= Saldo previsto</span><strong style="color:${saldoProx < 0 ? 'var(--danger)' : 'var(--good)'}">${money(saldoProx)}</strong></div>
+        </div>
       </div>
       <div class="saldo-acoes">
         <button type="button" class="btn small filter-control" data-acao="extrato-conta">Ver extrato</button>
@@ -1977,6 +2001,9 @@ function renderSaldoContaGrid() {
     renderPainel();
   };
   panel.querySelector('.saldo-prox-slot').appendChild(sel);
+  panel.querySelector('.saldo-prox-info').appendChild(makeInfoHost(
+    'Selecione o período: o sistema calcula o saldo previsto somando ao saldo realizado a liberação do CAIXA prevista via PLS até essa quinzena e descontando os custos previstos das quinzenas até lá. A liberação prevista vem das medições com status PLANEJADO na aba Liberação PCI; os custos, das quinzenas PLANEJADAS de Contas a Pagar.',
+  ));
 
   panel.querySelectorAll('[data-acao="extrato-conta"]').forEach((b) => { b.onclick = abrirExtratoConta; });
   panel.querySelector('[data-acao="imprimir-conta"]').onclick = () => { abrirExtratoConta(); setTimeout(() => window.print(), 300); };
