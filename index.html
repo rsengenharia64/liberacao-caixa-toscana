@@ -2374,14 +2374,16 @@ async function doSave() {
   }
 }
 
-function afterMutation() {
+function afterMutation({ livre = false } = {}) {
   // Com a sincronização automática ligada, a coluna "Cartão" das parcelas é
   // sempre derivada dos itens do Detalhamento FC — uma fonte só, sem briga.
   if (STATE.parametros.cartaoAutoSync) aplicarCartaoDerivado();
   STATE.updatedAt = new Date().toISOString();
   VIEW = recompute(STATE);
   renderAll();
-  if (READONLY) return;
+  // `livre`: lançamento de área aberta (Controle Mensal CAIXA), que o cliente
+  // preenche sem entrar com senha — grava mesmo em modo somente leitura.
+  if (READONLY && !livre) return;
   setStatus('saving');
   clearTimeout(saveTimer);
   saveTimer = setTimeout(doSave, SAVE_DEBOUNCE_MS);
@@ -3411,6 +3413,8 @@ function renderAll() {
     // por quinzena/mês, "até qual quinzena" do saldo em conta, checklist de
     // "Custo total do período"), que só mudam a visualização, não os dados.
     document.querySelectorAll('#app input:not(.filter-control), #app select:not(.filter-control), #app textarea, #app button:not(.filter-control)').forEach((el) => { el.disabled = true; });
+    // O Controle Mensal CAIXA é área do cliente: fica livre, sem senha.
+    document.querySelectorAll('#tab-controle-caixa input, #tab-controle-caixa select, #tab-controle-caixa button').forEach((el) => { el.disabled = false; });
   }
 }
 
@@ -4766,8 +4770,8 @@ function renderAvisoRascunho() {
     : '';
   const topo = document.createElement('div');
   topo.className = 'conf-topo';
-  topo.innerHTML = `<div><div class="conf-titulo">Você está vendo um rascunho local${quando}, não a versão publicada</div>
-    <div class="conf-texto">Este rascunho ficou guardado neste navegador quando alguém entrou para lançar dados e não chegou a publicar. Enquanto ele estiver em uso, correções feitas na versão publicada podem não aparecer na tela. Descartar não apaga nada do que já foi publicado.</div></div>`;
+  topo.innerHTML = `<div><div class="conf-titulo">Este navegador guarda lançamentos próprios${quando}</div>
+    <div class="conf-texto">Lançamentos feitos aqui (Controle Mensal CAIXA, ou edições de quem entrou para lançar e não publicou) ficam guardados neste navegador, por cima da versão publicada. Enquanto isso, correções feitas na versão publicada podem não aparecer nesta tela. Descartar apaga só o que está neste navegador — nada do que já foi publicado.</div></div>`;
   const btn = document.createElement('button');
   btn.type = 'button';
   btn.className = 'btn primary small';
@@ -6370,7 +6374,7 @@ function updateControleMes(cliente, ano, mes, patch) {
     const v = patch[c];
     reg[c] = (v === null || v === '' || Number.isNaN(Number(v))) ? null : round2(Number(v));
   }
-  afterMutation();
+  afterMutation({ livre: true });
 }
 
 function updateControleCliente(cliente, patch) {
@@ -6378,7 +6382,7 @@ function updateControleCliente(cliente, patch) {
   const reg = STATE.controleMensalCaixa[cliente];
   if (patch.contratoCaixa !== undefined) reg.contratoCaixa = String(patch.contratoCaixa || '');
   if (patch.responsavel !== undefined) reg.responsavel = String(patch.responsavel || '');
-  afterMutation();
+  afterMutation({ livre: true });
 }
 
 /* Cálculo da folha — espelha, coluna por coluna, as fórmulas da planilha de
@@ -6446,7 +6450,7 @@ function renderControleCaixa() {
     <div class="panel-header">
       <div>
         <h2>Controle Mensal CAIXA — lançamento do cliente</h2>
-        <div class="muted">Controle anual da evolução de obra, liberações da CAIXA e faturas. Preencha somente as células amarelas; as cinzas o sistema calcula. Os lançamentos ficam guardados por cliente e por ano.</div>
+        <div class="muted">Controle anual da evolução de obra, liberações da CAIXA e faturas. Preencha somente as células amarelas; as cinzas o sistema calcula. Os lançamentos ficam guardados por cliente e por ano. <strong>Esta aba é livre: não pede senha para lançar.</strong></div>
       </div>
     </div>
   `;
@@ -7454,7 +7458,9 @@ migrarMesFaturaDaPlanilha();
 migrarItensCartaoSemVinculo();
 migrarBaseAdm();
 SESSAO = lerSessao();
-if (SESSAO) restaurarRascunhoLocal();
+// O rascunho deste navegador é restaurado com ou sem sessão: o cliente lança
+// o Controle Mensal CAIXA sem senha e precisa reencontrar o que digitou.
+restaurarRascunhoLocal();
 // Com a sincronização automática ligada, a coluna Cartão já entra derivada
 // dos itens do Detalhamento na primeira renderização, sem esperar por uma
 // edição. Roda depois do rascunho para valer sobre o estado que será exibido;
