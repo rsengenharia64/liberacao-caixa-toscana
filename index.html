@@ -1139,10 +1139,21 @@ function calcularViabilidade(ctx) {
   // Uma rubrica de custo. `projetado` é o que a operação vai custar de fato
   // nessa linha: o realizado mais o que ainda falta do orçado; se já se
   // gastou mais que o orçado, o excedente também é custo (não some).
-  const rubrica = (id, nome, orcado, realizado, comprometido, origem, nota) => {
+  const rubrica = (id, nome, orcado, realizado, comprometido, origem, nota, banca) => {
     const o = round2(orcado), r = round2(realizado), c = round2(comprometido || 0);
     const projetado = round2(Math.max(o, r + c));
-    return { id, nome, orcado: o, realizado: r, comprometido: c, aFaturar: round2(Math.max(0, projetado - r - c)), projetado, excedente: round2(Math.max(0, r + c - o)), origem, nota: nota || '' };
+    // Quem banca a rubrica: o financiamento CAIXA só paga o que está no
+    // contrato dele (o lote e a construção, pela evolução de obra). Multa,
+    // administração, projetos/ITBI, CND e o custo financeiro saem do bolso.
+    const porCaixa = round2(Math.min(projetado, Math.max(0, Number(banca) || 0)));
+    return {
+      id, nome, orcado: o, realizado: r, comprometido: c,
+      aFaturar: round2(Math.max(0, projetado - r - c)),
+      projetado, excedente: round2(Math.max(0, r + c - o)),
+      porCaixa, porProprio: round2(projetado - porCaixa),
+      fonte: porCaixa >= projetado - 0.01 ? 'CAIXA' : (porCaixa > 0 ? 'CAIXA + próprio' : 'Recurso próprio'),
+      origem, nota: nota || '',
+    };
   };
 
   /* A. Aplicações — custo econômico ------------------------------------- */
@@ -1156,12 +1167,14 @@ function calcularViabilidade(ctx) {
   const rubricas = [
     rubrica('terreno', 'Terreno + multa de lote', custoTerreno + multaLote, loteRealizado, 0,
       'Parâmetros: custo do terreno e multa. Realizado = parte financiada pelo CAIXA (custo do lote executado) + entrada do lote paga com recurso próprio.',
-      entradaLote ? 'A entrada do lote vem da lista de consumos de recurso próprio.' : ''),
+      entradaLote ? 'A entrada do lote vem da lista de consumos de recurso próprio.' : '',
+      num(ctx.custoLoteExecutado)),
     rubrica('construcao', 'Construção — contrato empreiteiro', contrato,
       num(ctx.totalEmpreiteiroPago) + num(ctx.totalCartaoPago),
       num(ctx.totalEmpreiteiroPlanejado) + num(ctx.totalCartaoPlanejado),
       'Contrato total do empreiteiro. Realizado = PIX + cartão já pagos (Contas a Pagar); comprometido = quinzenas planejadas já lançadas.',
-      'Compras no cartão abatem o contrato — não são custo extra.'),
+      'Compras no cartão abatem o contrato — não são custo extra.',
+      num(p.financiamentoObraCaixa)),
     rubrica('administracao', 'Administração — taxa sobre a construção', contrato * taxaAdm,
       num(ctx.totalAdmPago), num(ctx.totalAdmPlanejado),
       'Taxa de administração × contrato. Realizado = coluna ADM das quinzenas realizadas.'),
@@ -1212,16 +1225,25 @@ function calcularViabilidade(ctx) {
   const etapaLote = (ctx.liberacaoPCI || []).find((e) => Number(e.etapa) === 1 || /lote/i.test(e.descricao || ''));
   const creditoLoteContratado = etapaLote ? num(etapaLote.valor) : 0;
   const loteNaoUtilizado = round2(Math.max(0, creditoLoteContratado - num(ctx.custoLoteExecutado)));
-  const creditoUtilizavel = round2(creditoContratado - loteNaoUtilizado);
   const creditoLiberado = num(ctx.caixaLiberadaAcumulada);
   const creditoUtilizado = round2(num(ctx.custoLoteExecutado) + num(ctx.saidasContaDesdeMarco));
   const creditoALiberar = round2(creditoContratado - creditoLiberado);
+  // Quanto do crédito CAIXA efetivamente banca o custo (soma do que cada
+  // rubrica pode receber do financiamento) e quanto do custo sobra para o
+  // bolso — é esta a conta da planilha de viabilidade.
+  const creditoAplicado = round2(sum(rubricas, (r) => r.porCaixa));
+  const creditoNaoAplicado = round2(creditoContratado - creditoAplicado);
   const capitalProprioPlanejado = num(ctx.recursoProprioPlanejado);
   const capitalProprioAportado = round2(num(ctx.totalConsumoRecursoProprio));
-  const capitalProprioNecessario = round2(Math.max(0, custoEconomicoProjetado - creditoUtilizavel));
+  const capitalProprioNecessario = round2(sum(rubricas, (r) => r.porProprio));
   const capitalProprioAindaNecessario = round2(Math.max(0, capitalProprioNecessario - capitalProprioAportado));
-  const fontesDisponiveis = round2(creditoUtilizavel + capitalProprioPlanejado);
+  const fontesDisponiveis = round2(creditoContratado + capitalProprioPlanejado);
   const conciliacao = round2(fontesDisponiveis - custoEconomicoProjetado);
+  // Contingência: fonte contratada que o custo projetado NÃO consome. Não é
+  // custo, não é lucro — é folga. Separada em folga do banco e folga própria.
+  const contingenciaPropria = round2(capitalProprioPlanejado - capitalProprioNecessario);
+  const contingenciaCaixa = creditoNaoAplicado;
+  const contingenciaTotal = round2(contingenciaCaixa + contingenciaPropria);
   const reservaGiro = num(p.reservaGiro);
 
   /* C. Fluxo de caixa (realizado) ---------------------------------------- */
@@ -1266,12 +1288,16 @@ function calcularViabilidade(ctx) {
     roiBrutoCapitalProprio: div(resultadoBruto, capitalProprioNecessario),
     roiEmpreendimentoCapitalProprio: div(lucroLiquido, capitalProprioNecessario),
     roiInvestidor: div(resultadoInvestidor, capitalProprioNecessario),
+    roiInvestidorSobrePlanejado: div(resultadoInvestidor, capitalProprioPlanejado),
     fontes: {
-      creditoContratado, creditoLoteContratado, loteNaoUtilizado, creditoUtilizavel,
+      creditoContratado, creditoLoteContratado, loteNaoUtilizado,
+      creditoAplicado, creditoNaoAplicado,
       creditoLiberado, creditoUtilizado, creditoALiberar,
       capitalProprioPlanejado, capitalProprioAportado, capitalProprioNecessario, capitalProprioAindaNecessario,
       fontesDisponiveis, conciliacao, reservaGiro,
-      participacaoFinanciamento: div(Math.min(creditoUtilizavel, custoEconomicoProjetado), custoEconomicoProjetado),
+      contingenciaCaixa, contingenciaPropria, contingenciaTotal,
+      financiamentoObraCaixa: num(p.financiamentoObraCaixa),
+      participacaoFinanciamento: div(creditoAplicado, custoEconomicoProjetado),
       participacaoCapitalProprio: div(capitalProprioNecessario, custoEconomicoProjetado),
     },
     fluxo,
@@ -4503,6 +4529,7 @@ const DRILLS = {
   caixaLiberado: () => abrirExtratoCaixaLiberado(),
   verbaDisponivel: () => abrirExtratoVerbaDisponivel(),
   viabilidade: () => abrirExtratoViabilidade(),
+  pagoDireto: () => abrirExtratoPagoDireto(),
 };
 
 function ligarDrills(root) {
@@ -4560,9 +4587,10 @@ function abrirExtratoViabilidade(secaoInicial = null) {
       card('Lucro líquido do empreendimento', money(v.lucroLiquido), 'após corretagem e IR', cls(v.lucroLiquido)),
       card('Margem líquida sobre VGV', pct(v.margemLiquidaSobreVgv), 'lucro líquido ÷ VGV', cls(v.lucroLiquido)),
       card('Retorno líquido sobre custo', pct(v.retornoLiquidoSobreCusto), 'lucro líquido ÷ custo econômico', cls(v.lucroLiquido)),
-      card('Capital próprio necessário', money(f.capitalProprioNecessario), `aportado ${money(f.capitalProprioAportado)} · falta ${money(f.capitalProprioAindaNecessario)}`),
+      card('Capital próprio necessário', money(f.capitalProprioNecessario), `custo que o financiamento não banca · aportado ${money(f.capitalProprioAportado)} · falta ${money(f.capitalProprioAindaNecessario)}`),
       card('ROI líquido do investidor', pct(v.roiInvestidor), `resultado do investidor ${money(v.resultadoInvestidor)} ÷ capital próprio necessário`, cls(v.resultadoInvestidor)),
-      card('Financiamento × capital próprio', `${pct(f.participacaoFinanciamento)} · ${pct(f.participacaoCapitalProprio)}`, `do custo econômico: CAIXA ${money(Math.min(f.creditoUtilizavel, v.custoEconomicoProjetado))} · próprio ${money(f.capitalProprioNecessario)}`),
+      card('Financiamento × capital próprio', `${pct(f.participacaoFinanciamento)} · ${pct(f.participacaoCapitalProprio)}`, `do custo econômico: CAIXA ${money(f.creditoAplicado)} · próprio ${money(f.capitalProprioNecessario)}`),
+      card('Verba de contingência', money(f.contingenciaTotal), `fonte contratada que o custo não consome — CAIXA ${money(f.contingenciaCaixa)} + próprio ${money(f.contingenciaPropria)}. Não é custo nem lucro.`, f.contingenciaTotal < 0 ? 'ruim' : ''),
     ].join('');
     body.appendChild(painel);
 
@@ -4579,19 +4607,21 @@ function abrirExtratoViabilidade(secaoInicial = null) {
     /* A. DRE — resultado econômico ---------------------------------------- */
     const linhasRubricas = v.rubricas.map((rb) => `
       <tr>
-        <td title="${esc(rb.origem)}${rb.nota ? ' ' + esc(rb.nota) : ''}">${esc(rb.nome)}${rb.id === 'administracao' ? ` <span class="muted">(${pct(v.taxaAdm)})</span>` : ''}</td>
+        <td title="${esc(rb.origem)}${rb.nota ? ' ' + esc(rb.nota) : ''}"><button type="button" class="value-drill tiny filter-control" data-rubrica="${rb.id}" title="Clique para ver o extrato — de onde sai esse número"><span class="drill-value">${esc(rb.nome)}${rb.id === 'administracao' ? ` (${pct(v.taxaAdm)})` : ''}</span><span class="drill-hint">extrato</span></button></td>
         <td class="num">${money(rb.orcado)}</td>
         <td class="num">${money(rb.realizado)}</td>
         <td class="num">${rb.comprometido ? money(rb.comprometido) : '—'}</td>
         <td class="num">${rb.aFaturar ? money(rb.aFaturar) : '—'}</td>
         <td class="num"><strong>${money(rb.projetado)}</strong>${rb.excedente ? ` <span class="muted" title="Gasto acima do orçado — entra no custo, não some.">(+${money(rb.excedente)})</span>` : ''}</td>
+        <td class="num" title="Quanto desta rubrica o financiamento CAIXA banca e quanto sai do bolso.">${rb.porCaixa ? money(rb.porCaixa) : '—'}</td>
+        <td class="num">${rb.porProprio ? money(rb.porProprio) : '—'}</td>
       </tr>`).join('');
     const dre = `
-      <div class="muted viab-explica">Cada despesa aparece <strong>uma vez</strong> e só muda de status: orçado → comprometido (quinzena planejada já lançada) → realizado. <strong>Projetado = realizado + o que ainda falta do orçado</strong>; se o realizado passar do orçado, o excedente entra. Principal do financiamento, liberações CAIXA, aportes próprios e saldos <strong>não são custo</strong> e não aparecem aqui.</div>
+      <div class="muted viab-explica"><strong>DRE — Demonstração do Resultado.</strong> Mede o <em>resultado econômico</em> do empreendimento: o que ele custa e o que sobra na venda, independentemente de quando o dinheiro entra ou sai (isso é o DFC, no bloco C). Cada despesa aparece <strong>uma vez</strong> e só muda de status: orçado → comprometido (quinzena planejada já lançada) → realizado. <strong>Projetado = realizado + o que ainda falta do orçado</strong>; se o realizado passar do orçado, o excedente entra. Principal do financiamento, liberações CAIXA, aportes próprios e saldos <strong>não são custo</strong> e não aparecem aqui.</div>
       <div class="table-scroll"><table class="extrato-table viab-dre">
-        <thead><tr><th>Rubrica</th><th class="num">Orçado</th><th class="num">Realizado</th><th class="num">Comprometido</th><th class="num">A incorrer</th><th class="num">Projetado</th></tr></thead>
+        <thead><tr><th>Rubrica</th><th class="num">Orçado</th><th class="num">Realizado</th><th class="num">Comprometido</th><th class="num">A incorrer</th><th class="num">Projetado</th><th class="num">Bancado pelo CAIXA</th><th class="num">Recurso próprio</th></tr></thead>
         <tbody>${linhasRubricas}
-          <tr class="extrato-residuo"><td><strong>Custo econômico total</strong></td><td class="num"><strong>${money(v.custoEconomicoOrcado)}</strong></td><td class="num"><strong>${money(v.custoEconomicoRealizado)}</strong></td><td class="num"><strong>${money(v.custoEconomicoComprometido)}</strong></td><td class="num"><strong>${money(v.custoEconomicoProjetado - v.custoEconomicoRealizado - v.custoEconomicoComprometido)}</strong></td><td class="num"><strong>${money(v.custoEconomicoProjetado)}</strong></td></tr>
+          <tr class="extrato-residuo"><td><strong>Custo econômico total</strong></td><td class="num"><strong>${money(v.custoEconomicoOrcado)}</strong></td><td class="num"><strong>${money(v.custoEconomicoRealizado)}</strong></td><td class="num"><strong>${money(v.custoEconomicoComprometido)}</strong></td><td class="num"><strong>${money(v.custoEconomicoProjetado - v.custoEconomicoRealizado - v.custoEconomicoComprometido)}</strong></td><td class="num"><strong>${money(v.custoEconomicoProjetado)}</strong></td><td class="num"><strong>${money(f.creditoAplicado)}</strong></td><td class="num"><strong>${money(f.capitalProprioNecessario)}</strong></td></tr>
         </tbody></table></div>
       <div class="table-scroll" style="margin-top:8px"><table class="extrato-table"><tbody>
         ${grupo('Resultado da operação — ' + cenarioRotulo)}
@@ -4610,39 +4640,53 @@ function abrirExtratoViabilidade(secaoInicial = null) {
         ${linha(`ROI do investidor sobre capital próprio necessário de ${money(f.capitalProprioNecessario)}`, 0, { sub: true, raw: `<strong>${pct(v.roiInvestidor)}</strong>` })}
         ${linha('ROI do empreendimento (lucro líquido ÷ capital próprio necessário)', 0, { sub: true, raw: pct(v.roiEmpreendimentoCapitalProprio) })}
       </tbody></table></div>`;
-    secao('dre', 'A · DRE — resultado econômico', dre, abrir('dre', true));
+    const secDre = secao('dre', 'A · DRE — Demonstração do Resultado (econômico)', dre, abrir('dre', true));
+    secDre.querySelectorAll('[data-rubrica]').forEach((btn) => { btn.onclick = () => abrirExtratoRubrica(btn.dataset.rubrica); });
 
     /* B. Fontes e aplicações ---------------------------------------------- */
-    const concl = f.conciliacao >= 0
-      ? `<strong>Recursos ainda não aplicados: ${money(f.conciliacao)}</strong> — sobra de fonte sobre o custo projetado. Não é custo e não entra no resultado.`
-      : `<strong>Necessidade adicional de recursos: ${money(-f.conciliacao)}</strong> — as fontes planejadas não cobrem o custo projetado.`;
+    const conclTexto = f.conciliacao >= 0
+      ? `<strong>Verba de contingência: ${money(f.contingenciaTotal)}</strong> — é a fonte contratada que o custo projetado não consome (${money(f.contingenciaCaixa)} de crédito CAIXA + ${money(f.contingenciaPropria)} de recurso próprio). <strong>Não é custo e não é lucro</strong>: é folga para imprevistos, aditivos e atrasos. Some-a ao custo e o resultado fica errado — foi exatamente isso que a versão anterior fazia ao chamar ${money(f.fontesDisponiveis)} de "custo total".`
+      : `<strong>Necessidade adicional de recursos: ${money(-f.conciliacao)}</strong> — as fontes contratadas não cobrem o custo projetado. Não há contingência.`;
     const fontes = `
-      <div class="muted viab-explica">Fontes são de onde o dinheiro vem; aplicações, para onde ele vai. Somar as duas é contar o mesmo real duas vezes — por isso o custo NÃO é "CAIXA + capital próprio".</div>
-      <div class="table-scroll"><table class="extrato-table"><tbody>
-        ${grupo('Fontes — financiamento CAIXA (principal)')}
+      <div class="muted viab-explica"><strong>Fontes × Aplicações.</strong> Fonte é de onde o dinheiro vem (financiamento e capital próprio); aplicação é o custo econômico do bloco A. Somar as duas é contar o mesmo real duas vezes — por isso o custo NÃO é "CAIXA + capital próprio". O financiamento só banca o que está no contrato dele: o <strong>lote</strong> e a <strong>construção</strong> (evolução de obra). Administração, projetos/ITBI, CND, multa e o custo financeiro saem do <strong>bolso</strong>.</div>
+      <div class="table-scroll"><table class="extrato-table">
+        <thead><tr><th>Aplicação (rubrica)</th><th class="num">Projetado</th><th class="num">CAIXA banca</th><th class="num">Recurso próprio</th><th>Por quê</th></tr></thead>
+        <tbody>
+          ${v.rubricas.map((rb) => `<tr>
+            <td>${esc(rb.nome)}</td>
+            <td class="num">${money(rb.projetado)}</td>
+            <td class="num">${rb.porCaixa ? money(rb.porCaixa) : '—'}</td>
+            <td class="num">${rb.porProprio ? money(rb.porProprio) : '—'}</td>
+            <td class="muted">${rb.id === 'terreno' ? 'CAIXA financia a etapa 1 (lote); a entrada é própria' : rb.id === 'construcao' ? `evolução de obra, limitada ao financiamento de obra de ${money(f.financiamentoObraCaixa)}` : 'fora do contrato de financiamento'}</td>
+          </tr>`).join('')}
+          <tr class="extrato-residuo"><td><strong>Custo econômico total</strong></td><td class="num"><strong>${money(v.custoEconomicoProjetado)}</strong></td><td class="num"><strong>${money(f.creditoAplicado)}</strong></td><td class="num"><strong>${money(f.capitalProprioNecessario)}</strong></td><td class="muted">${pct(f.participacaoFinanciamento)} · ${pct(f.participacaoCapitalProprio)}</td></tr>
+        </tbody></table></div>
+      <div class="table-scroll" style="margin-top:8px"><table class="extrato-table"><tbody>
+        ${grupo('Fonte 1 — financiamento CAIXA (principal, nunca custo)')}
         ${linha('Crédito contratado (PCI)', f.creditoContratado)}
-        ${linha(`Parte do lote não utilizada <span class="muted">(etapa 1: ${money(f.creditoLoteContratado)} contratados, ${money(f.creditoLoteContratado - f.loteNaoUtilizado)} executados)</span>`, f.loteNaoUtilizado, { neg: true, sub: true })}
-        ${linha('Crédito utilizável', f.creditoUtilizavel, { classe: 'extrato-residuo' })}
-        ${linha('Já liberado pelo banco (lote + medições realizadas)', f.creditoLiberado, { sub: true })}
+        ${linha('Aplicado no custo (lote + construção)', f.creditoAplicado, { sub: true })}
+        ${linha('<strong>Contingência do financiamento (contratado − aplicado)</strong>', f.contingenciaCaixa, { classe: 'extrato-residuo' })}
+        ${linha(`Já liberado pelo banco <span class="muted">(lote ${money(f.creditoLoteContratado - f.loteNaoUtilizado)} + medições)</span>`, f.creditoLiberado, { sub: true })}
         ${linha('Já utilizado (lote + saídas da conta desde o marco)', f.creditoUtilizado, { sub: true })}
         ${linha('Saldo a liberar', f.creditoALiberar, { sub: true })}
-        ${grupo('Fontes — capital próprio')}
+        ${grupo('Fonte 2 — capital próprio')}
         ${linha('Planejado (Parâmetros)', f.capitalProprioPlanejado)}
+        ${linha('<strong>Necessário = custo que o financiamento não banca</strong>', f.capitalProprioNecessario, { classe: 'extrato-residuo' })}
         ${linha('Aportado até hoje (lista de consumos de recurso próprio)', f.capitalProprioAportado, { sub: true })}
-        ${linha('Efetivamente necessário = custo econômico − crédito utilizável', f.capitalProprioNecessario, { classe: 'extrato-residuo' })}
-        ${linha('Ainda necessário (necessário − aportado)', f.capitalProprioAindaNecessario, { sub: true })}
-        ${f.reservaGiro ? linha('Reserva de giro (apoio a atrasos — fonte, não custo)', f.reservaGiro, { sub: true }) : ''}
+        ${linha('Ainda a aportar (necessário − aportado)', f.capitalProprioAindaNecessario, { sub: true })}
+        ${linha('<strong>Contingência própria (planejado − necessário)</strong>', f.contingenciaPropria, { classe: 'extrato-residuo' })}
+        ${f.reservaGiro ? linha('Reserva de giro para atrasos (premissa, fora do custo)', f.reservaGiro, { sub: true }) : ''}
         ${grupo('Conciliação fontes × aplicações')}
-        ${linha('Fontes disponíveis (crédito utilizável + capital próprio planejado)', f.fontesDisponiveis)}
+        ${linha('Fontes contratadas (crédito CAIXA + capital próprio planejado)', f.fontesDisponiveis)}
         ${linha('Aplicações previstas (custo econômico total projetado)', v.custoEconomicoProjetado, { neg: true })}
-        ${linha(f.conciliacao >= 0 ? '<strong>Recursos ainda não aplicados</strong>' : '<strong>Necessidade adicional de recursos</strong>', f.conciliacao, { classe: 'extrato-residuo' })}
+        ${linha(f.conciliacao >= 0 ? '<strong>Verba de contingência (não aplicada)</strong>' : '<strong>Necessidade adicional de recursos</strong>', f.conciliacao, { classe: 'extrato-residuo' })}
       </tbody></table></div>
-      <div class="muted viab-explica">${concl}</div>`;
-    secao('fontes', 'B · Fontes e aplicações', fontes, abrir('fontes', false));
+      <div class="muted viab-explica">${conclTexto}</div>`;
+    secao('fontes', 'B · Fontes e Aplicações (origens e aplicações de recursos)', fontes, abrir('fontes', false));
 
     /* C. Fluxo de caixa ---------------------------------------------------- */
     const fluxo = `
-      <div class="muted viab-explica">Liberação CAIXA e aporte próprio são <strong>entradas de caixa</strong>, não receita. Pagar fornecedor é <strong>saída de caixa</strong> e baixa da obrigação — o custo já estava reconhecido na DRE. Principal financiado é passivo; só juros, seguro e tarifas são custo financeiro.</div>
+      <div class="muted viab-explica"><strong>DFC — Demonstrativo de Fluxo de Caixa.</strong> Mostra <em>dinheiro entrando e saindo</em> da obra, na data em que acontece — é diferente da DRE (bloco A), que mede resultado econômico. Um mesmo real pode aparecer como custo na DRE num mês e como saída no DFC em outro; e há movimentos que só existem aqui: liberação CAIXA e aporte próprio são <strong>entradas de caixa</strong>, nunca receita. Pagar fornecedor é <strong>saída de caixa</strong> e baixa de obrigação — não cria custo novo, ele já foi reconhecido na DRE. Principal financiado é passivo (fonte); só juros, seguro e tarifas são custo financeiro.</div>
       <div class="table-scroll"><table class="extrato-table"><tbody>
         ${grupo('Entradas realizadas')}
         ${linha('CAIXA — lote (etapa 1)', fx.entradaCaixaLote)}
@@ -4652,32 +4696,47 @@ function abrirExtratoViabilidade(secaoInicial = null) {
         ${grupo('Saídas realizadas')}
         ${linha('Terreno + multa (entrada própria + parte financiada)', fx.saidaLote)}
         ${linha('Quinzenas realizadas — Contas a Pagar (PIX, cartão, ADM, evolução)', fx.saidaQuinzenas)}
-        ${linha('Pagos direto pelo proprietário (projetos, registros, ITBI)', fx.saidaPagoDireto)}
+        ${linha('<button type="button" class="value-drill tiny filter-control" data-drill="pagoDireto" title="Clique para ver o extrato — item a item"><span class="drill-value">Pagos direto pelo proprietário (projetos, registros, ITBI)</span><span class="drill-hint">extrato</span></button>', fx.saidaPagoDireto)}
         ${linha('<strong>Total de saídas</strong>', fx.saidas, { classe: 'extrato-residuo' })}
         ${grupo('Posição')}
         ${linha('Entradas − saídas (teórico)', fx.saldo)}
         ${linha(`Saldo em conta realizado <span class="muted">(desde ${dateBR(r.marcoSaldoConta)})</span>`, fx.saldoContaRealizado)}
         ${linha('Diferença a conciliar <span class="muted">(pagamentos com recurso próprio ainda não registrados como aporte, ou vice-versa)</span>', fx.diferencaConciliar, { sub: true })}
       </tbody></table></div>`;
-    secao('fluxo', 'C · Fluxo de caixa (realizado)', fluxo, abrir('fluxo', false));
+    ligarDrills(secao('fluxo', 'C · DFC — Demonstrativo de Fluxo de Caixa (realizado)', fluxo, abrir('fluxo', false)));
 
     /* D. Conciliação / auditoria financeira -------------------------------- */
+    const L0 = v.legado;
     const alertas = [];
     if (v.sobreposicaoPagoDireto > 0) alertas.push(`Categorias pagas direto pelo proprietário somam <strong>${money(v.sobreposicaoPagoDireto)}</strong> de orçado <em>dentro</em> do contrato do empreiteiro e também aparecem em "Projetos/ITBI". Se o empreiteiro não cobrar essa parte, o custo de construção projetado cai nesse valor — confirmar com o contrato. Nada foi ajustado.`);
     if (fx.ajustesManuaisQuinzenas) alertas.push(`Quinzenas com "Custo total" ajustado manualmente diferem em <strong>${money(Math.abs(fx.ajustesManuaisQuinzenas))}</strong> da soma dos componentes (PIX + cartão + ADM + evolução). O fluxo usa o valor ajustado, a DRE usa os componentes — ver Demonstrativo (Junho/1ª, Agosto/1ª).`);
     if (Math.abs(fx.diferencaConciliar) > 0.01) alertas.push(`Saldo em conta (${money(fx.saldoContaRealizado)}) difere do teórico entradas − saídas (${money(fx.saldo)}) em <strong>${money(Math.abs(fx.diferencaConciliar))}</strong>: pagamentos feitos antes do marco com recurso próprio que não estão na lista de aportes (ex.: cartão e ADM de Maio/Junho). Registre-os em Parâmetros › Consumos de recurso próprio para zerar.`);
-    if (f.loteNaoUtilizado > 0) alertas.push(`Etapa 1 do PCI (lote) contratada em ${money(f.creditoLoteContratado)}, executada em ${money(f.creditoLoteContratado - f.loteNaoUtilizado)}: <strong>${money(f.loteNaoUtilizado)}</strong> não contam como fonte utilizável até o banco confirmar a liberação.`);
+    if (f.contingenciaPropria < 0) alertas.push(`O capital próprio planejado (${money(f.capitalProprioPlanejado)}) é <strong>menor</strong> que o necessário (${money(f.capitalProprioNecessario)}): faltam ${money(-f.contingenciaPropria)}. Reveja as premissas ou o aporte planejado.`);
+    if (f.loteNaoUtilizado > 0) alertas.push(`Etapa 1 do PCI (lote) contratada em ${money(f.creditoLoteContratado)}, executada em ${money(f.creditoLoteContratado - f.loteNaoUtilizado)}: <strong>${money(f.loteNaoUtilizado)}</strong> de crédito do lote não foram aplicados e compõem a verba de contingência do financiamento.`);
     for (const rb of v.rubricas) if (rb.excedente > 0) alertas.push(`"${esc(rb.nome)}" já passou do orçado em <strong>${money(rb.excedente)}</strong> — o excedente entrou no custo projetado.`);
     const audit = `
       <div class="table-scroll"><table class="extrato-table"><tbody>
+        ${grupo('Conciliação')}
         ${linha('Custo econômico total (projetado)', v.custoEconomicoProjetado)}
-        ${linha('Fontes totais disponíveis', f.fontesDisponiveis)}
-        ${linha('Crédito contratado', f.creditoContratado, { sub: true })}
-        ${linha('Crédito utilizado', f.creditoUtilizado, { sub: true })}
+        ${linha('Fontes totais contratadas', f.fontesDisponiveis)}
+        ${linha('Crédito CAIXA contratado', f.creditoContratado, { sub: true })}
+        ${linha('Crédito CAIXA aplicado no custo', f.creditoAplicado, { sub: true })}
+        ${linha('Crédito CAIXA já utilizado', f.creditoUtilizado, { sub: true })}
+        ${linha('Capital próprio necessário', f.capitalProprioNecessario, { sub: true })}
         ${linha('Capital próprio aportado', f.capitalProprioAportado, { sub: true })}
-        ${linha('Capital próprio ainda necessário', f.capitalProprioAindaNecessario, { sub: true })}
-        ${linha(f.conciliacao >= 0 ? '<strong>Recursos ainda não aplicados</strong>' : '<strong>Necessidade adicional de recursos</strong>', Math.abs(f.conciliacao), { classe: 'extrato-residuo' })}
+        ${linha('Capital próprio ainda a aportar', f.capitalProprioAindaNecessario, { sub: true })}
+        ${linha(f.conciliacao >= 0 ? '<strong>Verba de contingência (recursos não aplicados)</strong>' : '<strong>Necessidade adicional de recursos</strong>', f.conciliacao, { classe: 'extrato-residuo' })}
+        ${grupo('Rastreamento do valor antigo — de onde vinham os ' + money(L0.investimentoTotal))}
+        ${linha('Crédito CAIXA contratado (PCI) — <em>fonte</em>, contava como custo', f.creditoContratado)}
+        ${linha('Recurso próprio planejado — <em>fonte</em>, contava como custo', f.capitalProprioPlanejado)}
+        ${linha('Custos financeiros avulsos (parâmetro)', Number(VIEW.parametros.custosFinanceiros) || 0)}
+        ${linha('<strong>Total antigo, chamado de "custo total da operação"</strong>', L0.investimentoTotal, { classe: 'extrato-residuo' })}
+        ${linha('Custo econômico real (base de custos da planilha)', v.custoEconomicoProjetado, { neg: true })}
+        ${linha('<strong>Diferença = verba de contingência que virava custo</strong>', f.contingenciaTotal, { classe: 'extrato-residuo' })}
+        ${linha('… crédito CAIXA contratado e não aplicado no custo', f.contingenciaCaixa, { sub: true })}
+        ${linha('… capital próprio planejado acima do necessário', f.contingenciaPropria, { sub: true })}
       </tbody></table></div>
+      <div class="muted viab-explica">A duplicidade era estrutural, não um erro de digitação: o custo era a <strong>soma das fontes</strong>. Corrigido na origem — o custo passou a ser a soma das aplicações econômicas, e a folga de ${money(f.contingenciaTotal)} foi reclassificada como <strong>verba de contingência</strong> (fonte não aplicada), fora do resultado. Nenhum lançamento foi alterado.</div>
       ${alertas.length ? `<ul class="viab-alertas">${alertas.map((a) => `<li>${a}</li>`).join('')}</ul>` : '<div class="muted viab-explica">Nenhuma divergência encontrada.</div>'}`;
     secao('auditoria', `D · Conciliação / auditoria financeira${alertas.length ? ` <span class="viab-badge">${alertas.length}</span>` : ''}`, audit, abrir('auditoria', false));
 
@@ -4707,8 +4766,9 @@ function abrirExtratoViabilidade(secaoInicial = null) {
           ${rowA('Margem líquida sobre VGV', 'lucro ÷ VGV (não exibida)', 'lucro líquido ÷ VGV', pct(v.vgvAtual ? antigo.lucro / v.vgvAtual : 0), pct(v.margemLiquidaSobreVgv), 'calculado')}
           ${rowA('Retorno líquido sobre custo', 'lucro ÷ (PCI + RP)', 'lucro líquido ÷ custo econômico', pct(L.investimentoTotal ? antigo.lucro / L.investimentoTotal : 0), pct(v.retornoLiquidoSobreCusto), 'calculado')}
           ${rowA('Participação do incorporador', '— (não existia)', 'valor fixo ou % do lucro líquido (Parâmetros)', '—', money(v.participacaoIncorporador), 'planilha de viabilidade')}
-          ${rowA('ROI líquido sobre capital próprio', 'lucro líquido ÷ recurso próprio <em>planejado</em>', 'resultado do <em>investidor</em> ÷ capital próprio <em>efetivamente necessário</em> (custo − crédito utilizável)', pct(antigo.roi), pct(v.roiInvestidor), 'calculado')}
-          ${rowA('Capital próprio necessário', '— (usava o planejado ' + money(f.capitalProprioPlanejado) + ')', 'custo econômico − crédito CAIXA utilizável', money(f.capitalProprioPlanejado), money(f.capitalProprioNecessario), 'PCI + parâmetros')}
+          ${rowA('ROI líquido sobre capital próprio', 'lucro líquido ÷ recurso próprio <em>planejado</em>', 'resultado do <em>investidor</em> ÷ capital próprio <em>efetivamente necessário</em>', pct(antigo.roi), pct(v.roiInvestidor), `calculado — sobre o planejado de ${money(f.capitalProprioPlanejado)} daria ${pct(v.roiInvestidorSobrePlanejado)}`)}
+          ${rowA('Capital próprio necessário', '— (usava o planejado ' + money(f.capitalProprioPlanejado) + ')', 'soma do que o financiamento NÃO banca por rubrica (multa, ADM, projetos/ITBI, CND, custo financeiro e a entrada do lote)', money(f.capitalProprioPlanejado), money(f.capitalProprioNecessario), 'Rubricas da DRE + contrato de financiamento — confere com a planilha de viabilidade')}
+          ${rowA('Verba de contingência', '— (não existia: virava custo)', 'fontes contratadas − custo econômico, separada em folga do banco e folga própria', '—', money(f.contingenciaTotal), 'calculado')}
           ${rowA('Custo financeiro da evolução', 'parâmetro avulso, zerado; principal e juros misturados na explicação', 'rubrica própria: projetado ' + money(v.rubricas.find((x) => x.id === 'financeiro')?.orcado || 0) + ', realizado pela coluna Evolução CAIXA; principal fora do custo', money(Number(VIEW.parametros.custosFinanceiros) || 0), money(v.rubricas.find((x) => x.id === 'financeiro')?.projetado || 0), 'Parâmetros + Contas a Pagar')}
         </tbody></table></div>`;
     secao('comparacao', 'E · Auditoria da correção — regra anterior × nova', comparacao, abrir('comparacao', false));
@@ -4829,6 +4889,126 @@ function abrirExtratoCaixaLiberado() {
 // item que já a consumiu (as parcelas bancadas com capital próprio, a entrada
 // do lote, os serviços pagos direto pelo proprietário), o total consumido e o
 // que ainda sobra. É a mesma lista editável de Parâmetros, aqui só de leitura.
+/* Extrato dos gastos pagos DIRETO pelo proprietário (categorias marcadas
+   "pago direto" no Detalhamento FC — hoje, Serviços Preliminares: projetos,
+   registros, ITBI). É o número que aparece como "Projetos, registros e ITBI"
+   na viabilidade, como consumo de recurso próprio e dentro do gasto
+   acumulado. Item a item, com orçado × realizado. */
+function abrirExtratoPagoDireto() {
+  const cats = (VIEW.categorias || []).filter((c) => c.pagoDiretoProprietario);
+  const v = VIEW.resumo.viabilidade || {};
+  const rb = (v.rubricas || []).find((x) => x.id === 'projetos');
+  const totalReal = round2(sum(cats, (c) => sum(c.itens || [], (i) => i.valorRealizado)));
+  const totalOrcItens = round2(sum(cats, (c) => sum(c.itens || [], (i) => i.valorOrcado)));
+  openModal('Extrato — Despesas pagas direto pelo proprietário', (body) => {
+    const topo = document.createElement('div');
+    topo.className = 'extrato-total-line';
+    topo.innerHTML = `<span>Total realizado (pago direto)</span><strong>${money(totalReal)}</strong>`;
+    body.appendChild(topo);
+    if (!cats.length) {
+      body.insertAdjacentHTML('beforeend', '<div class="extrato-empty">Nenhuma categoria está marcada como "pago direto pelo proprietário" no Detalhamento FC.</div>');
+      return;
+    }
+    const wrap = document.createElement('div');
+    wrap.className = 'table-scroll';
+    wrap.style.maxHeight = '52vh';
+    wrap.innerHTML = `<table class="extrato-table">
+      <thead><tr><th>Item</th><th>Unid.</th><th class="num">Orçado</th><th class="num">Realizado</th><th class="num">Diferença</th></tr></thead>
+      <tbody>
+        ${cats.map((c) => {
+          const orc = round2(sum(c.itens || [], (i) => i.valorOrcado));
+          const rea = round2(sum(c.itens || [], (i) => i.valorRealizado));
+          return `<tr class="extrato-grupo"><td colspan="5">${c.numero ? `${String(c.numero).padStart(2, '0')} — ` : ''}${esc(c.nome)} <span class="muted">· orçado da categoria no PCI ${money(c.valorOrcado)}</span></td></tr>
+            ${(c.itens || []).map((i) => {
+              const dif = (Number(i.valorOrcado) || 0) - (Number(i.valorRealizado) || 0);
+              return `<tr>
+              <td>${esc(i.descricao || '(sem descrição)')}${i.dataPagamento ? ` <span class="muted">· ${dateBR(String(i.dataPagamento).slice(0, 10))}</span>` : ''}</td>
+              <td class="muted">${esc(i.unidade || '')}</td>
+              <td class="num">${money(i.valorOrcado)}</td>
+              <td class="num">${money(i.valorRealizado)}</td>
+              <td class="num">${dif < 0 ? '− ' : ''}${money(Math.abs(dif))}</td>
+            </tr>`; }).join('')}
+            <tr class="extrato-residuo"><td colspan="2"><strong>Total da categoria</strong></td><td class="num"><strong>${money(orc)}</strong></td><td class="num"><strong>${money(rea)}</strong></td><td class="num"><strong>${orc - rea < 0 ? '− ' : ''}${money(Math.abs(orc - rea))}</strong></td></tr>`;
+        }).join('')}
+      </tbody>
+      <tfoot>
+        <tr><td colspan="2"><strong>Total pago direto</strong></td><td class="num">${money(totalOrcItens)}</td><td class="num"><strong>${money(totalReal)}</strong></td><td class="num">${totalOrcItens - totalReal < 0 ? '− ' : ''}${money(Math.abs(totalOrcItens - totalReal))}</td></tr>
+      </tfoot></table>`;
+    body.appendChild(wrap);
+    const nota = document.createElement('div');
+    nota.className = 'muted';
+    nota.style.marginTop = '8px';
+    nota.innerHTML = `<strong>Para onde este número vai:</strong> viabilidade › rubrica "Projetos, registros e ITBI" (realizado ${money(rb ? rb.realizado : totalReal)}; premissa orçada ${money(rb ? rb.orcado : 0)}, contra ${money(totalOrcItens)} orçados nos itens); consumo de recurso próprio ("Serviços preliminares (pago direto)"); gasto acumulado do Custo total realizado. Edite os itens no <strong>Detalhamento FC</strong> — tudo acima recalcula.`;
+    body.appendChild(nota);
+  }, { wide: true });
+}
+
+/* Extrato de uma rubrica da DRE de viabilidade: as linhas que compõem o
+   realizado e o comprometido daquela rubrica. */
+function abrirExtratoRubrica(id) {
+  const v = VIEW.resumo.viabilidade || {};
+  const rb = (v.rubricas || []).find((x) => x.id === id);
+  if (!rb) return;
+  if (id === 'projetos') { abrirExtratoPagoDireto(); return; }
+  const P = VIEW.parametros || {};
+  const parcelas = VIEW.parcelas || [];
+  const campo = {
+    construcao: (p) => (Number(p.totalEmpreiteiroPix) || 0) + (Number(p.gastoCartao) || 0),
+    administracao: (p) => Number(p.totalAdmPix) || 0,
+    financeiro: (p) => Number(p.parcelaEvolucaoCaixa) || 0,
+  }[id];
+  openModal(`Extrato — ${rb.nome}`, (body) => {
+    const topo = document.createElement('div');
+    topo.className = 'extrato-total-line';
+    topo.innerHTML = `<span>Projetado</span><strong>${money(rb.projetado)}</strong>`;
+    body.appendChild(topo);
+    const wrap = document.createElement('div');
+    wrap.className = 'table-scroll';
+    wrap.style.maxHeight = '50vh';
+    let linhas = '';
+    if (id === 'terreno') {
+      linhas = `<tr class="extrato-grupo"><td colspan="3">Orçado (Parâmetros)</td></tr>
+        <tr><td>Terreno</td><td></td><td class="num">${money(P.custoTerreno)}</td></tr>
+        <tr><td>Multa de lote</td><td></td><td class="num">${money(P.multaLote)}</td></tr>
+        <tr class="extrato-grupo"><td colspan="3">Realizado</td></tr>
+        <tr><td>Entrada do lote — recurso próprio (lista de consumos)</td><td></td><td class="num">${money(v.entradaLote)}</td></tr>
+        <tr><td>Parte financiada pelo CAIXA — custo do lote executado (Parâmetros)</td><td></td><td class="num">${money(P.custoLoteExecutado)}</td></tr>`;
+    } else if (campo) {
+      const lista = parcelas.filter((p) => campo(p) > 0).sort((a, b) => (a.vencimento || a.vencPlanejado || '').localeCompare(b.vencimento || b.vencPlanejado || ''));
+      const real = lista.filter((p) => p.status === 'REALIZADO');
+      const plan = lista.filter((p) => p.status !== 'REALIZADO');
+      const row = (p) => `<tr><td>${esc(p.label || p.mesReferenciaLabel || '')}</td><td>${dateBR(p.vencimento || p.vencPlanejado)}${p.status !== 'REALIZADO' ? ' <span class="muted">planejada</span>' : ''}</td><td class="num">${money(campo(p))}</td></tr>`;
+      const orcadoRotulo = id === 'construcao' ? 'Contrato total do empreiteiro (Parâmetros)'
+        : id === 'administracao' ? `${pct(v.taxaAdm)} × contrato do empreiteiro`
+        : `Custo financeiro projetado da evolução (Parâmetros)${Number(P.custosFinanceiros) ? ' + tarifas avulsas' : ''}`;
+      const colunaRotulo = id === 'construcao' ? ' (PIX + cartão)' : id === 'administracao' ? ' (coluna ADM)' : ' (coluna Evolução CAIXA)';
+      linhas = `<tr class="extrato-grupo"><td colspan="3">Orçado</td></tr>
+        <tr><td>${orcadoRotulo}</td><td></td><td class="num">${money(rb.orcado)}</td></tr>
+        <tr class="extrato-grupo"><td colspan="3">Realizado — quinzenas de Contas a Pagar${colunaRotulo}</td></tr>
+        ${real.map(row).join('') || '<tr><td colspan="3" class="muted">nenhuma</td></tr>'}
+        <tr class="extrato-residuo"><td colspan="2"><strong>Total realizado</strong></td><td class="num"><strong>${money(rb.realizado)}</strong></td></tr>
+        <tr class="extrato-grupo"><td colspan="3">Comprometido — quinzenas planejadas já lançadas</td></tr>
+        ${plan.map(row).join('') || '<tr><td colspan="3" class="muted">nenhuma</td></tr>'}
+        <tr class="extrato-residuo"><td colspan="2"><strong>Total comprometido</strong></td><td class="num"><strong>${money(rb.comprometido)}</strong></td></tr>`;
+    } else {
+      linhas = `<tr><td>Premissa em Parâmetros › Viabilidade</td><td></td><td class="num">${money(rb.orcado)}</td></tr>
+        <tr><td class="muted" colspan="3">Ainda sem lançamento realizado — o valor projetado é a premissa.</td></tr>`;
+    }
+    wrap.innerHTML = `<table class="extrato-table"><thead><tr><th>Origem</th><th>Data</th><th class="num">Valor</th></tr></thead><tbody>${linhas}
+      <tr class="extrato-grupo"><td colspan="3">Fechamento</td></tr>
+      <tr><td>A incorrer (projetado − realizado − comprometido)</td><td></td><td class="num">${money(rb.aFaturar)}</td></tr>
+      ${rb.excedente ? `<tr><td>Excedente sobre o orçado (entra no custo)</td><td></td><td class="num">${money(rb.excedente)}</td></tr>` : ''}
+      <tr class="extrato-residuo"><td colspan="2"><strong>Projetado = max(orçado, realizado + comprometido)</strong></td><td class="num"><strong>${money(rb.projetado)}</strong></td></tr>
+    </tbody></table>`;
+    body.appendChild(wrap);
+    const nota = document.createElement('div');
+    nota.className = 'muted';
+    nota.style.marginTop = '8px';
+    nota.textContent = rb.origem + (rb.nota ? ' ' + rb.nota : '');
+    body.appendChild(nota);
+  }, { wide: true });
+}
+
 function abrirExtratoRecursoProprio() {
   const r = VIEW.resumo;
   const itens = VIEW.consumosRecursoProprio || [];
@@ -4870,8 +5050,9 @@ function abrirExtratoRecursoProprio() {
           <tr class="extrato-linha-verba"><td><strong>Recurso próprio planejado</strong></td><td>—</td><td class="num"><strong>${money(planejado)}</strong></td></tr>
           ${[...itens].sort(ordenarConsumos).map((c) => {
             const fora = rec.ate && !(c.data && c.data <= rec.ate);
+            const drill = /pago direto|prelimin/i.test(c.descricao || '') ? 'pagoDireto' : null;
             return `<tr class="${fora ? 'fora-do-recorte' : ''}">
-              <td>${esc(c.descricao || '(sem descrição)')}</td>
+              <td>${drill ? `<button type="button" class="value-drill tiny filter-control" data-drill="${drill}" title="Clique para ver o extrato — item a item"><span class="drill-value">${esc(c.descricao)}</span><span class="drill-hint">extrato</span></button>` : esc(c.descricao || '(sem descrição)')}</td>
               <td>${c.data ? dateBR(c.data) : '<span class="muted">sem data</span>'}</td>
               <td class="num">− ${money(c.valor)}</td>
             </tr>`;
@@ -4882,6 +5063,7 @@ function abrirExtratoRecursoProprio() {
           <tr><td>${rec.ate ? 'Saldo naquela data' : 'Saldo disponível'}</td><td></td><td class="num">${money(rec.saldo)}</td></tr>
         </tfoot>
       </table>`;
+    ligarDrills(wrap);
     body.appendChild(wrap);
 
     const nota = document.createElement('div');
@@ -7768,10 +7950,22 @@ function glossarioItens() {
       fonte: 'Viabilidade + Liberação PCI + Parâmetros.',
     },
     {
-      label: 'Fontes × aplicações (conciliação)',
-      valor: money(((r.viabilidade || {}).fontes || {}).conciliacao),
-      formula: 'Crédito CAIXA utilizável + capital próprio planejado − custo econômico total. Positivo = recursos ainda não aplicados; negativo = necessidade adicional. Nunca é incorporado ao custo.',
-      fonte: 'Viabilidade › Fontes e aplicações.',
+      label: 'Capital próprio necessário',
+      valor: money(((r.viabilidade || {}).fontes || {}).capitalProprioNecessario),
+      formula: 'Soma, rubrica a rubrica, da parte do custo que o financiamento CAIXA não banca. O financiamento cobre o lote (etapa 1 do PCI) e a construção (evolução de obra, limitada ao financiamento de obra contratado); multa, administração, projetos/ITBI, CND e custo financeiro saem do bolso.',
+      fonte: 'Viabilidade › Fontes e Aplicações. Confere com a planilha de viabilidade (Soma total de recursos próprios p/ obra).',
+    },
+    {
+      label: 'Verba de contingência',
+      valor: money(((r.viabilidade || {}).fontes || {}).contingenciaTotal),
+      formula: 'Fontes contratadas (crédito CAIXA + capital próprio planejado) − custo econômico total projetado. Separada em folga do financiamento (contratado − aplicado) e folga própria (planejado − necessário). Não é custo nem lucro: é reserva para imprevistos.',
+      fonte: 'Viabilidade › Fontes e Aplicações.',
+    },
+    {
+      label: 'DFC — Demonstrativo de Fluxo de Caixa',
+      valor: '(ver Viabilidade › bloco C)',
+      formula: 'Entradas (liberações CAIXA e aportes próprios) menos saídas (lote, quinzenas de Contas a Pagar e pagamentos diretos), na data em que o dinheiro se move. Diferente da DRE, que mede resultado econômico: liberação de crédito não é receita e pagamento de fornecedor não é custo novo.',
+      fonte: 'Liberação PCI + Contas a Pagar + Detalhamento FC.',
     },
     {
       label: 'Saldo em conta (realizado)',
