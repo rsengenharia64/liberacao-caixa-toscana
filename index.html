@@ -4,6 +4,11 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
+<meta name="theme-color" content="#0f2137">
+<meta name="application-name" content="Obra Toscana">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="apple-touch-icon" sizes="192x192" href="icon-192.png">
 <style>
   :root { color-scheme: light dark; }
   html, body { margin: 0; padding: 0; }
@@ -285,6 +290,11 @@
   .painel-resumo .neg { color: var(--danger); }
   .painel-resumo .pos { color: var(--good); }
   .panel.recolhivel:not(.fechado) .painel-resumo { display: none; }
+  .app-install-guia { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-top: 8px; }
+  .guia-bloco { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px 8px 6px; background: var(--surface-2); font-size: 12px; line-height: 1.45; }
+  .guia-titulo { font-weight: 700; color: var(--accent-ink); margin: 0 0 4px 4px; }
+  .guia-bloco ol { margin: 0; padding-left: 22px; }
+  .guia-bloco li { margin: 2px 0; }
   .saldo-fora-conta { font-size: 11.5px; color: var(--ink-soft); background: var(--surface-2); border: 1px dashed var(--border); border-radius: 7px; padding: 6px 9px; margin-top: 6px; line-height: 1.45; }
   .saldo-ponte { display: flex; flex-direction: column; gap: 3px; font-size: 12px; margin-top: 4px; }
   .saldo-ponte > div { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; align-items: baseline; }
@@ -1502,8 +1512,26 @@ window.addEventListener('beforeinstallprompt', (e) => {
   if (btn) btn.hidden = false;
 });
 
+// O site publicado (GitHub Pages) traz manifest, ícones e service worker
+// como arquivos de verdade — é o que faz o Chrome oferecer "Instalar app" no
+// Android e no PC. O arquivo único (artifact/cópia local) não tem como servir
+// esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
+// tela de início" com nome e ícone certos.
+const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
+let APP_INSTALADO = false;
+function appAbertoComoInstalado() {
+  try { return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; } catch (e) { return false; }
+}
+window.addEventListener('appinstalled', () => { APP_INSTALADO = true; toast('App instalado. Ele já está na sua tela inicial / área de trabalho.'); });
+
+function registrarServiceWorker() {
+  if (!PWA_REAL || !('serviceWorker' in navigator) || location.protocol !== 'https:') return;
+  navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { /* sem SW é degradação aceitável */ });
+}
+
 function prepararInstalacaoApp() {
   try {
+    registrarServiceWorker();
     const i192 = iconeAppDataUrl(192);
     const i512 = iconeAppDataUrl(512);
     if (!i192) return;
@@ -1512,12 +1540,13 @@ function prepararInstalacaoApp() {
       for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
       document.head.appendChild(el);
     };
-    add('link', { rel: 'apple-touch-icon', href: i192 });
-    add('link', { rel: 'icon', type: 'image/png', href: i192 });
-    add('meta', { name: 'theme-color', content: '#0f2137' });
+    if (!document.querySelector('link[rel="apple-touch-icon"]')) add('link', { rel: 'apple-touch-icon', href: i192 });
+    if (!document.querySelector('link[rel="icon"]')) add('link', { rel: 'icon', type: 'image/png', href: i192 });
+    if (!document.querySelector('meta[name="theme-color"]')) add('meta', { name: 'theme-color', content: '#0f2137' });
     add('meta', { name: 'mobile-web-app-capable', content: 'yes' });
     add('meta', { name: 'apple-mobile-web-app-capable', content: 'yes' });
     add('meta', { name: 'apple-mobile-web-app-title', content: APP_NOME_CURTO });
+    if (PWA_REAL) return; // manifest de verdade já está no <head>
     const manifest = {
       name: APP_NOME,
       short_name: APP_NOME_CURTO,
@@ -3818,8 +3847,9 @@ function renderFiltroConsumoAte(rerender) {
 function renderInstalarAppPanel() {
   const panel = document.createElement('div');
   panel.className = 'panel';
-  panel.innerHTML = `<div class="panel-header"><div><h2>Instalar no celular</h2>
-    <div class="muted">Coloca um ícone deste painel na tela inicial do celular ou tablet. Ele abre em tela cheia, sem a barra do navegador, e funciona como um aplicativo.</div></div></div>`;
+  const instalado = APP_INSTALADO || appAbertoComoInstalado();
+  panel.innerHTML = `<div class="panel-header"><div><h2>Instalar como aplicativo — celular e PC</h2>
+    <div class="muted">O painel vira um app: ícone na tela inicial do celular ou na área de trabalho do computador, abre em tela cheia sem a barra do navegador e continua abrindo mesmo sem internet (com os dados da última vez que carregou). Nada é baixado de loja — é o próprio site instalado.</div></div></div>`;
 
   const wrap = document.createElement('div');
   wrap.className = 'app-install';
@@ -3834,6 +3864,13 @@ function renderInstalarAppPanel() {
   const corpo = document.createElement('div');
   corpo.className = 'app-install-body';
 
+  if (instalado) {
+    const okMsg = document.createElement('div');
+    okMsg.className = 'conf-cartao ok';
+    okMsg.innerHTML = '<div class="conf-titulo">Você já está usando o painel como aplicativo instalado.</div>';
+    corpo.appendChild(okMsg);
+  }
+
   const acoes = document.createElement('div');
   acoes.className = 'app-install-actions';
 
@@ -3841,7 +3878,7 @@ function renderInstalarAppPanel() {
   btnInstalar.id = 'btnInstalarApp';
   btnInstalar.className = 'btn primary filter-control';
   btnInstalar.textContent = 'Instalar app';
-  btnInstalar.hidden = !PROMPT_INSTALACAO;
+  btnInstalar.hidden = !PROMPT_INSTALACAO || instalado;
   btnInstalar.onclick = async () => {
     if (!PROMPT_INSTALACAO) return;
     PROMPT_INSTALACAO.prompt();
@@ -3852,22 +3889,56 @@ function renderInstalarAppPanel() {
   };
   acoes.appendChild(btnInstalar);
 
+  const btnLink = document.createElement('button');
+  btnLink.className = 'btn filter-control';
+  btnLink.textContent = 'Copiar link do painel';
+  btnLink.title = location.href;
+  btnLink.onclick = async () => {
+    const link = location.href.split('#')[0];
+    try { await navigator.clipboard.writeText(link); toast('Link copiado. Envie para quem for instalar.'); }
+    catch (e) { window.prompt('Copie o link:', link); }
+  };
+  acoes.appendChild(btnLink);
+
   const btnIcone = document.createElement('button');
   btnIcone.className = 'btn filter-control';
   btnIcone.textContent = 'Baixar ícone (PNG)';
   btnIcone.onclick = baixarIconeApp;
   acoes.appendChild(btnIcone);
-
   corpo.appendChild(acoes);
 
-  const passos = document.createElement('details');
-  passos.className = 'app-install-steps';
-  passos.innerHTML = `<summary>Como colocar na tela inicial</summary>
-    <ol>
-      <li><strong>iPhone / iPad (Safari):</strong> toque no botão Compartilhar e escolha “Adicionar à Tela de Início”.</li>
-      <li><strong>Android (Chrome):</strong> toque no menu ⋮ e escolha “Instalar app” ou “Adicionar à tela inicial”.</li>
-      <li><strong>Importante:</strong> abra o link deste painel direto no navegador do celular. Dentro do aplicativo do Claude a opção não aparece, porque a página roda embutida.</li>
-    </ol>`;
+  const dica = document.createElement('div');
+  dica.className = 'muted';
+  dica.style.margin = '6px 0 4px';
+  dica.textContent = PWA_REAL
+    ? 'Quando o navegador reconhece o app, o botão "Instalar app" aparece acima. Se não aparecer, use o caminho manual do seu aparelho abaixo — o resultado é o mesmo.'
+    : 'Nesta versão (arquivo único) o navegador não mostra o botão de instalar; use o caminho manual do seu aparelho abaixo. No site publicado, o botão "Instalar app" aparece sozinho.';
+  corpo.appendChild(dica);
+
+  const passos = document.createElement('div');
+  passos.className = 'app-install-guia';
+  passos.innerHTML = `
+    <div class="guia-bloco"><div class="guia-titulo">Android (Chrome)</div><ol>
+      <li>Abra o link no <strong>Chrome</strong> (não dentro de WhatsApp, Instagram ou do app do Claude — nesses o painel roda embutido e a opção não aparece; toque em "abrir no navegador").</li>
+      <li>Toque no menu <strong>⋮</strong> no canto superior direito.</li>
+      <li>Toque em <strong>"Instalar app"</strong> (ou "Adicionar à tela inicial") e confirme.</li>
+      <li>O ícone "Obra Toscana" aparece na tela inicial. Abra por ele daqui em diante.</li>
+    </ol></div>
+    <div class="guia-bloco"><div class="guia-titulo">iPhone / iPad (Safari)</div><ol>
+      <li>Abra o link no <strong>Safari</strong> (obrigatório — Chrome no iPhone não instala).</li>
+      <li>Toque no botão <strong>Compartilhar</strong> (quadrado com seta para cima, na barra de baixo).</li>
+      <li>Role a lista e toque em <strong>"Adicionar à Tela de Início"</strong>.</li>
+      <li>Confirme em <strong>Adicionar</strong>. O ícone aparece na tela inicial.</li>
+    </ol></div>
+    <div class="guia-bloco"><div class="guia-titulo">Computador (Chrome ou Edge)</div><ol>
+      <li>Abra o link no <strong>Chrome</strong> ou <strong>Edge</strong>.</li>
+      <li>Clique no ícone de <strong>instalar</strong> que aparece no fim da barra de endereço (um monitor com seta ⤓), ou no menu <strong>⋮ › Salvar e compartilhar › Instalar página como app</strong> (Chrome) / <strong>Aplicativos › Instalar este site como um aplicativo</strong> (Edge).</li>
+      <li>Confirme em <strong>Instalar</strong>. O app abre em janela própria e ganha atalho no menu Iniciar / área de trabalho (Windows) ou na pasta Aplicativos (Mac).</li>
+    </ol></div>
+    <div class="guia-bloco"><div class="guia-titulo">Para desinstalar</div><ol>
+      <li><strong>Celular:</strong> segure o ícone e escolha remover/desinstalar, como qualquer app.</li>
+      <li><strong>PC:</strong> abra o app, clique no menu ⋮ da janela dele e escolha "Desinstalar".</li>
+    </ol></div>`;
   corpo.appendChild(passos);
 
   wrap.appendChild(corpo);
