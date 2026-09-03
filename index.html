@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
+<meta name="app-version" content="20260903T210249">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -363,6 +364,9 @@
   .cen-cobre td { background: var(--good-soft); }
   .saldo-pos { color: var(--good); font-weight: 700; }
   .saldo-neg { color: var(--danger); font-weight: 700; }
+  .faixa-atualizacao { position: sticky; top: 0; z-index: 90; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 8px 14px; background: var(--accent); color: #fff; font-size: 12.5px; }
+  .faixa-atualizacao .btn.primary { background: #fff; color: var(--accent-ink); border-color: #fff; }
+  .faixa-atualizacao .btn:not(.primary) { background: transparent; color: #fff; border-color: rgba(255,255,255,.6); }
   .baixa-barra { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 6px 0 8px; font-size: 11.5px; }
   summary.fatura-paga { color: var(--good); }
   .alerta-baixa { color: var(--danger); }
@@ -1858,6 +1862,68 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
+const APP_VERSAO = '20260903T210249';
+
+/* Verificação de versão nova.
+   --------------------------------------------------------------------------
+   O site publicado manda o HTML com validade de 10 minutos e o app instalado
+   reaproveitava essa cópia — a pessoa via a versão velha e achava que nada
+   tinha mudado. Agora, ao abrir, o app busca o index.html direto do servidor
+   (sem cache), lê a versão embutida e, se for diferente da que está rodando,
+   mostra uma faixa com "Atualizar agora". */
+async function verificarAtualizacaoApp(manual = false) {
+  if (!PWA_REAL || APP_VERSAO === 'dev' || location.protocol !== 'https:') { if (manual) toast('Esta cópia não é a do site publicado; não há o que verificar.'); return null; }
+  try {
+    const resp = await fetch('./index.html', { cache: 'no-store' });
+    const txt = await resp.text();
+    const m = txt.match(/<meta name="app-version" content="([^"]+)"/);
+    const remota = m ? m[1] : null;
+    if (!remota) { if (manual) toast('Não consegui ler a versão do servidor.', true); return null; }
+    if (remota !== APP_VERSAO) { mostrarFaixaAtualizacao(remota); return remota; }
+    if (manual) toast('Você já está na versão mais recente.');
+    return null;
+  } catch {
+    if (manual) toast('Sem conexão para verificar agora.', true);
+    return null;
+  }
+}
+
+function mostrarFaixaAtualizacao(remota) {
+  if (document.getElementById('faixaAtualizacao')) return;
+  const f = document.createElement('div');
+  f.id = 'faixaAtualizacao';
+  f.className = 'faixa-atualizacao no-print';
+  const fmtV = (v) => (/^\d{8}T\d{6}$/.test(v) ? `${v.slice(6, 8)}/${v.slice(4, 6)} ${v.slice(9, 11)}:${v.slice(11, 13)}` : v);
+  f.innerHTML = `<span>Há uma <strong>versão nova</strong> do painel (${esc(fmtV(remota))}). Você está na de ${esc(fmtV(APP_VERSAO))}.</span>`;
+  const bt = document.createElement('button');
+  bt.type = 'button';
+  bt.className = 'btn small primary filter-control';
+  bt.textContent = 'Atualizar agora';
+  bt.onclick = atualizarAppAgora;
+  f.appendChild(bt);
+  const fechar = document.createElement('button');
+  fechar.type = 'button';
+  fechar.className = 'btn small filter-control';
+  fechar.textContent = 'Depois';
+  fechar.onclick = () => f.remove();
+  f.appendChild(fechar);
+  document.body.insertBefore(f, document.body.firstChild);
+}
+
+async function atualizarAppAgora() {
+  toast('Atualizando…');
+  try {
+    if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); }
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.update().catch(() => {})));
+      if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('limpar-cache');
+    }
+  } catch { /* segue para o reload de qualquer jeito */ }
+  const u = new URL(location.href);
+  u.searchParams.set('v', String(Date.now()));
+  location.replace(u.toString());
+}
 let APP_INSTALADO = false;
 function appAbertoComoInstalado() {
   try { return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; } catch (e) { return false; }
@@ -1872,6 +1938,9 @@ function registrarServiceWorker() {
 function prepararInstalacaoApp() {
   try {
     registrarServiceWorker();
+    setTimeout(() => { verificarAtualizacaoApp(false); }, 1500);
+    // Ao voltar para o app (celular), confere de novo.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') verificarAtualizacaoApp(false); });
     const i192 = iconeAppDataUrl(192);
     const i512 = iconeAppDataUrl(512);
     if (!i192) return;
@@ -4464,6 +4533,19 @@ function renderInstalarAppPanel() {
   const btnIcone = document.createElement('button');
   btnIcone.className = 'btn filter-control';
   btnIcone.textContent = 'Baixar ícone (PNG)';
+  const btnVer = document.createElement('button');
+  btnVer.type = 'button';
+  btnVer.className = 'btn small filter-control';
+  btnVer.textContent = 'Verificar atualização';
+  btnVer.title = `Versão em uso: ${APP_VERSAO}. Busca no servidor e avisa se houver uma mais nova.`;
+  btnVer.onclick = () => verificarAtualizacaoApp(true);
+  btnIcone.insertAdjacentElement('afterend', btnVer);
+  const verInfo = document.createElement('span');
+  verInfo.className = 'muted';
+  verInfo.style.fontSize = '11px';
+  verInfo.style.marginLeft = '8px';
+  verInfo.textContent = APP_VERSAO === 'dev' ? '' : `versão de ${APP_VERSAO.slice(6, 8)}/${APP_VERSAO.slice(4, 6)}/${APP_VERSAO.slice(0, 4)} ${APP_VERSAO.slice(9, 11)}:${APP_VERSAO.slice(11, 13)} (UTC)`;
+  btnVer.insertAdjacentElement('afterend', verInfo);
   btnIcone.onclick = baixarIconeApp;
   acoes.appendChild(btnIcone);
   corpo.appendChild(acoes);

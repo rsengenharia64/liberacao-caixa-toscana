@@ -1,8 +1,8 @@
-/* Service worker do painel Liberação Caixa.
-   Estratégia: rede primeiro, cache como reserva. O app é um HTML único, então
-   guardar a última versão que carregou é o bastante para abrir sem internet;
-   quando a rede volta, a versão nova substitui a guardada. */
-const CACHE = 'liberacao-caixa-v1';
+/* Service worker do painel Liberação Caixa — versão 20260903T210249.
+   Estratégia: rede primeiro, SEM passar pelo cache HTTP do navegador (o
+   GitHub Pages manda index.html com validade de 10 minutos, e isso segurava
+   versões velhas). Cache próprio só como reserva para abrir sem internet. */
+const CACHE = 'liberacao-caixa-20260903T210249';
 const ARQUIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-512-maskable.png'];
 
 self.addEventListener('install', (e) => {
@@ -15,12 +15,21 @@ self.addEventListener('activate', (e) => {
   self.clients.claim();
 });
 
+self.addEventListener('message', (e) => {
+  if (e.data === 'limpar-cache') {
+    e.waitUntil(caches.keys().then((ks) => Promise.all(ks.map((k) => caches.delete(k)))));
+  }
+});
+
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   const url = new URL(e.request.url);
   if (url.origin !== location.origin) return;
+  // 'no-cache' obriga o navegador a revalidar com o servidor: se o arquivo
+  // mudou, vem o novo; se não, o servidor responde 304 e a cópia vale.
+  const pedido = new Request(e.request, { cache: 'no-cache' });
   e.respondWith(
-    fetch(e.request).then((resp) => {
+    fetch(pedido).then((resp) => {
       const copia = resp.clone();
       caches.open(CACHE).then((c) => c.put(e.request, copia)).catch(() => {});
       return resp;
