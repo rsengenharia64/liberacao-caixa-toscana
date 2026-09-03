@@ -575,6 +575,10 @@
   :root[data-theme="dark"] .controle-tabela td.edit .cell-input { background: #3d3410; border-color: #6b5a1c; color: var(--ink); }
   :root[data-theme="dark"] .controle-tabela td.edit .cell-input::placeholder { color: #a3924f; }
 
+  .qz-split { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; font-size: 12px; margin-top: 4px; }
+  .qz-split-real { color: var(--good); font-weight: 700; }
+  .qz-split-plan { color: var(--accent-ink); font-weight: 700; }
+  .qz-split-sep { color: var(--muted); }
   tfoot tr.total-realizado td { color: var(--good); }
   tfoot tr.total-planejado td { color: var(--muted); font-weight: 500; }
   tfoot tr.total-geral td { border-top: 2px solid var(--border); }
@@ -1975,6 +1979,18 @@ function renderCustoTotalPeriodoPanel() {
   const drill = panel.querySelector('#custoTotalPeriodoValor');
   drill.querySelector('.drill-value').textContent = money(total);
   drill.onclick = () => abrirExtratoCustoTotal(selecionadas, total);
+
+  // Quando a seleção mistura realizado e planejado, o número grande é a soma
+  // dos dois — e isso precisa estar escrito, senão ele parece contradizer o
+  // card "Custo total realizado" do topo, que conta só o realizado.
+  const realizadoSel = round2(selecionadas.filter((p) => p.status === 'REALIZADO').reduce((a, p) => a + (Number(p.custoTotal) || 0), 0));
+  const planejadoSel = round2(total - realizadoSel);
+  if (realizadoSel > 0 && planejadoSel > 0.005) {
+    const split = document.createElement('div');
+    split.className = 'qz-split';
+    split.innerHTML = `<span class="qz-split-real">Realizado ${money(realizadoSel)}</span><span class="qz-split-sep">+</span><span class="qz-split-plan">Planejado ${money(planejadoSel)}</span><span class="muted"> — o card "Custo total realizado" do topo mostra só a parte realizada</span>`;
+    drill.insertAdjacentElement('afterend', split);
+  }
 
   return panel;
 }
@@ -4830,7 +4846,7 @@ function renderPainel() {
     <div class="card accent">
       <div class="card-label">Custo total realizado</div>
       ${cardValueDrill('custoRealizado', custoRealizado)}
-      <div class="card-sub">${qtdRealizadas} quinzena(s) realizada(s): empreiteiro + ADM + cartão + evolução CAIXA</div>
+      <div class="card-sub">Só o que já aconteceu: ${qtdRealizadas} quinzena(s) REALIZADA(S). Planejado ainda por vir: ${money(r.totalPlanejadoFuturo)} · tudo junto: ${money(round2(custoRealizado + r.totalPlanejadoFuturo))}</div>
     </div>
     <div class="card ${r.saldoRecursoDisponivel < 0 ? 'warn' : 'good'}">
       <div class="card-label">Saldo de recurso próprio disponível</div>
