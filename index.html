@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260903T210249">
+<meta name="app-version" content="20260903T231443">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -338,6 +338,55 @@
     .viab-secao { border: none !important; }
     .viab-secao > :not(summary) { display: block !important; }
     details.viab-secao > summary { list-style: none; }
+  }
+  /* ---------- Conta da quinzena ---------- */
+  .conta-tabela tfoot td { border-top: 1px solid var(--border); }
+  .conta-tabela tr.conta-total td { background: var(--surface-2); font-weight: 600; }
+  .conta-tabela tr.conta-pix td { background: var(--accent-soft); color: var(--accent-ink); border-top: 2px solid var(--accent); border-bottom: 2px solid var(--accent); }
+  .conta-tabela tr.planejado td { color: var(--muted); }
+  .conta-acoes { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+  /* ---------- Estudo de Mercado ---------- */
+  .mk-subnav { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 14px; }
+  .mk-sub { border: 1px solid var(--border); background: var(--surface); color: var(--ink-soft); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .mk-sub:hover { border-color: var(--accent); color: var(--accent-ink); }
+  .mk-sub.ativa { background: var(--header-bg); color: #fff; border-color: var(--header-bg); }
+  .mk-texto { font-size: 13px; line-height: 1.55; color: var(--ink-soft); margin: 6px 0 10px; }
+  .mk-texto strong { color: var(--ink); }
+  .mk-h3-secao { font-size: 15px; color: var(--accent-ink); border-bottom: 2px solid var(--accent); padding-bottom: 4px; margin-top: 22px; }
+  .mk-h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 14px 0 6px; font-weight: 700; }
+  .mk-bloco { border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; background: var(--surface-2); margin: 8px 0; }
+  .mk-chart { width: 100%; height: auto; display: block; margin: 6px 0 4px; font-family: inherit; }
+  .mk-grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 3; }
+  .mk-bar { fill: var(--ink-soft); }
+  .mk-bar-destaque { fill: var(--accent); }
+  .mk-bar-custo { fill: var(--danger); opacity: .85; }
+  .mk-bar-mercado { fill: var(--good); }
+  .mk-bar-ref { fill: var(--muted); }
+  .mk-bar-novo { fill: var(--warn); }
+  .mk-val { fill: var(--ink); font-size: 11px; font-weight: 700; }
+  .mk-val-forte { fill: var(--accent-ink); font-size: 12px; font-weight: 800; }
+  .mk-rot { fill: var(--muted); font-size: 10.5px; }
+  .mk-line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+  .mk-line-0 { stroke: var(--accent); } .mk-line-1 { stroke: var(--good); } .mk-line-2 { stroke: var(--ink-soft); }
+  .mk-dot { stroke: var(--surface); stroke-width: 1.5; }
+  .mk-dot.mk-line-0 { fill: var(--accent); } .mk-dot.mk-line-1 { fill: var(--good); } .mk-dot.mk-line-2 { fill: var(--ink-soft); }
+  .mk-trend { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 6 4; fill: none; }
+  .mk-pt { fill: var(--ink-soft); opacity: .55; }
+  .mk-pt-recente { fill: var(--good); opacity: .9; }
+  .mk-pt-obra { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+  .mk-legenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: var(--muted); margin: 2px 0 8px; }
+  .mk-leg { display: inline-flex; align-items: center; gap: 6px; }
+  .mk-leg::before { content: ""; width: 14px; height: 3px; border-radius: 2px; background: currentColor; }
+  .mk-leg.mk-line-0 { color: var(--accent); } .mk-leg.mk-line-1 { color: var(--good); } .mk-leg.mk-line-2 { color: var(--ink-soft); }
+  .mk-fonte-link { color: var(--accent-ink); text-decoration: underline; overflow-wrap: anywhere; }
+  @media print {
+    .mk-subnav { display: none !important; }
+    .mk-chart { max-height: 260px; }
+    .mk-bloco, .mk-chart, .viab-destaques { break-inside: avoid; }
+    .mk-secao-print { break-before: page; }
+    .mk-secao-print:first-of-type { break-before: auto; }
+    .mk-secao-print .panel { break-inside: auto; }
+    .mk-h3-secao { break-after: avoid; }
   }
   /* ---------- Cobrança PIX ---------- */
   .pix-grid { display: grid; grid-template-columns: auto 1fr; gap: 16px; align-items: start; }
@@ -980,6 +1029,7 @@
     <button class="tab-btn" data-tab="pci">Liberação PCI</button>
     <button class="tab-btn" data-tab="controle-caixa">Controle Mensal CAIXA</button>
     <button class="tab-btn" data-tab="relatorios">Relatórios</button>
+    <button class="tab-btn" data-tab="mercado">Estudo de Mercado</button>
     <button class="tab-btn" data-tab="rastreabilidade">Rastreabilidade</button>
     <button class="tab-btn" data-tab="parametros">Parâmetros</button>
   </nav>
@@ -996,6 +1046,7 @@
   <section id="tab-pci" class="tab-panel" hidden=""></section>
   <section id="tab-controle-caixa" class="tab-panel" hidden=""></section>
   <section id="tab-relatorios" class="tab-panel" hidden=""></section>
+  <section id="tab-mercado" class="tab-panel" hidden=""></section>
   <section id="tab-rastreabilidade" class="tab-panel" hidden=""></section>
   <section id="tab-parametros" class="tab-panel" hidden=""></section>
 </main>
@@ -1862,7 +1913,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260903T210249';
+const APP_VERSAO = '20260903T231443';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -3296,6 +3347,9 @@ function afterMutation({ livre = false } = {}) {
   // Com a sincronização automática ligada, a coluna "Cartão" das parcelas é
   // sempre derivada dos itens do Detalhamento FC — uma fonte só, sem briga.
   if (STATE.parametros.cartaoAutoSync) aplicarCartaoDerivado();
+  // O PIX do empreiteiro das parcelas planejadas geradas por avanço segue a
+  // conta da quinzena (avanços × verba − cartão), sempre depois do cartão.
+  aplicarPixDerivadoDosAvancos();
   STATE.updatedAt = new Date().toISOString();
   VIEW = recompute(STATE);
   renderAll();
@@ -3995,6 +4049,9 @@ function updateParcela(id, patch) {
   // Digitar na ADM assume o controle daquela célula; qualquer mexida na base
   // (PIX, cartão, evolução) devolve a ADM ao cálculo automático.
   if (patch.totalAdmPix !== undefined) { p.overrides.totalAdmPix = true; }
+  // PIX digitado à mão numa parcela gerada por avanço deixa de seguir a conta
+  // da quinzena (ver aplicarPixDerivadoDosAvancos / voltarPixAoCalculo).
+  if (patch.totalEmpreiteiroPix !== undefined && /Avanço da quinzena/.test(p.obs || '')) { p.overrides.totalEmpreiteiroPix = true; }
   if (patch.totalEmpreiteiroPix !== undefined || patch.gastoCartao !== undefined || patch.parcelaEvolucaoCaixa !== undefined) {
     recalcularCustoParcela(p);
   }
@@ -4046,6 +4103,186 @@ function itensCartaoDoMes(mes, quinzena = 1) {
     }
   }
   return out;
+}
+
+/* ==========================================================================
+   CONTA DA QUINZENA EM R$
+   --------------------------------------------------------------------------
+   Cada avanço lançado vale dinheiro: verba orçada da categoria (contrato do
+   empreiteiro) × variação do % acumulado. Somando os avanços da quinzena
+   fecha o total medido do empreiteiro; descontando o cartão da mesma
+   quinzena (materiais comprados pelo proprietário no Detalhamento FC, que
+   saem da verba dele) chega-se ao PIX líquido a receber. Esse líquido é o
+   que alimenta "Contas a Pagar" na coluna Empreiteiro (PIX).
+
+   A parcela PLANEJADO gerada por "Lançar avanço da quinzena" passa a seguir
+   esta conta ao vivo: se o cartão da fatura muda depois (compra lançada no
+   Detalhamento), o PIX do empreiteiro se ajusta sozinho, em vez de ficar
+   com o número congelado no dia do lançamento. Digitar o PIX à mão em
+   Contas a Pagar assume o controle daquela célula (overrides.totalEmpreiteiroPix);
+   "voltar ao cálculo" devolve à regra.
+   ========================================================================== */
+function valorDoAvanco(h) {
+  const cat = STATE.categorias.find((c) => c.id === h.categoriaId);
+  const verba = cat ? (Number(cat.valorOrcado) || 0) : 0;
+  const ant = h.percAvancoAnterior == null ? 0 : (Number(h.percAvancoAnterior) || 0);
+  const novo = Number(h.percAvancoNovo) || 0;
+  return { verba, delta: novo - ant, valor: round2(verba * (novo - ant)), cat };
+}
+
+// Avanços de uma quinzena (pela data do avanço) que não têm parcela própria
+// (os lançados por "+ Novo avanço" com parcelaId carregam a própria parcela).
+function avancosDaQuinzena(filtro) {
+  return (STATE.historicoAvancos || [])
+    .filter((h) => dataNaQuinzena(h.data, filtro) && !h.parcelaId)
+    .sort((a, b) => (a.data || '').localeCompare(b.data || ''));
+}
+
+function parcelaDaQuinzena(filtro) {
+  if (!filtro) return null;
+  const venc = dataQuinzena(filtro.mes, filtro.quinzena);
+  return STATE.parcelas.find((p) => p.vencPlanejado === venc && p.status !== 'REALIZADO')
+    || STATE.parcelas.find((p) => p.vencPlanejado === venc)
+    || null;
+}
+
+function parcelaSegueAvancos(p) {
+  return !!p && p.status !== 'REALIZADO' && /Avanço da quinzena/.test(p.obs || '') && !(p.overrides && p.overrides.totalEmpreiteiroPix);
+}
+
+// A conta completa de uma quinzena: avanços em R$, cartão, PIX líquido, ADM.
+function contaDaQuinzena(filtro) {
+  if (!filtro) return null;
+  const avancos = avancosDaQuinzena(filtro).map((h) => ({ h, ...valorDoAvanco(h) }));
+  const medido = round2(sum(avancos, (a) => a.valor));
+  const parcela = parcelaDaQuinzena(filtro);
+  const cartao = parcela ? round2(Number(parcela.gastoCartao) || 0) : sugestaoCartaoDoMes(filtro.mes, filtro.quinzena);
+  const pix = round2(Math.max(0, medido - cartao));
+  const taxaAdm = Number(STATE.parametros.taxaAdministracaoPercent) || 0;
+  const adm = round2((pix + cartao) * taxaAdm);
+  const pixAtual = parcela ? round2(Number(parcela.totalEmpreiteiroPix) || 0) : null;
+  return {
+    filtro, avancos, medido, cartao, pix, adm, taxaAdm, totalTransferir: round2(pix + adm), parcela, pixAtual,
+    diferenca: parcela ? round2(pix - pixAtual) : null,
+    segue: parcelaSegueAvancos(parcela),
+    vencPlanejado: dataQuinzena(filtro.mes, filtro.quinzena),
+  };
+}
+
+// Mantém o PIX do empreiteiro das parcelas planejadas geradas por avanço
+// igual à conta da quinzena (avanços × verba − cartão). Devolve quantas mudou.
+function aplicarPixDerivadoDosAvancos() {
+  let mexeu = 0;
+  for (const p of STATE.parcelas) {
+    if (!parcelaSegueAvancos(p)) continue;
+    const per = periodoFromDateStr(p.vencPlanejado);
+    if (!per) continue;
+    const avancos = avancosDaQuinzena(per);
+    if (!avancos.length) continue;
+    const medido = round2(sum(avancos, (h) => valorDoAvanco(h).valor));
+    const cartao = round2(Number(p.gastoCartao) || 0);
+    const pix = round2(Math.max(0, medido - cartao));
+    const atual = round2(Number(p.totalEmpreiteiroPix) || 0);
+    const delta = round2(pix - atual);
+    if (!delta) continue;
+    p.totalEmpreiteiroPix = pix;
+    recalcularCustoParcela(p, delta);
+    mexeu += 1;
+  }
+  return mexeu;
+}
+
+function voltarPixAoCalculo(parcelaId) {
+  const p = STATE.parcelas.find((x) => x.id === parcelaId);
+  if (!p) return;
+  p.overrides = p.overrides || {};
+  p.overrides.totalEmpreiteiroPix = false;
+  const antes = Number(p.totalEmpreiteiroPix) || 0;
+  aplicarPixDerivadoDosAvancos();
+  afterMutation();
+  toast(`PIX de "${p.label}" voltou à conta dos avanços: ${money(antes)} → ${money(p.totalEmpreiteiroPix)}.`);
+}
+
+// Painel "Conta da quinzena em R$" (aba Lançar Avanços, com a quinzena filtrada).
+function renderContaQuinzenaPanel(filtro) {
+  const c = contaDaQuinzena(filtro);
+  const panel = document.createElement('div');
+  panel.className = 'panel conta-quinzena';
+  if (!c) {
+    panel.innerHTML = `<div class="panel-header"><div><h2>Conta da quinzena em R$</h2>
+      <div class="muted">Escolha uma quinzena no filtro acima para ver quanto os avanços lançados valem em dinheiro, o cartão descontado e o líquido que o empreiteiro recebe.</div></div></div>`;
+    return panel;
+  }
+  const rotulo = mesQuinzenaLabel(filtro.mes, filtro.quinzena);
+  const linhasAv = c.avancos.map((a) => `<tr class="${a.h.status === 'REALIZADO' ? '' : 'planejado'}">
+      <td><span class="wrap">${esc(a.h.categoriaNome)}</span></td>
+      <td class="num">${money(a.verba)}</td>
+      <td class="num">${a.h.percAvancoAnterior == null ? '0,00%' : pct(a.h.percAvancoAnterior)} → <strong>${pct(a.h.percAvancoNovo)}</strong></td>
+      <td class="num">${pct(a.delta)}</td>
+      <td class="num"><strong>${money(a.valor)}</strong></td>
+      <td><span class="badge ${a.h.status === 'REALIZADO' ? 'green' : 'gray'}">${a.h.status === 'REALIZADO' ? 'Realizado' : 'Planejado'}</span></td>
+    </tr>`).join('');
+  const situacao = (() => {
+    if (!c.parcela) return `<span class="badge gray">sem parcela em Contas a Pagar</span>`;
+    if (c.parcela.status === 'REALIZADO') return `<span class="badge green">parcela REALIZADO: ${money(c.pixAtual)} (valor pago, não recalcula)</span>`;
+    if (Math.abs(c.diferenca) < 0.01) return `<span class="badge green">Contas a Pagar bate: ${money(c.pixAtual)}</span>`;
+    return `<span class="badge red">Contas a Pagar traz ${money(c.pixAtual)} (diferença de ${money(c.diferenca)})</span>`;
+  })();
+  panel.innerHTML = `
+    <div class="panel-header">
+      <div>
+        <h2>Conta da quinzena em R$: ${esc(rotulo)}</h2>
+        <div class="muted">Cada avanço vale verba orçada da categoria × variação do %. A soma fecha o total medido do empreiteiro; o cartão da mesma quinzena (compras do proprietário no Detalhamento FC) sai da verba dele; o que sobra é o PIX líquido a receber, que alimenta Contas a Pagar.</div>
+      </div>
+    </div>
+    <div class="table-scroll"><table class="data conta-tabela">
+      <thead><tr><th class="wrap">Categoria</th><th class="num">Verba orçada (contrato)</th><th class="num">% anterior → novo</th><th class="num">Variação</th><th class="num">R$ do avanço</th><th>Status</th></tr></thead>
+      <tbody>${linhasAv || `<tr><td colspan="6" class="muted">Nenhum avanço lançado nesta quinzena.</td></tr>`}</tbody>
+      <tfoot>
+        <tr class="conta-total"><td colspan="4">Total medido do empreiteiro na quinzena</td><td class="num"><strong>${money(c.medido)}</strong></td><td></td></tr>
+        <tr><td colspan="4">(−) Cartão da quinzena, compras do proprietário no Detalhamento FC${c.cartao ? ` <button type="button" class="btn small filter-control" data-acao="cartao">ver compras</button>` : ''}</td><td class="num">− ${money(c.cartao)}</td><td></td></tr>
+        <tr class="conta-total conta-pix"><td colspan="4">= Empreiteiro a receber (PIX líquido)</td><td class="num"><strong>${money(c.pix)}</strong></td><td>${situacao}</td></tr>
+        <tr><td colspan="4">(+) ADM RS Engenharia (${pct(c.taxaAdm)} sobre PIX + cartão)</td><td class="num">${money(c.adm)}</td><td></td></tr>
+        <tr class="conta-total"><td colspan="4">Total a transferir na quinzena (PIX + ADM)</td><td class="num"><strong>${money(c.totalTransferir)}</strong></td><td></td></tr>
+      </tfoot>
+    </table></div>
+    <div class="conta-acoes no-print"></div>`;
+  const acoes = panel.querySelector('.conta-acoes');
+  const btnCartao = panel.querySelector('button[data-acao="cartao"]');
+  if (btnCartao) btnCartao.onclick = () => abrirComprasCartaoQuinzena(filtro);
+  const nota = document.createElement('div');
+  nota.className = 'muted';
+  if (c.parcela && c.parcela.status !== 'REALIZADO') {
+    if (c.segue) {
+      nota.textContent = 'Esta parcela segue a conta acima automaticamente: se um avanço ou o cartão mudar, o PIX em Contas a Pagar acompanha.';
+    } else if (c.parcela.overrides && c.parcela.overrides.totalEmpreiteiroPix) {
+      nota.textContent = 'O PIX desta parcela foi digitado à mão em Contas a Pagar e não segue a conta dos avanços.';
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn small'; b.textContent = 'Voltar ao cálculo dos avanços';
+      b.onclick = () => voltarPixAoCalculo(c.parcela.id);
+      acoes.appendChild(b);
+    } else if (Math.abs(c.diferenca) >= 0.01) {
+      nota.textContent = 'Esta parcela não foi gerada pelo lançamento de quinzena, por isso não segue a conta sozinha.';
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'btn small primary'; b.textContent = `Aplicar ${money(c.pix)} em Contas a Pagar`;
+      b.onclick = () => { updateParcela(c.parcela.id, { totalEmpreiteiroPix: c.pix }); toast(`PIX da quinzena ${rotulo} atualizado para ${money(c.pix)}.`); };
+      acoes.appendChild(b);
+    }
+  } else if (!c.parcela && c.avancos.length) {
+    nota.textContent = 'Ainda não há parcela desta quinzena em Contas a Pagar. Lance a quinzena pelo formulário acima para gerá-la.';
+  }
+  acoes.prepend(nota);
+  return panel;
+}
+
+function abrirComprasCartaoQuinzena(filtro) {
+  const itens = itensCartaoDoMes(filtro.mes, filtro.quinzena);
+  openModal(`Cartão da quinzena: ${mesQuinzenaLabel(filtro.mes, filtro.quinzena)}`, (body) => {
+    body.innerHTML = `<div class="muted" style="margin-bottom:8px">Compras lançadas no Detalhamento FC com forma de pagamento cartão e fatura do mês ${filtro.mes}. Elas saem da verba do empreiteiro nesta quinzena.</div>
+      <div class="table-scroll"><table class="extrato-table"><thead><tr><th>Categoria</th><th>Compra</th><th class="num">Valor</th></tr></thead>
+      <tbody>${itens.map((i) => `<tr><td>${esc(i.categoria)}</td><td>${esc(i.descricao)}</td><td class="num">${money(i.valor)}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">Nenhuma compra.</td></tr>'}</tbody>
+      <tfoot><tr class="extrato-residuo"><td colspan="2"><strong>Total do cartão</strong></td><td class="num"><strong>${money(sum(itens, (i) => i.valor))}</strong></td></tr></tfoot></table></div>`;
+  });
 }
 
 // Lançamento de avanço por quinzena (aba "Lançar Avanços"): 2 lançamentos por
@@ -4323,6 +4560,7 @@ function renderAll() {
   renderPCI();
   renderControleCaixa();
   renderRelatorios();
+  renderEstudoMercado();
   renderRastreabilidade();
   renderParametros();
   marcarSimulacaoNoCabecalho();
@@ -4337,6 +4575,8 @@ function renderAll() {
     document.querySelectorAll('#tab-controle-caixa input, #tab-controle-caixa select, #tab-controle-caixa button').forEach((el) => { el.disabled = false; });
     // Relatórios são leitura e simulação: liberados sem senha.
     document.querySelectorAll('#tab-relatorios input, #tab-relatorios select, #tab-relatorios button').forEach((el) => { el.disabled = false; });
+    // Estudo de Mercado: leitura e simulação livres; a edição das tabelas só aparece com sessão aberta.
+    document.querySelectorAll('#tab-mercado .filter-control').forEach((el) => { el.disabled = false; });
     const bs = document.getElementById('btnSairSimulacao');
     if (bs) bs.disabled = false;
   }
@@ -5046,13 +5286,13 @@ function abrirExtratoViabilidade(secaoInicial = null) {
       const bCsv = document.createElement('button');
       bCsv.type = 'button';
       bCsv.className = 'btn small filter-control';
-      bCsv.textContent = 'Planilha da análise (CSV)';
-      bCsv.title = 'Baixa a DRE com fórmula de soma na linha de total — abre no Excel e no Google Planilhas.';
+      bCsv.textContent = 'Planilha da análise (Excel)';
+      bCsv.title = 'Baixa a DRE em Excel formatado: cabeçalho, moeda, totais com fórmula viva e aba de resumo. Abre no Excel e no Google Planilhas.';
       bCsv.onclick = () => {
         const rel = relatoriosDisponiveis().find((x) => x.id === 'dre');
         if (!rel) return;
         const ls = rel.linhas();
-        baixarArquivo(`viabilidade-dre-${new Date().toISOString().slice(0, 10)}.csv`, csvDoRelatorio(rel, ls, totaisRelatorio(rel, ls)), 'text/csv;charset=utf-8');
+        baixarArquivo(`viabilidade-dre-${new Date().toISOString().slice(0, 10)}.xlsx`, xlsxDoRelatorio(rel, ls, totaisRelatorio(rel, ls)), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       };
       acoes.appendChild(bCsv);
       body.appendChild(acoes);
@@ -6814,6 +7054,7 @@ function renderAvancos() {
   </tr>`;
 
   root.appendChild(renderHistoricoAvancosPanel());
+  root.appendChild(renderContaQuinzenaPanel(FILTRO_QUINZENA_AVANCOS));
 }
 
 // Histórico de avanços — tabela única editável com avanços PLANEJADO e
@@ -6853,8 +7094,9 @@ function renderHistoricoAvancosPanel() {
     tbl.className = 'data';
     tbl.innerHTML = `<thead><tr>
       <th>Data</th><th class="wrap">Categoria</th><th class="num">% anterior</th><th class="num">% novo</th>
+      <th class="num">Verba (contrato)</th><th class="num">R$ do avanço</th>
       <th>Status</th><th class="wrap">Observação</th><th></th>
-    </tr></thead><tbody></tbody>`;
+    </tr></thead><tbody></tbody><tfoot></tfoot>`;
     const tbody = tbl.querySelector('tbody');
     for (const h of entries) {
       const tr = document.createElement('tr');
@@ -6862,6 +7104,9 @@ function renderHistoricoAvancosPanel() {
       tr.appendChild(td(`<span class="wrap">${esc(h.categoriaNome)}</span>`));
       tr.appendChild(td(`<span class="num">${h.percAvancoAnterior == null ? '—' : pct(h.percAvancoAnterior)}</span>`));
       tr.appendChild(td(percentInput({ value: h.percAvancoNovo, onSave: (v) => updateHistoricoAvanco(h.id, { percAvancoNovo: v }) })));
+      const va = valorDoAvanco(h);
+      tr.appendChild(td(`<span class="num">${money(va.verba)}</span>`));
+      tr.appendChild(td(`<span class="num"><strong>${money(va.valor)}</strong></span>`));
       tr.appendChild(td(statusSelect({ value: h.status, onSave: (v) => updateHistoricoAvanco(h.id, { status: v }) })));
       marcarLinhaStatus(tr, h.status || 'REALIZADO');
       tr.appendChild(td(textInput({ value: h.obs, wide: true, onSave: (v) => updateHistoricoAvanco(h.id, { obs: v }) })));
@@ -6873,6 +7118,8 @@ function renderHistoricoAvancosPanel() {
       tr.appendChild(delTd);
       tbody.appendChild(tr);
     }
+    const totalAv = round2(sum(entries, (h) => valorDoAvanco(h).valor));
+    tbl.querySelector('tfoot').innerHTML = `<tr><td colspan="5"><strong>${FILTRO_QUINZENA_AVANCOS ? 'Total dos avanços da quinzena' : 'Total dos avanços listados'}</strong></td><td class="num"><strong>${money(totalAv)}</strong></td><td colspan="3" class="muted">${FILTRO_QUINZENA_AVANCOS ? 'a conta completa (cartão, PIX líquido, ADM) está no painel abaixo' : 'filtre por quinzena para ver a conta completa'}</td></tr>`;
     wrap.appendChild(tbl);
   }
   panel.querySelector('#btnNovoAvanco').onclick = () => openNovoAvancoModal();
@@ -8851,7 +9098,7 @@ function relatoriosDisponiveis() {
     nome: 'Planilha avançada — todos os lançamentos',
     grupo: 'Demonstrações',
     resumo: 'Base completa para conferência no Excel',
-    descricao: 'Um lançamento por linha, com origem e fórmula de cada valor. Exporte em CSV: a linha de total sai com fórmula de soma.',
+    descricao: 'Um lançamento por linha, com origem e fórmula de cada valor. Exporte em Excel: a linha de total sai com fórmula de soma.',
     colunas: [
       { k: 'tipo', t: 'Tipo' }, { k: 'referencia', t: 'Referência' }, { k: 'data', t: 'Data', tipo: 'data' },
       { k: 'status', t: 'Status' }, { k: 'natureza', t: 'Natureza' },
@@ -8961,6 +9208,418 @@ function blocosRelatorioHtml(rel) {
   </tbody></table></div>`;
 }
 
+/* ======================================================================
+   PLANILHA EXCEL (.xlsx) FORMATADA, gerada no próprio navegador, sem
+   biblioteca externa. O .xlsx é um ZIP (método "store", sem compressão) com
+   XML dentro: cabeçalho com fundo, moeda em R$ com separador de milhar,
+   percentual, data de verdade, linha de total em negrito com FÓRMULA viva
+   (SOMA / SOMASE), painel congelado, filtro automático, largura de coluna
+   e impressão em paisagem ajustada à largura. Continua 100% rastreável: a
+   planilha sai do mesmo dado das telas.
+   ====================================================================== */
+const XLSX_CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function xlsxCrc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < bytes.length; i++) c = XLSX_CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+// ZIP "store": cada arquivo entra sem compressão; o Excel abre normalmente.
+function xlsxZip(arquivos) {
+  const enc = new TextEncoder();
+  const partes = [];
+  const central = [];
+  let offset = 0;
+  const d = new Date();
+  const dosHora = ((d.getHours() << 11) | (d.getMinutes() << 5) | Math.floor(d.getSeconds() / 2)) & 0xFFFF;
+  const dosData = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF;
+  const u16 = (n) => [n & 0xFF, (n >>> 8) & 0xFF];
+  const u32 = (n) => [n & 0xFF, (n >>> 8) & 0xFF, (n >>> 16) & 0xFF, (n >>> 24) & 0xFF];
+  for (const [nome, conteudo] of arquivos) {
+    const nomeB = enc.encode(nome);
+    const dados = typeof conteudo === 'string' ? enc.encode(conteudo) : conteudo;
+    const crc = xlsxCrc32(dados);
+    const local = new Uint8Array([
+      ...u32(0x04034b50), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(dosHora), ...u16(dosData),
+      ...u32(crc), ...u32(dados.length), ...u32(dados.length), ...u16(nomeB.length), ...u16(0),
+    ]);
+    partes.push(local, nomeB, dados);
+    central.push(new Uint8Array([
+      ...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(dosHora), ...u16(dosData),
+      ...u32(crc), ...u32(dados.length), ...u32(dados.length), ...u16(nomeB.length), ...u16(0), ...u16(0),
+      ...u16(0), ...u16(0), ...u32(0), ...u32(offset),
+    ]), nomeB);
+    offset += local.length + nomeB.length + dados.length;
+  }
+  const inicioCentral = offset;
+  let tamCentral = 0;
+  for (const p of central) tamCentral += p.length;
+  const fim = new Uint8Array([
+    ...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(arquivos.length), ...u16(arquivos.length),
+    ...u32(tamCentral), ...u32(inicioCentral), ...u16(0),
+  ]);
+  const total = offset + tamCentral + fim.length;
+  const out = new Uint8Array(total);
+  let pos = 0;
+  for (const p of [...partes, ...central, fim]) { out.set(p, pos); pos += p.length; }
+  return out;
+}
+function xlsxEsc(s) {
+  return String(s === null || s === undefined ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+}
+function xlsxColLetra(i) { // 0 -> A, 25 -> Z, 26 -> AA
+  let s = '';
+  i += 1;
+  while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); }
+  return s;
+}
+function xlsxSerialData(iso) { // 'AAAA-MM-DD' -> número de série do Excel
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  if (!m) return null;
+  const ms = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])) - Date.UTC(1899, 11, 30);
+  return Math.round(ms / 86400000);
+}
+
+// Estilos fixos (índice em cellXfs). Quem monta a planilha usa estes nomes.
+const XLSX_ESTILO = {
+  padrao: 0, titulo: 1, subtitulo: 2, cabecalho: 3,
+  texto: 4, moeda: 5, pct: 6, data: 7, numero: 8,
+  totalTexto: 9, totalMoeda: 10, subTexto: 11, subMoeda: 12, nota: 13, totalPct: 14, subPct: 15,
+  textoForte: 16, moedaForte: 17, grupo: 18, totalNumero: 19, subNumero: 20,
+};
+function xlsxStylesXml() {
+  const numFmts = [
+    [164, '#,##0.00'], [165, '0.00%'], [166, 'dd/mm/yyyy'], [167, '#,##0'],
+  ];
+  const fonts = [
+    '<font><sz val="11"/><name val="Calibri"/><family val="2"/></font>',
+    '<font><b/><sz val="11"/><name val="Calibri"/><family val="2"/></font>',
+    '<font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Calibri"/><family val="2"/></font>',
+    '<font><b/><sz val="14"/><color rgb="FF14304A"/><name val="Calibri"/><family val="2"/></font>',
+    '<font><i/><sz val="10"/><color rgb="FF5F6B7A"/><name val="Calibri"/><family val="2"/></font>',
+    '<font><b/><sz val="11"/><color rgb="FF14304A"/><name val="Calibri"/><family val="2"/></font>',
+  ];
+  const fills = [
+    '<fill><patternFill patternType="none"/></fill>',
+    '<fill><patternFill patternType="gray125"/></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="FF1F4E79"/><bgColor indexed="64"/></patternFill></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFDDE8F3"/><bgColor indexed="64"/></patternFill></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFF2F5F9"/><bgColor indexed="64"/></patternFill></fill>',
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFE9EEF4"/><bgColor indexed="64"/></patternFill></fill>',
+  ];
+  const borders = [
+    '<border><left/><right/><top/><bottom/><diagonal/></border>',
+    '<border><left style="thin"><color rgb="FFB7C4D3"/></left><right style="thin"><color rgb="FFB7C4D3"/></right><top style="thin"><color rgb="FFB7C4D3"/></top><bottom style="thin"><color rgb="FFB7C4D3"/></bottom><diagonal/></border>',
+    '<border><left style="thin"><color rgb="FFB7C4D3"/></left><right style="thin"><color rgb="FFB7C4D3"/></right><top style="medium"><color rgb="FF1F4E79"/></top><bottom style="double"><color rgb="FF1F4E79"/></bottom><diagonal/></border>',
+  ];
+  const xf = (o) => {
+    const a = [];
+    if (o.h || o.wrap || o.v) a.push(`<alignment${o.h ? ` horizontal="${o.h}"` : ''}${o.v ? ` vertical="${o.v}"` : ''}${o.wrap ? ' wrapText="1"' : ''}/>`);
+    return `<xf numFmtId="${o.num || 0}" fontId="${o.font || 0}" fillId="${o.fill || 0}" borderId="${o.border || 0}" xfId="0"${o.num ? ' applyNumberFormat="1"' : ''}${o.font ? ' applyFont="1"' : ''}${o.fill ? ' applyFill="1"' : ''}${o.border ? ' applyBorder="1"' : ''}${a.length ? ' applyAlignment="1"' : ''}>${a.join('')}</xf>`;
+  };
+  const xfs = [
+    xf({}),                                                  // 0 padrao
+    xf({ font: 3 }),                                         // 1 titulo
+    xf({ font: 4 }),                                         // 2 subtitulo
+    xf({ font: 2, fill: 2, border: 1, h: 'center', v: 'center', wrap: true }), // 3 cabecalho
+    xf({ border: 1, v: 'top', wrap: true }),                 // 4 texto
+    xf({ num: 164, border: 1 }),                             // 5 moeda
+    xf({ num: 165, border: 1 }),                             // 6 pct
+    xf({ num: 166, border: 1, h: 'center' }),                // 7 data
+    xf({ num: 164, border: 1 }),                             // 8 numero
+    xf({ font: 1, fill: 3, border: 2 }),                     // 9 totalTexto
+    xf({ num: 164, font: 1, fill: 3, border: 2 }),           // 10 totalMoeda
+    xf({ font: 1, fill: 4, border: 1 }),                     // 11 subTexto
+    xf({ num: 164, font: 1, fill: 4, border: 1 }),           // 12 subMoeda
+    xf({ font: 4, wrap: true, v: 'top' }),                   // 13 nota
+    xf({ num: 165, font: 1, fill: 3, border: 2 }),           // 14 totalPct
+    xf({ num: 165, font: 1, fill: 4, border: 1 }),           // 15 subPct
+    xf({ font: 1, border: 1, v: 'top', wrap: true }),        // 16 textoForte
+    xf({ num: 164, font: 1, border: 1 }),                    // 17 moedaForte
+    xf({ font: 5, fill: 5, border: 1 }),                     // 18 grupo
+    xf({ num: 164, font: 1, fill: 3, border: 2 }),           // 19 totalNumero
+    xf({ num: 164, font: 1, fill: 4, border: 1 }),           // 20 subNumero
+  ];
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="${numFmts.length}">${numFmts.map(([id, f]) => `<numFmt numFmtId="${id}" formatCode="${xlsxEsc(f)}"/>`).join('')}</numFmts>
+<fonts count="${fonts.length}">${fonts.join('')}</fonts>
+<fills count="${fills.length}">${fills.join('')}</fills>
+<borders count="${borders.length}">${borders.join('')}</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs>
+<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>`;
+}
+
+/* Uma aba: { nome, larguras:[n..], congelar: linhaBase (1-based, congela acima),
+   filtro: 'A4:G10', mesclar:['A1:G1'], linhas: [ [celula,...], ... ] }
+   Célula: null | string | number | { v, t:'s'|'n'|'d'|'f', s: estilo }
+   t='d' recebe 'AAAA-MM-DD'; t='f' recebe a fórmula (sem '='). */
+function xlsxSheetXml(aba) {
+  const linhas = aba.linhas || [];
+  let maxCol = 0;
+  for (const l of linhas) maxCol = Math.max(maxCol, (l || []).length);
+  const rows = [];
+  linhas.forEach((l, ri) => {
+    const r = ri + 1;
+    const cells = [];
+    (l || []).forEach((c, ci) => {
+      if (c === null || c === undefined) return;
+      const ref = `${xlsxColLetra(ci)}${r}`;
+      let cel = c;
+      if (typeof c !== 'object') cel = (typeof c === 'number') ? { v: c, t: 'n' } : { v: c, t: 's' };
+      const s = cel.s ? ` s="${cel.s}"` : '';
+      if (cel.t === 'f') { cells.push(`<c r="${ref}"${s}><f>${xlsxEsc(cel.v)}</f></c>`); return; }
+      if (cel.t === 'd') {
+        const serial = xlsxSerialData(cel.v);
+        if (serial === null) { if (cel.v) cells.push(`<c r="${ref}"${s} t="inlineStr"><is><t>${xlsxEsc(cel.v)}</t></is></c>`); return; }
+        cells.push(`<c r="${ref}"${s}><v>${serial}</v></c>`); return;
+      }
+      if (cel.t === 'n') {
+        const n = Number(cel.v);
+        if (!Number.isFinite(n)) return;
+        cells.push(`<c r="${ref}"${s}><v>${n}</v></c>`); return;
+      }
+      if (cel.v === '' || cel.v === null || cel.v === undefined) { if (s) cells.push(`<c r="${ref}"${s}/>`); return; }
+      cells.push(`<c r="${ref}"${s} t="inlineStr"><is><t xml:space="preserve">${xlsxEsc(cel.v)}</t></is></c>`);
+    });
+    const alt = aba.alturas && aba.alturas[r] ? ` ht="${aba.alturas[r]}" customHeight="1"` : '';
+    rows.push(`<row r="${r}"${alt}>${cells.join('')}</row>`);
+  });
+  const dim = `A1:${xlsxColLetra(Math.max(0, maxCol - 1))}${Math.max(1, linhas.length)}`;
+  const cols = (aba.larguras || []).length
+    ? `<cols>${aba.larguras.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${Math.max(6, Math.min(80, Number(w) || 12))}" customWidth="1"/>`).join('')}</cols>`
+    : '';
+  const pane = aba.congelar
+    ? `<pane ySplit="${aba.congelar}" topLeftCell="A${aba.congelar + 1}" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft"/>`
+    : '';
+  const merges = (aba.mesclar || []).length ? `<mergeCells count="${aba.mesclar.length}">${aba.mesclar.map((m) => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : '';
+  const filtro = aba.filtro ? `<autoFilter ref="${aba.filtro}"/>` : '';
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>
+<dimension ref="${dim}"/>
+<sheetViews><sheetView workbookViewId="0" showGridLines="0">${pane}</sheetView></sheetViews>
+<sheetFormatPr defaultRowHeight="15"/>
+${cols}
+<sheetData>${rows.join('')}</sheetData>
+${filtro}${merges}
+<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/>
+<pageSetup orientation="landscape" paperSize="9" fitToWidth="1" fitToHeight="0"/>
+<headerFooter><oddFooter>&amp;L${xlsxEsc(aba.rodape || '')}&amp;RPágina &amp;P de &amp;N</oddFooter></headerFooter>
+</worksheet>`;
+}
+
+function xlsxNomeAba(s, usados) {
+  let n = String(s || 'Planilha').replace(/[\\/?*[\]:]/g, ' ').trim().slice(0, 31) || 'Planilha';
+  let base = n; let k = 2;
+  while (usados.has(n.toLowerCase())) { n = `${base.slice(0, 28)} ${k++}`; }
+  usados.add(n.toLowerCase());
+  return n;
+}
+
+// Monta o arquivo: abas = [{ nome, ...aba }]. Devolve Uint8Array.
+function xlsxGerar(abas, meta) {
+  const usados = new Set();
+  const nomes = abas.map((a) => xlsxNomeAba(a.nome, usados));
+  const arquivos = [];
+  arquivos.push(['[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+${abas.map((a, i) => `<Override PartName="/xl/worksheets/sheet${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`).join('\n')}
+<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>`]);
+  arquivos.push(['_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>`]);
+  const agora = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
+  arquivos.push(['docProps/core.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+<dc:title>${xlsxEsc(meta && meta.titulo || 'Relatório')}</dc:title><dc:creator>${xlsxEsc(meta && meta.autor || 'Controle de obra')}</dc:creator>
+<dcterms:created xsi:type="dcterms:W3CDTF">${agora}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${agora}</dcterms:modified>
+</cp:coreProperties>`]);
+  arquivos.push(['docProps/app.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>${xlsxEsc(meta && meta.app || 'Controle de obra')}</Application></Properties>`]);
+  arquivos.push(['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<workbookPr/>
+<bookViews><workbookView xWindow="0" yWindow="0" windowWidth="24000" windowHeight="12000"/></bookViews>
+<sheets>${abas.map((a, i) => `<sheet name="${xlsxEsc(nomes[i])}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets>
+<definedNames>${abas.map((a, i) => a.filtro ? `<definedName name="_xlnm._FilterDatabase" localSheetId="${i}" hidden="1">'${xlsxEsc(nomes[i]).replace(/'/g, "''")}'!$${a.filtro.replace(':', ':$').replace(/([A-Z]+)(\d+)/g, '$1$$$2')}</definedName>` : '').join('')}</definedNames>
+<calcPr calcId="191029" fullCalcOnLoad="1"/>
+</workbook>`]);
+  arquivos.push(['xl/_rels/workbook.xml.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${abas.map((a, i) => `<Relationship Id="rId${i + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i + 1}.xml"/>`).join('\n')}
+<Relationship Id="rId${abas.length + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+</Relationships>`]);
+  arquivos.push(['xl/styles.xml', xlsxStylesXml()]);
+  abas.forEach((a, i) => arquivos.push([`xl/worksheets/sheet${i + 1}.xml`, xlsxSheetXml(a)]));
+  return xlsxZip(arquivos);
+}
+
+/* Aba tabular padrão: título, subtítulo, cabeçalho, linhas tipadas, total com
+   fórmula, notas. colunas = [{ t, k, tipo:'money'|'pct'|'num'|'data'|'texto', total }]
+   linhas = objetos; linhas com _subtotal viram linha destacada (e ficam fora da soma). */
+function xlsxAbaTabela(opts) {
+  const E = XLSX_ESTILO;
+  const cols = opts.colunas;
+  const linhas = opts.linhas || [];
+  const nCols = cols.length;
+  const ultimaLetra = xlsxColLetra(nCols - 1);
+  const out = [];
+  out.push([{ v: opts.titulo || '', t: 's', s: E.titulo }]);
+  out.push([{ v: opts.subtitulo || '', t: 's', s: E.subtitulo }]);
+  out.push([]);
+  const linhaCab = out.length + 1;
+  out.push(cols.map((c) => ({ v: c.t, t: 's', s: E.cabecalho })));
+  const estiloDe = (tipo, forte) => {
+    if (tipo === 'money') return forte ? E.subMoeda : E.moeda;
+    if (tipo === 'pct') return forte ? E.subPct : E.pct;
+    if (tipo === 'num') return forte ? E.subNumero : E.numero;
+    if (tipo === 'data') return E.data;
+    return forte ? E.subTexto : E.texto;
+  };
+  const subtotais = [];
+  for (const l of linhas) {
+    const r = out.length + 1;
+    if (l._subtotal) subtotais.push(r);
+    out.push(cols.map((c) => {
+      const v = l[c.k];
+      const s = estiloDe(c.tipo, !!l._subtotal);
+      if (c.tipo === 'money' || c.tipo === 'num' || c.tipo === 'pct') {
+        if (v === null || v === undefined || v === '') return { v: '', t: 's', s };
+        return { v: Number(v) || 0, t: 'n', s };
+      }
+      if (c.tipo === 'data') return { v: v ? String(v).slice(0, 10) : '', t: v ? 'd' : 's', s };
+      return { v: v === null || v === undefined ? '' : String(v), t: 's', s };
+    }));
+  }
+  const primeira = linhaCab + 1;
+  const ultima = linhaCab + linhas.length;
+  const temDados = linhas.length > 0;
+  const estiloTotal = (tipo, sub) => (tipo === 'pct' ? (sub ? E.subPct : E.totalPct) : (tipo === 'num' ? (sub ? E.subNumero : E.totalNumero) : (sub ? E.subMoeda : E.totalMoeda)));
+  const colStatus = cols.findIndex((c) => c.k === 'status');
+  const temStatus = colStatus >= 0 && linhas.some((l) => l.status);
+  const formulaSoma = (letra, criterio) => {
+    if (!temDados) return { v: 0, t: 'n' };
+    let f;
+    if (criterio) {
+      const st = xlsxColLetra(colStatus);
+      f = `SUMIF($${st}$${primeira}:$${st}$${ultima},"${criterio}",${letra}${primeira}:${letra}${ultima})`;
+    } else {
+      f = `SUM(${letra}${primeira}:${letra}${ultima})`;
+      if (subtotais.length) f += subtotais.map((r) => `-${letra}${r}`).join('');
+    }
+    return { v: f, t: 'f' };
+  };
+  const linhaTotal = (rotulo, criterio, sub) => cols.map((c, i) => {
+    if (i === 0) return { v: rotulo, t: 's', s: sub ? E.subTexto : E.totalTexto };
+    if (!c.total) return { v: '', t: 's', s: sub ? E.subTexto : E.totalTexto };
+    const f = formulaSoma(xlsxColLetra(i), criterio);
+    return { ...f, s: estiloTotal(c.tipo, sub) };
+  });
+  if (temStatus && !subtotais.length) {
+    if (linhas.some((l) => l.status === 'REALIZADO')) out.push(linhaTotal('REALIZADO', 'REALIZADO', true));
+    if (linhas.some((l) => l.status && l.status !== 'REALIZADO')) out.push(linhaTotal('PLANEJADO', '<>REALIZADO', true));
+  }
+  out.push(linhaTotal(opts.rotuloTotal || 'TOTAL', null, false));
+  const linhaTot = out.length;
+  out.push([]);
+  for (const n of (opts.notas || [])) out.push([{ v: n, t: 's', s: E.nota }]);
+  if (opts.rodapeOrigem) { out.push([]); out.push([{ v: opts.rodapeOrigem, t: 's', s: E.nota }]); }
+  // largura: maior texto da coluna (limitado), moeda com folga
+  const larguras = cols.map((c, i) => {
+    let w = String(c.t || '').length + 2;
+    for (const l of linhas) {
+      const v = l[c.k];
+      const len = (c.tipo === 'money' || c.tipo === 'num') ? String(Math.round(Number(v) || 0)).length + 6 : (c.tipo === 'pct' ? 9 : (c.tipo === 'data' ? 12 : String(v === null || v === undefined ? '' : v).length + 2));
+      w = Math.max(w, len);
+    }
+    if (i === 0) w = Math.max(w, 14);
+    return Math.min(w, c.tipo === 'texto' || !c.tipo ? 60 : 22);
+  });
+  const mesclar = nCols > 1 ? [`A1:${ultimaLetra}1`, `A2:${ultimaLetra}2`] : [];
+  for (let r = linhaTot + 2; r <= out.length; r++) if (nCols > 1) mesclar.push(`A${r}:${ultimaLetra}${r}`);
+  const alturas = {};
+  for (let r = linhaTot + 2; r <= out.length; r++) alturas[r] = 30;
+  return {
+    nome: opts.nome, linhas: out, larguras, congelar: linhaCab, mesclar, alturas,
+    filtro: temDados ? `A${linhaCab}:${ultimaLetra}${ultima}` : null,
+    rodape: opts.rodape || '',
+  };
+}
+
+/* Aba de blocos (DRE / DFC / resumo): grupos com pares rótulo · valor. */
+function xlsxAbaBlocos(opts) {
+  const E = XLSX_ESTILO;
+  const out = [];
+  out.push([{ v: opts.titulo || '', t: 's', s: E.titulo }]);
+  out.push([{ v: opts.subtitulo || '', t: 's', s: E.subtitulo }]);
+  out.push([]);
+  const mesclar = ['A1:B1', 'A2:B2'];
+  for (const b of (opts.blocos || [])) {
+    const r = out.length + 1;
+    out.push([{ v: b.titulo, t: 's', s: E.grupo }, { v: '', t: 's', s: E.grupo }]);
+    mesclar.push(`A${r}:B${r}`);
+    for (const [rot, val, forte] of (b.itens || [])) {
+      const num = typeof val === 'number';
+      out.push([
+        { v: rot, t: 's', s: forte ? E.textoForte : E.texto },
+        num ? { v: val, t: 'n', s: forte ? E.moedaForte : E.moeda } : { v: String(val === null || val === undefined ? '' : val), t: 's', s: forte ? E.textoForte : E.texto },
+      ]);
+    }
+    out.push([]);
+  }
+  for (const n of (opts.notas || [])) { const r = out.length + 1; out.push([{ v: n, t: 's', s: E.nota }]); mesclar.push(`A${r}:B${r}`); }
+  return { nome: opts.nome, linhas: out, larguras: [58, 20], mesclar, rodape: opts.rodape || '' };
+}
+
+function xlsxDoRelatorio(rel, linhas, totais) {
+  const obra = (typeof VIEW !== 'undefined' && VIEW.meta && VIEW.meta.obra) || 'Obra';
+  const hoje = new Date().toISOString().slice(0, 10);
+  const per = (typeof RELATORIO_PERIODO !== 'undefined' && (RELATORIO_PERIODO.de || RELATORIO_PERIODO.ate))
+    ? `período ${RELATORIO_PERIODO.de ? dateBR(RELATORIO_PERIODO.de) : 'início'} a ${RELATORIO_PERIODO.ate ? dateBR(RELATORIO_PERIODO.ate) : 'hoje'}`
+    : 'período completo';
+  const sim = (typeof VIEW !== 'undefined' && VIEW.resumo && VIEW.resumo.simulando) ? ' · SIMULAÇÃO (dados não oficiais)' : '';
+  const versao = (typeof APP_VERSAO !== 'undefined') ? ` · versão ${APP_VERSAO}` : '';
+  const notas = (typeof rel.notas === 'function' ? rel.notas() : []).map((n) => String(n).replace(/<[^>]+>/g, ''));
+  const abas = [xlsxAbaTabela({
+    nome: rel.abaNome || rel.nome,
+    titulo: `${obra} · ${rel.nome}`,
+    subtitulo: `Gerado em ${dateBR(hoje)} · ${per}${sim}${versao}`,
+    colunas: rel.colunas, linhas, notas,
+    rodapeOrigem: 'Origem: aplicativo de controle da obra. Cada valor sai do mesmo dado que alimenta as telas; a linha de total usa fórmula viva (SOMA / SOMASE).',
+    rodape: `${obra} · ${rel.nome}`,
+  })];
+  if (typeof rel.blocos === 'function') {
+    abas.push(xlsxAbaBlocos({
+      nome: 'Resumo',
+      titulo: `${obra} · ${rel.nome} · resumo`,
+      subtitulo: `Gerado em ${dateBR(hoje)} · ${per}${sim}`,
+      blocos: rel.blocos(), rodape: `${obra} · ${rel.nome}`,
+    }));
+  }
+  return xlsxGerar(abas, { titulo: `${obra} · ${rel.nome}`, autor: 'Controle de obra', app: 'Controle de obra' });
+}
+
 // CSV com ; (padrão pt-BR), BOM para o Excel abrir acentuado e FÓRMULA de
 // soma na linha de total — a planilha continua "viva" para quem for conferir.
 function csvDoRelatorio(rel, linhas, totais) {
@@ -8996,10 +9655,11 @@ function csvDoRelatorio(rel, linhas, totais) {
 }
 
 async function baixarArquivo(filename, data, mime) {
+  const binario = data instanceof Uint8Array;
   const ns = (window.claude && typeof window.claude.use === 'function')
     ? await window.claude.use('downloads').catch(() => null)
     : null;
-  if (ns && typeof ns.save === 'function') {
+  if (ns && typeof ns.save === 'function' && !binario) {
     try { await ns.save({ filename, data }); toast('Arquivo salvo.'); return; }
     catch (e) { if (e && e.code === 'declined') return; }
   }
@@ -9044,8 +9704,8 @@ function abrirRelatorio(id) {
       return b;
     };
     btn('Imprimir / PDF', 'Abre a impressão do navegador — escolha "Salvar como PDF" para gerar o arquivo.', () => window.print(), true);
-    btn('Planilha (CSV)', 'Baixa a tabela em CSV, com fórmula de soma na linha de total — abre no Excel e no Google Planilhas.', () => {
-      baixarArquivo(`${rel.id}-${new Date().toISOString().slice(0, 10)}.csv`, csvDoRelatorio(rel, linhas, totais), 'text/csv;charset=utf-8');
+    btn('Planilha (Excel)', 'Baixa a tabela em Excel formatado: cabeçalho, moeda em R$, datas, painel congelado, filtro e linha de total com fórmula viva (SOMA / SOMASE). Abre no Excel e no Google Planilhas.', () => {
+      baixarArquivo(`${rel.id}-${new Date().toISOString().slice(0, 10)}.xlsx`, xlsxDoRelatorio(rel, linhas, totais), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     });
     body.appendChild(acoes);
 
@@ -10036,7 +10696,7 @@ function renderRelatorios() {
   const painel = document.createElement('div');
   painel.className = 'panel';
   painel.innerHTML = `<div class="panel-header"><div><h2>Relatórios</h2>
-    <div class="muted">Cada relatório sai do mesmo dado que alimenta as telas — nada é recalculado por fora. Todos abrem em tela cheia, com totalizadores, botão de imprimir (que vira PDF) e planilha CSV com fórmula de soma. O filtro de período abaixo vale para todos.</div></div>`;
+    <div class="muted">Cada relatório sai do mesmo dado que alimenta as telas — nada é recalculado por fora. Todos abrem em tela cheia, com totalizadores, botão de imprimir (que vira PDF) e planilha Excel formatada, com fórmula de soma na linha de total. O filtro de período abaixo vale para todos.</div></div>`;
 
   // Filtro de período comum
   const filtro = document.createElement('div');
@@ -10120,6 +10780,687 @@ function renderRelatorios() {
     painel.appendChild(grid);
   }
   root.appendChild(painel);
+}
+
+/* ==========================================================================
+   Estudo de Mercado — aba de apoio à decisão e apresentação a investidores
+   --------------------------------------------------------------------------
+   Cruza três coisas que normalmente vivem em planilhas separadas: o custo
+   real desta obra (que o app já tem), o preço que o mercado está pedindo
+   por m² no Gran Park Toscana e vizinhança, e o que a região oferece de
+   lote novo para repetir a operação. Nada aqui é recalculado por fora: o
+   custo vem da viabilidade, o VGV vem dos parâmetros, e o mercado vem de
+   uma base de anúncios com fonte e data em cada linha — editável.
+   ========================================================================== */
+const MERCADO_SEED = {"atualizadoEm":"2026-09-03","premissas":{"areaConstruidaM2":349,"areaLoteM2":405,"precoLoteAlvo":301132,"condominioAlvo":"Gran Park Douro","custoConstrucaoM2":3100,"indiretosPercent":0.09,"custoFinanceiroPercent":0.188,"financiadoPercent":0.75,"taxaCreditoAnual":0.118,"prazoMeses":20,"valorizacaoAnualEsperada":0.06,"loteToscanaLancamentoM2":365,"loteToscanaLancamentoAno":2020},"indices":{"cub":[["2021-01",1639.97],["2022-01",1933.67],["2023-01",2151.17],["2024-01",2169.23],["2025-01",2322.58],["2026-06",2548.33]],"fipezapBrasilAnual":[["2021",0.0529],["2022",0.0616],["2023",0.0513],["2024",0.0773],["2025",0.0652]],"fipezapBh":{"mes":"2026-05","precoM2":10680,"var12m":0.0554},"fipezapBrasil12m":0.0559,"selic":0.14,"toscanaMedianaMaio26":8650.52,"amostraMaio26":22},"comparaveis":[{"id":"c-ma-01","cond":"Gran Park Toscana","area":268,"preco":2300000,"q":5,"fonte":"OLX","data":"2026-05","obs":"piscina"},{"id":"c-ma-02","cond":"Gran Park Toscana","area":250,"preco":1890000,"q":4,"fonte":"OLX","data":"2026-05","obs":"direto c/ proprietário"},{"id":"c-ma-03","cond":"Gran Park Toscana","area":205,"preco":1770000,"q":4,"fonte":"OLX","data":"2026-05","obs":""},{"id":"c-ma-04","cond":"Gran Park Toscana","area":245,"preco":2390000,"q":4,"fonte":"OLX","data":"2026-05","obs":""},{"id":"c-ma-05","cond":"Gran Park Toscana","area":290,"preco":2500000,"q":4,"fonte":"OLX","data":"2026-05","obs":"3 suítes"},{"id":"c-ma-06","cond":"Gran Park Toscana","area":300,"preco":2640000,"q":4,"fonte":"OLX","data":"2026-05","obs":""},{"id":"c-ma-07","cond":"Gran Park Toscana","area":337,"preco":2700000,"q":3,"fonte":"OLX","data":"2026-05","obs":"3 suítes"},{"id":"c-ma-08","cond":"Gran Park Toscana","area":365,"preco":3500000,"q":4,"fonte":"OLX","data":"2026-05","obs":"4 suítes, teto"},{"id":"c-ma-09","cond":"Gran Park Toscana","area":245,"preco":2180000,"q":4,"fonte":"OLX","data":"2026-05","obs":"2 suítes"},{"id":"c-ma-10","cond":"Gran Park Toscana","area":289,"preco":2500000,"q":4,"fonte":"OLX","data":"2026-05","obs":""},{"id":"c-ma-11","cond":"Gran Park Toscana","area":272,"preco":2150000,"q":4,"fonte":"OLX","data":"2026-05","obs":"1 suíte"},{"id":"c-ma-12","cond":"Gran Park Toscana","area":202,"preco":2000000,"q":4,"fonte":"OLX","data":"2026-05","obs":"2 suítes"},{"id":"c-ma-13","cond":"Gran Park Toscana","area":180,"preco":2180000,"q":4,"fonte":"OLX","data":"2026-05","obs":"outlier R$/m²"},{"id":"c-ma-14","cond":"Gran Park Toscana","area":315,"preco":2890000,"q":4,"fonte":"OLX","data":"2026-05","obs":"reduzido de 2.950.000"},{"id":"c-ma-15","cond":"Gran Park Toscana","area":205,"preco":1950000,"q":3,"fonte":"OLX","data":"2026-05","obs":"reduzido de 2.100.000"},{"id":"c-ma-16","cond":"Gran Park Toscana","area":300,"preco":2690000,"q":5,"fonte":"OLX","data":"2026-05","obs":""},{"id":"c-ma-17","cond":"Gran Park Toscana","area":300,"preco":2640000,"q":4,"fonte":"OLX","data":"2026-05","obs":""},{"id":"c-ma-18","cond":"Gran Park Toscana","area":259,"preco":1700000,"q":4,"fonte":"OLX","data":"2026-05","obs":"abaixo da amostra"},{"id":"c-ma-19","cond":"Gran Park Toscana","area":221,"preco":1650000,"q":3,"fonte":"OLX","data":"2026-05","obs":"reduzido de 1.700.000"},{"id":"c-ma-20","cond":"Gran Park Toscana","area":304,"preco":1990000,"q":4,"fonte":"OLX","data":"2026-05","obs":"reduzido de 2.100.000"},{"id":"c-ma-21","cond":"Gran Park Toscana","area":289,"preco":2500000,"q":4,"fonte":"OLX","data":"2026-05","obs":""},{"id":"c-ma-22","cond":"Gran Park Toscana","area":381,"preco":2600000,"q":3,"fonte":"OLX","data":"2026-05","obs":"maior metragem"},{"id":"c-se-01","cond":"Gran Park Toscana","area":352,"preco":3190000,"q":4,"fonte":"Gold House","data":"2026-09","obs":"4 suítes"},{"id":"c-se-02","cond":"Gran Park Toscana","area":202,"preco":2400000,"q":4,"fonte":"Gold House","data":"2026-09","obs":"4 suítes, teto"},{"id":"c-se-03","cond":"Gran Park Toscana","area":202,"preco":1690000,"q":4,"fonte":"Gold House","data":"2026-09","obs":"2 suítes"},{"id":"c-se-04","cond":"Gran Park Toscana","area":202,"preco":1950000,"q":4,"fonte":"Gold House","data":"2026-09","obs":"4 suítes"},{"id":"c-se-05","cond":"Gran Park Toscana","area":325,"preco":3300000,"q":4,"fonte":"Gold House","data":"2026-09","obs":"4 suítes"},{"id":"c-se-06","cond":"Gran Park Toscana","area":270,"preco":2450000,"q":4,"fonte":"Gold House","data":"2026-09","obs":"4 suítes"},{"id":"c-se-07","cond":"Gran Park Toscana","area":235,"preco":2100000,"q":3,"fonte":"Gold House","data":"2026-09","obs":"3 suítes"},{"id":"c-se-08","cond":"Gran Park Toscana","area":225,"preco":2290000,"q":4,"fonte":"Gold House","data":"2026-09","obs":"2 suítes"},{"id":"c-se-09","cond":"Gran Park Toscana","area":205,"preco":2290000,"q":4,"fonte":"Gold House","data":"2026-09","obs":"2 suítes"},{"id":"c-se-10","cond":"Gran Park Toscana","area":250,"preco":2450000,"q":3,"fonte":"Gold House","data":"2026-09","obs":"1 suíte"},{"id":"c-se-11","cond":"Gran Park Toscana","area":205,"preco":1950000,"q":3,"fonte":"Gold House","data":"2026-09","obs":"3 suítes"},{"id":"c-se-12","cond":"Gran Park Toscana","area":282,"preco":2300000,"q":4,"fonte":"Gold House","data":"2026-09","obs":"4 suítes"},{"id":"c-se-13","cond":"Gran Park Toscana","area":283,"preco":1980000,"q":4,"fonte":"Lagoa Santa Top","data":"2026-09","obs":""},{"id":"c-se-14","cond":"Gran Park Toscana","area":230,"preco":2100000,"q":3,"fonte":"Lagoa Santa Top","data":"2026-09","obs":""},{"id":"c-se-15","cond":"Gran Park Toscana","area":243,"preco":2150000,"q":4,"fonte":"Lagoa Santa Top","data":"2026-09","obs":""},{"id":"c-se-16","cond":"Gran Park Toscana","area":245,"preco":2290000,"q":4,"fonte":"Lagoa Santa Top","data":"2026-09","obs":""},{"id":"c-se-17","cond":"Gran Park Toscana","area":380,"preco":2300000,"q":5,"fonte":"Lagoa Santa Top","data":"2026-09","obs":"maior metragem, R$/m² baixo"},{"id":"c-se-18","cond":"Gran Park Toscana","area":251,"preco":2450000,"q":3,"fonte":"Lagoa Santa Top","data":"2026-09","obs":""}],"lotes":[{"id":"l-01","cond":"Gran Park Toscana","cidade":"Vespasiano","area":405,"preco":500000,"fonte":"Lagoa Santa Top","data":"2026-09","tipo":"consolidado","obs":""},{"id":"l-02","cond":"Gran Park Toscana","cidade":"Vespasiano","area":448,"preco":500000,"fonte":"Lagoa Santa Top","data":"2026-09","tipo":"consolidado","obs":""},{"id":"l-03","cond":"Gran Park Toscana","cidade":"Vespasiano","area":405,"preco":405000,"fonte":"Wimoveis","data":"2026-09","tipo":"consolidado","obs":"Av. Um"},{"id":"l-04","cond":"Gran Park Toscana","cidade":"Vespasiano","area":405,"preco":450000,"fonte":"Wimoveis","data":"2026-09","tipo":"consolidado","obs":""},{"id":"l-05","cond":"Gran Park Toscana","cidade":"Vespasiano","area":405,"preco":440000,"fonte":"Wimoveis","data":"2026-09","tipo":"consolidado","obs":""},{"id":"l-06","cond":"Gran Park Toscana","cidade":"Vespasiano","area":405,"preco":590000,"fonte":"Wimoveis","data":"2026-09","tipo":"consolidado","obs":"R. Carlos Drummond"},{"id":"l-07","cond":"Gran Park Toscana","cidade":"Vespasiano","area":405,"preco":680000,"fonte":"Wimoveis","data":"2026-09","tipo":"consolidado","obs":"Av. Um, posição premium"},{"id":"l-08","cond":"Gran Park Toscana","cidade":"Vespasiano","area":529,"preco":480000,"fonte":"Wimoveis","data":"2026-09","tipo":"consolidado","obs":""},{"id":"l-09","cond":"Gran Park Douro","cidade":"Vespasiano","area":400,"preco":301132,"fonte":"Metropoli","data":"2026-09","tipo":"novo","obs":"financiamento próprio; condomínio R$ 250/mês"},{"id":"l-10","cond":"Gran Park Douro","cidade":"Vespasiano","area":405,"preco":289000,"fonte":"Wimoveis","data":"2026-09","tipo":"novo","obs":"Rua Doze"},{"id":"l-11","cond":"Gran Park Celebration","cidade":"Vespasiano","area":360,"preco":307000,"fonte":"Wimoveis","data":"2026-09","tipo":"novo","obs":""},{"id":"l-12","cond":"Gran Royalle","cidade":"Lagoa Santa","area":525,"preco":440000,"fonte":"Alessandro Antonio","data":"2026-09","tipo":"consolidado","obs":""},{"id":"l-13","cond":"Gran Royalle","cidade":"Lagoa Santa","area":567,"preco":498000,"fonte":"Chaves na Mão","data":"2026-09","tipo":"consolidado","obs":""},{"id":"l-14","cond":"Gran Royalle","cidade":"Lagoa Santa","area":980,"preco":450000,"fonte":"Chaves na Mão","data":"2026-09","tipo":"consolidado","obs":""},{"id":"l-15","cond":"Gran Royalle","cidade":"Lagoa Santa","area":1080,"preco":650000,"fonte":"Chaves na Mão","data":"2026-09","tipo":"consolidado","obs":""},{"id":"l-16","cond":"Eco Village","cidade":"Lagoa Santa","area":1000,"preco":450000,"fonte":"Alessandro Antonio","data":"2026-09","tipo":"novo","obs":"lotes de 1.000 m²+"},{"id":"l-17","cond":"Eco Village","cidade":"Lagoa Santa","area":1213,"preco":390000,"fonte":"Alessandro Antonio","data":"2026-09","tipo":"novo","obs":""},{"id":"l-18","cond":"Green Village","cidade":"Lagoa Santa","area":500,"preco":315000,"fonte":"Alessandro Antonio","data":"2026-09","tipo":"novo","obs":""},{"id":"l-19","cond":"Green Village","cidade":"Lagoa Santa","area":569,"preco":270000,"fonte":"Alessandro Antonio","data":"2026-09","tipo":"novo","obs":""},{"id":"l-20","cond":"Park Vivar","cidade":"Lagoa Santa","area":500,"preco":310000,"fonte":"Alessandro Antonio","data":"2026-09","tipo":"novo","obs":"a partir de"},{"id":"l-21","cond":"Parque dos Buritis","cidade":"Lagoa Santa","area":373,"preco":250000,"fonte":"Alessandro Antonio","data":"2026-09","tipo":"novo","obs":"a partir de"},{"id":"l-22","cond":"Aeronautas","cidade":"Lagoa Santa","area":360,"preco":279000,"fonte":"Alessandro Antonio","data":"2026-09","tipo":"novo","obs":"a partir de"},{"id":"l-23","cond":"Champagne","cidade":"Lagoa Santa","area":1102,"preco":439000,"fonte":"Alessandro Antonio","data":"2026-09","tipo":"consolidado","obs":""},{"id":"l-24","cond":"Versailles Ville de France","cidade":"Lagoa Santa","area":1000,"preco":249000,"fonte":"Alessandro Antonio","data":"2026-09","tipo":"novo","obs":"a partir de"},{"id":"l-25","cond":"Gran Park Toscana (lançamento)","cidade":"Vespasiano","area":520,"preco":190080,"fonte":"Lugar Certo (anúncio encerrado)","data":"2020","tipo":"historico","obs":"proxy do valor de lançamento, sem data no anúncio; edite se tiver o contrato"}],"fontes":[{"nome":"Gold House Imóveis, casas Gran Park Toscana","url":"https://www.goldhousels.com.br/imoveis/a-venda/casa/vespasiano/condominio-gran-park-toscana","data":"2026-09-03","uso":"12 casas (set/26)","limite":"Preço pedido, não fechado; 25 anúncios, 12 visíveis."},{"nome":"Lagoa Santa Top Imóveis, Gran Park Toscana","url":"https://www.lagoasantatopimoveis.com.br/imoveis/vespasiano/condominio-gran-park-toscana","data":"2026-09-03","uso":"3 lotes e 9 casas (set/26)","limite":"Preço pedido."},{"nome":"OLX, condomínios Toscana Vespasiano","url":"https://www.olx.com.br/anuncios/condominios-toscana-vespasiano","data":"2026-05-19","uso":"22 casas do levantamento de maio/26 (planilha base)","limite":"Anúncios ativos na data; alguns podem ter sido vendidos."},{"nome":"Wimoveis, terrenos Complexo Gran Park","url":"https://www.wimoveis.com.br/venda/terrenos/loteamento-condominio/mg/vespasiano/condominio-residencial-gran-park","data":"2026-09-03","uso":"16 lotes: Toscana, Douro, Celebration","limite":"Nem todo anúncio identifica o condomínio interno."},{"nome":"Metropoli Imóveis, Gran Park Douro","url":"https://www.metropolimoveis.com.br/155/imoveis/venda-area-vespasiano-mg","data":"2026-09-03","uso":"Lote 400 m² R$ 301.132, financiamento próprio","limite":"Um anúncio; confirmar tabela com a Gran Viver."},{"nome":"Alessandro Antonio Consultor, lotes Lagoa Santa","url":"https://www.alessandroantonioconsultor.com.br/terreno-lote-em-condominio/a-venda/lagoa-santa-mg","data":"2026-09-03","uso":"20 lotes em 9 condomínios (44 anúncios)","limite":"Vários 'a partir de'."},{"nome":"Chaves na Mão, Gran Royalle Lagoa Santa","url":"https://www.chavesnamao.com.br/terrenos-em-condominio-a-venda/mg-lagoa-santa/gran-royalle/","data":"2026-09-03","uso":"4 lotes (33 anúncios)","limite":"Preço pedido."},{"nome":"Lugar Certo, lote 520 m² Toscana R$ 190.080","url":"https://estadodeminas.lugarcerto.com.br/imovel/lote-em-condominio-condominio-gran-park-toscana-vespasiano-520m2-compra-e-venda-rs190080-id-341393657","data":"sem data (encerrado)","uso":"Proxy do preço de lançamento","limite":"Anúncio encerrado e sem data; usar como referência, não como fato."},{"nome":"MySide, CUB/MG (Sinduscon-MG)","url":"https://myside.com.br/guia-imoveis/cub-mg","data":"2026-06","uso":"Série CUB R8N jan/21 a jun/26","limite":"R8N = padrão normal; casa de alto padrão custa acima do CUB."},{"nome":"FipeZap, venda residencial maio/2026","url":"https://downloads.fipe.org.br/indices/fipezap/fipezap-202605-residencial-venda.pdf","data":"2026-05","uso":"BH R$ 10.680/m², +5,54% 12m; Brasil anual 2021–25","limite":"Índice de BH capital, não de Vespasiano."},{"nome":"Meelion, Selic","url":"https://www.meelion.com/indicadores-financeiros/selic/","data":"2026-09-03","uso":"Selic 14,00% a.a.","limite":""}]};
+const MERCADO_SUBS = [
+  ['visao', 'Visão executiva'],
+  ['comparaveis', 'Comparáveis'],
+  ['lotes', 'Lotes e novos loteamentos'],
+  ['tendencia', 'Tendência e valorização'],
+  ['estrategia', 'Estratégia financiada'],
+  ['fontes', 'Fontes'],
+];
+let MERCADO_SUB = (() => { try { return sessionStorage.getItem('mercadoSub') || 'visao'; } catch { return 'visao'; } })();
+// Premissas de simulação (sem senha): ficam só na memória.
+const MERCADO_SIM = {};
+
+function estudoMercado() {
+  if (!STATE.estudoMercado) STATE.estudoMercado = JSON.parse(JSON.stringify(MERCADO_SEED));
+  const e = STATE.estudoMercado;
+  e.premissas = { ...MERCADO_SEED.premissas, ...(e.premissas || {}) };
+  e.indices = e.indices || JSON.parse(JSON.stringify(MERCADO_SEED.indices));
+  e.comparaveis = e.comparaveis || [];
+  e.lotes = e.lotes || [];
+  e.fontes = e.fontes || [];
+  return e;
+}
+function premissasMercado() { return { ...estudoMercado().premissas, ...MERCADO_SIM }; }
+function updateMercadoPremissa(patch) {
+  if (READONLY) { Object.assign(MERCADO_SIM, patch); renderEstudoMercado(); return; }
+  Object.assign(estudoMercado().premissas, patch);
+  afterMutation();
+}
+function updateMercadoLinha(lista, id, patch) {
+  const arr = estudoMercado()[lista];
+  const it = arr.find((x) => x.id === id);
+  if (!it) return;
+  Object.assign(it, patch);
+  afterMutation();
+}
+function addMercadoLinha(lista, base) {
+  estudoMercado()[lista].push({ id: newId(lista === 'lotes' ? 'l' : 'c'), ...base });
+  afterMutation();
+}
+function removeMercadoLinha(lista, id) {
+  const e = estudoMercado();
+  e[lista] = e[lista].filter((x) => x.id !== id);
+  afterMutation();
+}
+
+/* ---------------- Estatística ---------------- */
+function mediana(vals) {
+  const v = vals.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
+  if (!v.length) return 0;
+  const m = Math.floor(v.length / 2);
+  return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2;
+}
+function percentil(vals, p) {
+  const v = vals.filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
+  if (!v.length) return 0;
+  const pos = (v.length - 1) * p;
+  const lo = Math.floor(pos), hi = Math.ceil(pos);
+  return v[lo] + (v[hi] - v[lo]) * (pos - lo);
+}
+function media(vals) { const v = vals.filter((x) => Number.isFinite(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0; }
+
+function resumoMercado() {
+  const e = estudoMercado();
+  const P = premissasMercado();
+  const r = VIEW.resumo;
+  const v = r.viabilidade || {};
+  const area = Number(P.areaConstruidaM2) || Number(VIEW.meta?.areaM2) || 349;
+
+  const casas = e.comparaveis.map((c) => ({ ...c, m2: c.area > 0 ? c.preco / c.area : 0 })).filter((c) => c.m2 > 0);
+  const recentes = casas.filter((c) => (c.data || '') >= '2026-09');
+  const antigas = casas.filter((c) => (c.data || '') < '2026-09');
+  const m2Todos = casas.map((c) => c.m2);
+  const m2Rec = recentes.map((c) => c.m2);
+  const stats = {
+    n: casas.length, nRecentes: recentes.length,
+    mediana: mediana(m2Todos), media: media(m2Todos), p25: percentil(m2Todos, 0.25), p75: percentil(m2Todos, 0.75),
+    medianaRecente: recentes.length ? mediana(m2Rec) : 0,
+    medianaAntiga: antigas.length ? mediana(antigas.map((c) => c.m2)) : 0,
+    min: Math.min(...m2Todos), max: Math.max(...m2Todos),
+  };
+  const faixas = [
+    ['Até 220 m²', 0, 220], ['221 a 260 m²', 221, 260], ['261 a 300 m²', 261, 300], ['301 a 340 m²', 301, 340], ['Acima de 340 m²', 341, 9999],
+  ].map(([nome, a, b]) => { const l = casas.filter((c) => c.area >= a && c.area <= b); return { nome, n: l.length, precoMedio: media(l.map((c) => c.preco)), m2: media(l.map((c) => c.m2)) }; });
+
+  // Nossa obra, por m²
+  const custoTotal = Number(v.custoEconomicoProjetado) || 0;
+  const construcao = (v.rubricas || []).find((x) => x.id === 'construcao');
+  const custoConstrucao = construcao ? construcao.projetado : Number(r.contratoTotalEmpreiteiro) || 0;
+  const vgvAtual = Number(v.vgvAtual) || 0;
+  const vgvProj = Number(v.vgvProjetado) || 0;
+  const obra = {
+    area,
+    custoTotalM2: area ? custoTotal / area : 0,
+    custoConstrucaoM2: area ? custoConstrucao / area : 0,
+    vgvAtualM2: area ? vgvAtual / area : 0,
+    vgvProjM2: area ? vgvProj / area : 0,
+    custoTotal, custoConstrucao, vgvAtual, vgvProj,
+    lucroLiquido: Number(v.lucroLiquido) || 0,
+    lucroM2: area ? (Number(v.lucroLiquido) || 0) / area : 0,
+  };
+  // Valor de mercado desta casa nos cenários
+  const cenarios = [
+    { nome: 'Conservador (P25)', m2: stats.p25, uso: 'piso de negociação / venda rápida' },
+    { nome: 'Mediana da amostra', m2: stats.mediana, uso: 'referência principal' },
+    { nome: 'Mediana anúncios set/26', m2: stats.medianaRecente || stats.mediana, uso: 'o que o mercado pede hoje' },
+    { nome: 'Média', m2: stats.media, uso: 'checagem ampla, sensível a outliers' },
+    { nome: 'Teto (P75)', m2: stats.p75, uso: 'padrão premium, usar com cautela' },
+  ].map((c) => ({ ...c, valor: c.m2 * area, vsVgv: vgvAtual ? c.m2 * area / vgvAtual - 1 : 0 }));
+
+  // Lotes
+  const lotes = e.lotes.map((l) => ({ ...l, m2: l.area > 0 ? l.preco / l.area : 0 }));
+  const porCond = {};
+  for (const l of lotes) {
+    if (l.tipo === 'historico') continue;
+    const k = l.cond;
+    porCond[k] = porCond[k] || { cond: k, cidade: l.cidade, tipo: l.tipo, n: 0, m2s: [], precos: [], areas: [] };
+    porCond[k].n += 1; porCond[k].m2s.push(l.m2); porCond[k].precos.push(l.preco); porCond[k].areas.push(l.area);
+  }
+  const condominios = Object.values(porCond).map((c) => ({ ...c, m2: mediana(c.m2s), preco: mediana(c.precos), area: mediana(c.areas) })).sort((a, b) => b.m2 - a.m2);
+  const toscana = condominios.find((c) => /toscana/i.test(c.cond) && !/lançamento/i.test(c.cond));
+  const alvo = condominios.find((c) => c.cond === P.condominioAlvo) || condominios.find((c) => /douro/i.test(c.cond));
+  const hist = lotes.find((l) => l.tipo === 'historico');
+  const loteLancM2 = Number(P.loteToscanaLancamentoM2) || (hist ? hist.m2 : 0);
+  const anosLote = (new Date().getFullYear()) - (Number(P.loteToscanaLancamentoAno) || 2020);
+  const valorizLote = toscana && loteLancM2 ? toscana.m2 / loteLancM2 - 1 : 0;
+  const valorizLoteAA = toscana && loteLancM2 && anosLote > 0 ? Math.pow(toscana.m2 / loteLancM2, 1 / anosLote) - 1 : 0;
+
+  // Índices
+  const cub = e.indices.cub || [];
+  const cubIni = cub.length ? cub[0][1] : 0;
+  const cubFim = cub.length ? cub[cub.length - 1][1] : 0;
+  const fz = e.indices.fipezapBrasilAnual || [];
+  const fzAcum = fz.reduce((a, [, x]) => a * (1 + x), 1) - 1;
+  const varCasas = stats.medianaAntiga ? stats.medianaRecente / stats.medianaAntiga - 1 : 0;
+
+  return { e, P, area, casas, recentes, stats, faixas, obra, cenarios, lotes, condominios, toscana, alvo, hist, loteLancM2, anosLote, valorizLote, valorizLoteAA, cub, cubIni, cubFim, cubVar: cubIni ? cubFim / cubIni - 1 : 0, fz, fzAcum, varCasas, bh: e.indices.fipezapBh || {}, selic: e.indices.selic };
+}
+
+/* Estratégia: repetir a operação num lote novo com construção financiada. */
+function simularEstrategia(m) {
+  const P = m.P;
+  const areaC = Number(P.areaConstruidaM2) || 349;
+  const lote = Number(P.precoLoteAlvo) || (m.alvo ? m.alvo.preco : 0);
+  const construcao = areaC * (Number(P.custoConstrucaoM2) || 0);
+  const adm = construcao * (Number((VIEW.parametros || {}).taxaAdministracaoPercent) || 0.1);
+  const indiretos = construcao * (Number(P.indiretosPercent) || 0);
+  const financiado = construcao * (Number(P.financiadoPercent) || 0);
+  const custoFin = construcao * (Number(P.custoFinanceiroPercent) || 0) * ((Number(P.financiadoPercent) || 0) / 0.75);
+  const custoSemFin = lote + construcao + adm + indiretos;
+  const custoTotal = custoSemFin + custoFin;
+  const m2Venda = m.stats.medianaRecente || m.stats.mediana;
+  const prazo = Number(P.prazoMeses) || 20;
+  const valorizacao = Math.pow(1 + (Number(P.valorizacaoAnualEsperada) || 0), prazo / 12) - 1;
+  const vgvHoje = m2Venda * areaC;
+  const vgvSaida = vgvHoje * (1 + valorizacao);
+  const corr = Number((VIEW.parametros || {}).corretagemPercent) || 0.06;
+  const ir = Number((VIEW.parametros || {}).irPercent) || 0.15;
+  const resultado = (vgv, custo) => { const antes = vgv - vgv * corr - custo; const imp = Math.max(0, antes) * ir; return { bruto: vgv - custo, lucro: antes - imp }; };
+  const comFin = resultado(vgvSaida, custoTotal);
+  const semFin = resultado(vgvSaida, custoSemFin);
+  const capitalCom = custoTotal - financiado;
+  const capitalSem = custoSemFin;
+  return {
+    areaC, lote, construcao, adm, indiretos, financiado, custoFin, custoSemFin, custoTotal, m2Venda, vgvHoje, vgvSaida, valorizacao, prazo,
+    custoM2: areaC ? custoTotal / areaC : 0,
+    comFin: { ...comFin, capital: capitalCom, roi: capitalCom > 0 ? comFin.lucro / capitalCom : 0 },
+    semFin: { ...semFin, capital: capitalSem, roi: capitalSem > 0 ? semFin.lucro / capitalSem : 0 },
+    margemVgv: vgvSaida ? comFin.lucro / vgvSaida : 0,
+    loteSobreVgv: vgvSaida ? lote / vgvSaida : 0,
+  };
+}
+
+/* ---------------- Gráficos SVG (sem biblioteca) ---------------- */
+function svgBarras({ itens, largura = 640, altura = 220, formato = (v) => money(v), destaque = null, cores = null }) {
+  const pad = { t: 22, r: 12, b: 46, l: 12 };
+  const max = Math.max(...itens.map((i) => i.valor), 1);
+  const w = largura - pad.l - pad.r;
+  const h = altura - pad.t - pad.b;
+  const n = itens.length;
+  const bw = Math.min(90, (w / n) * 0.62);
+  const gap = w / n;
+  let s = `<svg viewBox="0 0 ${largura} ${altura}" class="mk-chart" role="img">`;
+  for (let g = 0; g <= 4; g += 1) {
+    const y = pad.t + h - (h * g) / 4;
+    s += `<line x1="${pad.l}" x2="${largura - pad.r}" y1="${y}" y2="${y}" class="mk-grid"/>`;
+  }
+  itens.forEach((it, i) => {
+    const x = pad.l + gap * i + (gap - bw) / 2;
+    const bh = (it.valor / max) * h;
+    const y = pad.t + h - bh;
+    const cls = it.classe || (destaque && it.nome === destaque ? 'mk-bar-destaque' : 'mk-bar');
+    const fill = cores && cores[i] ? ` style="fill:${cores[i]}"` : '';
+    s += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="4" class="${cls}"${fill}/>`;
+    s += `<text x="${x + bw / 2}" y="${y - 6}" text-anchor="middle" class="mk-val">${esc(formato(it.valor))}</text>`;
+    const rot = String(it.nome);
+    const linhas = rot.length > 16 ? [rot.slice(0, rot.lastIndexOf(' ', 16) > 0 ? rot.lastIndexOf(' ', 16) : 16), rot.slice(rot.lastIndexOf(' ', 16) > 0 ? rot.lastIndexOf(' ', 16) + 1 : 16)] : [rot];
+    linhas.forEach((l, k) => { s += `<text x="${x + bw / 2}" y="${pad.t + h + 14 + k * 12}" text-anchor="middle" class="mk-rot">${esc(l)}</text>`; });
+  });
+  return s + '</svg>';
+}
+
+function svgLinhas({ series, labels, largura = 640, altura = 220, formato = (v) => fmtNum.format(v) }) {
+  const pad = { t: 18, r: 14, b: 30, l: 54 };
+  const todos = series.flatMap((sr) => sr.valores).filter(Number.isFinite);
+  const max = Math.max(...todos), min = Math.min(...todos, 0);
+  const w = largura - pad.l - pad.r, h = altura - pad.t - pad.b;
+  const X = (i) => pad.l + (labels.length > 1 ? (w * i) / (labels.length - 1) : w / 2);
+  const Y = (v) => pad.t + h - ((v - min) / ((max - min) || 1)) * h;
+  let s = `<svg viewBox="0 0 ${largura} ${altura}" class="mk-chart" role="img">`;
+  for (let g = 0; g <= 4; g += 1) {
+    const v = min + ((max - min) * g) / 4;
+    s += `<line x1="${pad.l}" x2="${largura - pad.r}" y1="${Y(v)}" y2="${Y(v)}" class="mk-grid"/><text x="${pad.l - 6}" y="${Y(v) + 4}" text-anchor="end" class="mk-rot">${esc(formato(v))}</text>`;
+  }
+  series.forEach((sr, k) => {
+    const pts = sr.valores.map((v, i) => `${X(i)},${Y(v)}`).join(' ');
+    s += `<polyline points="${pts}" class="mk-line mk-line-${k}"/>`;
+    sr.valores.forEach((v, i) => { s += `<circle cx="${X(i)}" cy="${Y(v)}" r="3.5" class="mk-dot mk-line-${k}"/><text x="${X(i)}" y="${Y(v) - 8}" text-anchor="middle" class="mk-val">${esc(formato(v))}</text>`; });
+  });
+  labels.forEach((l, i) => { s += `<text x="${X(i)}" y="${altura - 8}" text-anchor="middle" class="mk-rot">${esc(l)}</text>`; });
+  return s + '</svg>';
+}
+
+function svgDispersao({ pontos, marcador, largura = 640, altura = 260, xFmt = (v) => `${v} m²`, yFmt = (v) => moneyCurto(v) }) {
+  const pad = { t: 16, r: 14, b: 30, l: 58 };
+  const xs = pontos.map((p) => p.x).concat(marcador ? [marcador.x] : []);
+  const ys = pontos.map((p) => p.y).concat(marcador ? [marcador.y] : []);
+  const xmin = Math.min(...xs) * 0.95, xmax = Math.max(...xs) * 1.05;
+  const ymin = Math.min(...ys) * 0.9, ymax = Math.max(...ys) * 1.05;
+  const w = largura - pad.l - pad.r, h = altura - pad.t - pad.b;
+  const X = (v) => pad.l + ((v - xmin) / ((xmax - xmin) || 1)) * w;
+  const Y = (v) => pad.t + h - ((v - ymin) / ((ymax - ymin) || 1)) * h;
+  let s = `<svg viewBox="0 0 ${largura} ${altura}" class="mk-chart" role="img">`;
+  for (let g = 0; g <= 4; g += 1) {
+    const v = ymin + ((ymax - ymin) * g) / 4;
+    s += `<line x1="${pad.l}" x2="${largura - pad.r}" y1="${Y(v)}" y2="${Y(v)}" class="mk-grid"/><text x="${pad.l - 6}" y="${Y(v) + 4}" text-anchor="end" class="mk-rot">${esc(yFmt(v))}</text>`;
+  }
+  for (let g = 0; g <= 4; g += 1) {
+    const v = xmin + ((xmax - xmin) * g) / 4;
+    s += `<text x="${X(v)}" y="${altura - 8}" text-anchor="middle" class="mk-rot">${esc(xFmt(Math.round(v)))}</text>`;
+  }
+  // Linha de tendência (regressão linear simples)
+  if (pontos.length > 2) {
+    const n = pontos.length;
+    const mx = media(pontos.map((p) => p.x)), my = media(pontos.map((p) => p.y));
+    const b = pontos.reduce((a, p) => a + (p.x - mx) * (p.y - my), 0) / (pontos.reduce((a, p) => a + (p.x - mx) ** 2, 0) || 1);
+    const a0 = my - b * mx;
+    s += `<line x1="${X(xmin)}" y1="${Y(a0 + b * xmin)}" x2="${X(xmax)}" y2="${Y(a0 + b * xmax)}" class="mk-trend"/>`;
+  }
+  for (const p of pontos) {
+    s += `<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="5" class="${p.recente ? 'mk-pt-recente' : 'mk-pt'}"><title>${esc(p.titulo || '')}</title></circle>`;
+  }
+  if (marcador) {
+    s += `<circle cx="${X(marcador.x)}" cy="${Y(marcador.y)}" r="9" class="mk-pt-obra"/><text x="${X(marcador.x)}" y="${Y(marcador.y) - 14}" text-anchor="middle" class="mk-val-forte">${esc(marcador.rotulo)}</text>`;
+  }
+  return s + '</svg>';
+}
+
+/* ---------------- Render ---------------- */
+function renderEstudoMercado() {
+  const root = document.getElementById('tab-mercado');
+  if (!root) return;
+  root.innerHTML = '';
+  const m = resumoMercado();
+
+  const cab = document.createElement('div');
+  cab.className = 'panel';
+  cab.innerHTML = `<div class="panel-header"><div><h2>Estudo de Mercado: Gran Park Toscana e região</h2>
+    <div class="muted">Custo real desta obra × preço que o mercado pede por m² × oportunidades de lote novo em Vespasiano e Lagoa Santa. Cada número tem fonte e data (sub-aba Fontes). Preços de anúncio são pedidos, não fechados. Base atualizada em ${dateBR(m.e.atualizadoEm || '2026-09-03')}.</div></div>`;
+  const nav = document.createElement('div');
+  nav.className = 'mk-subnav';
+  for (const [id, nome] of MERCADO_SUBS) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `mk-sub filter-control${MERCADO_SUB === id ? ' ativa' : ''}`;
+    b.textContent = nome;
+    b.dataset.sub = id;
+    b.onclick = () => { MERCADO_SUB = id; try { sessionStorage.setItem('mercadoSub', id); } catch { /* sem storage */ } renderEstudoMercado(); };
+    nav.appendChild(b);
+  }
+  cab.appendChild(nav);
+  const acoes = document.createElement('div');
+  acoes.className = 'rel-acoes no-print';
+  acoes.style.marginTop = '8px';
+  const bImp = document.createElement('button');
+  bImp.type = 'button';
+  bImp.className = 'btn small primary filter-control';
+  bImp.textContent = 'Apresentação completa (imprimir / PDF)';
+  bImp.onclick = abrirApresentacaoMercado;
+  acoes.appendChild(bImp);
+  const bXls = document.createElement('button');
+  bXls.type = 'button';
+  bXls.className = 'btn small filter-control';
+  bXls.textContent = 'Planilha (Excel)';
+  bXls.title = 'Baixa o estudo em Excel formatado: comparáveis, lotes, condomínios e premissas, com fonte e data em cada linha.';
+  bXls.onclick = () => baixarArquivo(`estudo-mercado-${new Date().toISOString().slice(0, 10)}.xlsx`, xlsxDoEstudoMercado(m), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  acoes.appendChild(bXls);
+  cab.appendChild(acoes);
+  root.appendChild(cab);
+
+  const secoes = {
+    visao: renderMercadoVisao, comparaveis: renderMercadoComparaveis, lotes: renderMercadoLotes,
+    tendencia: renderMercadoTendencia, estrategia: renderMercadoEstrategia, fontes: renderMercadoFontes,
+  };
+  (secoes[MERCADO_SUB] || renderMercadoVisao)(root, m);
+}
+
+function mkCard(rot, val, nota, classe = '') {
+  return `<div class="viab-num"><span class="viab-rotulo">${rot}</span><strong class="viab-valor ${classe}">${val}</strong>${nota ? `<span class="viab-nota">${nota}</span>` : ''}</div>`;
+}
+function mkPanel(titulo, sub) {
+  const p = document.createElement('div');
+  p.className = 'panel';
+  p.innerHTML = `<div class="panel-header"><div><h2>${titulo}</h2>${sub ? `<div class="muted">${sub}</div>` : ''}</div></div>`;
+  return p;
+}
+
+function renderMercadoVisao(root, m) {
+  const o = m.obra, s = m.stats;
+  const mercadoM2 = s.medianaRecente || s.mediana;
+  const valorMercado = mercadoM2 * m.area;
+  const cards = document.createElement('div');
+  cards.className = 'viab-destaques';
+  cards.innerHTML = [
+    mkCard('Mercado pede hoje por m²', money(mercadoM2), `mediana de ${s.nRecentes} anúncios set/26 · amostra total ${s.n} casas`),
+    mkCard('Custo total desta obra por m²', money(o.custoTotalM2), `${money(o.custoTotal)} ÷ ${m.area} m² · terreno, construção, ADM, projetos e juros`),
+    mkCard('Custo de construção por m²', money(o.custoConstrucaoM2), `contrato do empreiteiro ÷ área · CUB/MG R8N ${money(m.cubFim)}`),
+    mkCard('VGV do projeto por m²', money(o.vgvAtualM2), `${money(o.vgvAtual)} · ${o.vgvAtualM2 && mercadoM2 ? pct(o.vgvAtualM2 / mercadoM2 - 1) : 'n/d'} vs. mercado`, o.vgvAtualM2 <= mercadoM2 ? 'bom' : ''),
+    mkCard('Valor de mercado desta casa', money(valorMercado), `${m.area} m² × mediana set/26 · VGV do projeto ${money(o.vgvAtual)}`, 'bom'),
+    mkCard('Spread mercado − custo por m²', money(mercadoM2 - o.custoTotalM2), `${pct(o.custoTotalM2 ? (mercadoM2 - o.custoTotalM2) / o.custoTotalM2 : 0)} sobre o custo · antes de corretagem e IR`, 'bom'),
+    mkCard('Lote Toscana: valorização', pct(m.valorizLote), `${money(m.loteLancM2)}/m² (${m.P.loteToscanaLancamentoAno}) → ${money(m.toscana ? m.toscana.m2 : 0)}/m² hoje · ${pct(m.valorizLoteAA)} a.a.`, 'bom'),
+    mkCard('Lote novo no complexo', m.alvo ? money(m.alvo.m2) + '/m²' : 'n/d', m.alvo ? `${m.alvo.cond} · ${money(m.alvo.preco)} por ${m.alvo.area} m² · ${m.toscana ? pct(1 - m.alvo.m2 / m.toscana.m2) : ''} abaixo do Toscana` : 'cadastre em Lotes'),
+  ].join('');
+  root.appendChild(cards);
+
+  const p1 = mkPanel('Custo × VGV × mercado, por m² construído', 'A barra da esquerda é o que custa fazer; as do meio, o que o projeto prevê vender; as da direita, o que o mercado está pedindo agora. A diferença entre custo e mercado é a margem bruta por m².');
+  p1.insertAdjacentHTML('beforeend', svgBarras({
+    itens: [
+      { nome: 'Construção', valor: o.custoConstrucaoM2, classe: 'mk-bar-custo' },
+      { nome: 'Custo total', valor: o.custoTotalM2, classe: 'mk-bar-custo' },
+      { nome: 'VGV atual', valor: o.vgvAtualM2, classe: 'mk-bar' },
+      { nome: 'VGV projetado', valor: o.vgvProjM2, classe: 'mk-bar' },
+      { nome: 'Mercado P25', valor: s.p25, classe: 'mk-bar-mercado' },
+      { nome: 'Mercado mediana', valor: mercadoM2, classe: 'mk-bar-mercado' },
+      { nome: 'Mercado P75', valor: s.p75, classe: 'mk-bar-mercado' },
+      { nome: 'BH (FipeZap)', valor: Number(m.bh.precoM2) || 0, classe: 'mk-bar-ref' },
+    ],
+    formato: (v) => `R$ ${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(v)}`,
+  }));
+  root.appendChild(p1);
+
+  const p2 = mkPanel('Onde esta casa se posiciona entre as casas à venda', `Cada ponto é uma casa anunciada no Gran Park Toscana (área × preço). Os laranja são de setembro/26. O círculo grande é esta obra pelo VGV do projeto. A linha é a tendência da amostra: acima dela, o preço pedido está acima do padrão da amostra para aquela área.`);
+  p2.insertAdjacentHTML('beforeend', svgDispersao({
+    pontos: m.casas.map((c) => ({ x: c.area, y: c.preco, recente: (c.data || '') >= '2026-09', titulo: `${c.area} m² · ${money(c.preco)} · ${c.fonte} ${c.data}` })),
+    marcador: { x: m.area, y: o.vgvAtual, rotulo: `Esta obra · ${money(o.vgvAtual)}` },
+  }));
+  root.appendChild(p2);
+
+  const p3 = mkPanel('Leitura para o investidor', '');
+  const lucroMercado = valorMercado - o.custoTotal;
+  p3.insertAdjacentHTML('beforeend', `<div class="mk-texto">
+    <p><strong>Custo × mercado.</strong> Esta casa custa <strong>${money(o.custoTotalM2)}/m²</strong> tudo incluído (terreno, construção, administração, projetos, CND e o custo do financiamento). O mercado do próprio condomínio pede hoje <strong>${money(mercadoM2)}/m²</strong>, mediana de ${s.nRecentes} anúncios de setembro. Isso dá um spread de <strong>${money(mercadoM2 - o.custoTotalM2)}/m²</strong>, ou ${pct(o.custoTotalM2 ? (mercadoM2 - o.custoTotalM2) / o.custoTotalM2 : 0)} sobre o custo, antes de corretagem e IR.</p>
+    <p><strong>VGV do projeto é conservador.</strong> O projeto prevê vender a ${money(o.vgvAtualM2)}/m² (${money(o.vgvAtual)}); a ${money(mercadoM2)}/m² a casa valeria <strong>${money(valorMercado)}</strong>, ${money(valorMercado - o.vgvAtual)} acima. Pelo custo total projetado, o resultado bruto a preço de mercado seria ${money(lucroMercado)}.</p>
+    <p><strong>O terreno subiu mais que a construção.</strong> O lote do Toscana saiu de cerca de ${money(m.loteLancM2)}/m² no lançamento para ${money(m.toscana ? m.toscana.m2 : 0)}/m² hoje (${pct(m.valorizLote)} em ${m.anosLote} anos, ${pct(m.valorizLoteAA)} ao ano), enquanto o CUB/MG subiu ${pct(m.cubVar)} no mesmo período e o índice FipeZap acumulou ${pct(m.fzAcum)} de 2021 a 2025. Quem comprou o lote cedo capturou a maior parte do ganho.</p>
+    <p><strong>A próxima operação.</strong> No mesmo complexo, o ${m.alvo ? m.alvo.cond : 'Gran Park Douro'} vende lote a ${m.alvo ? money(m.alvo.m2) : 'n/d'}/m², ${m.alvo && m.toscana ? pct(1 - m.alvo.m2 / m.toscana.m2) : 'n/d'} abaixo do Toscana consolidado, com financiamento próprio da urbanizadora. A sub-aba <em>Estratégia financiada</em> simula repetir esta obra lá, com o custo real desta e o preço de venda do mercado.</p>
+  </div>`);
+  root.appendChild(p3);
+}
+
+function renderMercadoComparaveis(root, m) {
+  const s = m.stats;
+  const cards = document.createElement('div');
+  cards.className = 'viab-destaques';
+  cards.innerHTML = [
+    mkCard('Amostra', `${s.n} casas`, `${s.nRecentes} de set/26 + ${s.n - s.nRecentes} de mai/26`),
+    mkCard('Mediana R$/m²', money(s.mediana), 'amostra completa'),
+    mkCard('Mediana set/26', money(s.medianaRecente), `mai/26 era ${money(s.medianaAntiga)} · ${pct(m.varCasas)}`, m.varCasas >= 0 ? 'bom' : 'ruim'),
+    mkCard('P25 · P75', `${moneyCurto(s.p25)} · ${moneyCurto(s.p75)}`, 'faixa central dos anúncios'),
+    mkCard('Mín · máx', `${moneyCurto(s.min)} · ${moneyCurto(s.max)}`, 'extremos: checar padrão e estado'),
+  ].join('');
+  root.appendChild(cards);
+
+  const p0 = mkPanel(`Estimativa para uma casa de ${m.area} m²`, 'O mesmo m² da amostra aplicado à área desta obra. A mediana de setembro é a referência mais atual; P25 é o piso para venda rápida; P75 é o teto de padrão premium.');
+  p0.insertAdjacentHTML('beforeend', `<div class="table-scroll"><table class="extrato-table rel-table"><thead><tr><th>Cenário</th><th class="num">R$/m²</th><th class="num">Valor estimado</th><th class="num">× VGV do projeto</th><th>Uso</th></tr></thead><tbody>
+    ${m.cenarios.map((c) => `<tr><td>${esc(c.nome)}</td><td class="num">${money(c.m2)}</td><td class="num"><strong>${money(c.valor)}</strong></td><td class="num ${c.vsVgv >= 0 ? 'saldo-pos' : 'saldo-neg'}">${c.vsVgv >= 0 ? '+' : ''}${pct(c.vsVgv)}</td><td class="muted">${esc(c.uso)}</td></tr>`).join('')}
+  </tbody></table></div>`);
+  root.appendChild(p0);
+
+  const p1 = mkPanel('Faixas de área', 'Preço médio e R$/m² por faixa de metragem. Casas menores costumam ter R$/m² maior, o m² dilui menos o terreno.');
+  p1.insertAdjacentHTML('beforeend', `<div class="table-scroll"><table class="extrato-table rel-table"><thead><tr><th>Faixa</th><th class="num">Casas</th><th class="num">Preço médio</th><th class="num">R$/m² médio</th></tr></thead><tbody>
+    ${m.faixas.map((f) => `<tr class="${m.area >= (f.nome.match(/\d+/g) || [0])[0] ? '' : ''}"><td>${esc(f.nome)}</td><td class="num">${f.n}</td><td class="num">${f.n ? money(f.precoMedio) : 'n/d'}</td><td class="num">${f.n ? money(f.m2) : 'n/d'}</td></tr>`).join('')}
+  </tbody></table></div>`);
+  p1.insertAdjacentHTML('beforeend', svgBarras({ itens: m.faixas.filter((f) => f.n).map((f) => ({ nome: f.nome, valor: f.m2, classe: 'mk-bar-mercado' })), formato: (v) => `R$ ${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(v)}`, altura: 200 }));
+  root.appendChild(p1);
+
+  const p2 = mkPanel('Base de comparáveis', READONLY ? 'Anúncios com fonte e data. Entre para lançar para editar ou adicionar linhas.' : 'Edite direto na tabela; as estatísticas recalculam. Adicione anúncios novos conforme forem aparecendo.');
+  const wrap = document.createElement('div');
+  wrap.className = 'table-scroll';
+  const t = document.createElement('table');
+  t.className = 'extrato-table rel-table';
+  t.innerHTML = `<thead><tr><th>Condomínio</th><th class="num">Área m²</th><th class="num">Preço</th><th class="num">R$/m²</th><th class="num">Q</th><th>Fonte</th><th>Data</th><th>Obs.</th>${READONLY ? '' : '<th class="no-print"></th>'}</tr></thead>`;
+  const tb = document.createElement('tbody');
+  const ordenados = [...m.casas].sort((a, b) => (b.data || '').localeCompare(a.data || '') || b.m2 - a.m2);
+  for (const c of ordenados) {
+    const tr = document.createElement('tr');
+    if (READONLY) {
+      tr.innerHTML = `<td>${esc(c.cond)}</td><td class="num">${c.area}</td><td class="num">${money(c.preco)}</td><td class="num"><strong>${money(c.m2)}</strong></td><td class="num">${c.q || 'n/d'}</td><td>${esc(c.fonte)}</td><td>${esc(c.data)}</td><td class="muted">${esc(c.obs || '')}</td>`;
+    } else {
+      tr.innerHTML = `<td></td><td class="num"></td><td class="num"></td><td class="num"><strong>${money(c.m2)}</strong></td><td class="num"></td><td></td><td></td><td></td><td class="no-print"></td>`;
+      const tds = tr.querySelectorAll('td');
+      const txt = (i, k, w) => { const inp = document.createElement('input'); inp.type = 'text'; inp.className = 'cell-input'; inp.value = c[k] || ''; if (w) inp.style.width = w; inp.addEventListener('blur', () => { if (inp.value !== (c[k] || '')) updateMercadoLinha('comparaveis', c.id, { [k]: inp.value }); }); tds[i].appendChild(inp); };
+      txt(0, 'cond', '150px');
+      tds[1].appendChild(numberInput({ value: c.area, step: '1', onSave: (v) => updateMercadoLinha('comparaveis', c.id, { area: v }) }));
+      tds[2].appendChild(moneyInput({ value: c.preco, onSave: (v) => updateMercadoLinha('comparaveis', c.id, { preco: v }) }));
+      tds[4].appendChild(numberInput({ value: c.q, step: '1', onSave: (v) => updateMercadoLinha('comparaveis', c.id, { q: v }) }));
+      txt(5, 'fonte', '110px'); txt(6, 'data', '80px'); txt(7, 'obs', '160px');
+      const del = document.createElement('button'); del.type = 'button'; del.className = 'icon-btn'; del.textContent = '✕'; del.title = 'Remover';
+      del.onclick = async () => { if (await confirmDialog('Remover este anúncio da base?')) removeMercadoLinha('comparaveis', c.id); };
+      tds[8].appendChild(del);
+    }
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb);
+  wrap.appendChild(t);
+  p2.appendChild(wrap);
+  if (!READONLY) {
+    const add = document.createElement('button'); add.type = 'button'; add.className = 'btn small'; add.textContent = '+ Novo anúncio';
+    add.onclick = () => addMercadoLinha('comparaveis', { cond: 'Gran Park Toscana', area: 250, preco: 2000000, q: 4, fonte: '', data: new Date().toISOString().slice(0, 7), obs: '' });
+    p2.appendChild(add);
+  }
+  root.appendChild(p2);
+}
+
+function renderMercadoLotes(root, m) {
+  const cards = document.createElement('div');
+  cards.className = 'viab-destaques';
+  const tos = m.toscana, al = m.alvo;
+  const lagoa = m.condominios.filter((c) => /lagoa/i.test(c.cidade));
+  cards.innerHTML = [
+    mkCard('Gran Park Toscana (consolidado)', tos ? money(tos.m2) + '/m²' : 'n/d', tos ? `mediana de ${tos.n} lotes · ${money(tos.preco)} por ${tos.area} m²` : ''),
+    mkCard(al ? al.cond : 'Lote novo', al ? money(al.m2) + '/m²' : 'n/d', al ? `${money(al.preco)} por ${al.area} m² · ${tos ? pct(1 - al.m2 / tos.m2) + ' abaixo do Toscana' : ''}` : '', 'bom'),
+    mkCard('Lagoa Santa (faixa)', lagoa.length ? `${moneyCurto(Math.min(...lagoa.map((c) => c.m2)))} a ${moneyCurto(Math.max(...lagoa.map((c) => c.m2)))}` : 'n/d', `por m² · ${lagoa.length} condomínios · lotes maiores (500 a 1.200 m²)`),
+    mkCard('Lote no VGV desta casa', pct(m.obra.vgvAtual ? (Number(m.P.precoLoteAlvo) || 0) / m.obra.vgvAtual : 0), `lote a ${money(Number(m.P.precoLoteAlvo) || 0)} sobre VGV de ${money(m.obra.vgvAtual)}`),
+  ].join('');
+  root.appendChild(cards);
+
+  const p1 = mkPanel('Mapa de oportunidades: R$/m² de lote por condomínio', 'Mediana dos anúncios de cada condomínio. Verde = loteamento novo ou em fase de vendas (preço de entrada); azul = consolidado. O Toscana é a referência de para onde o preço vai quando o condomínio amadurece.');
+  p1.insertAdjacentHTML('beforeend', svgBarras({
+    itens: m.condominios.map((c) => ({ nome: `${c.cond}${/lagoa/i.test(c.cidade) ? ' (LS)' : ''}`, valor: c.m2, classe: c.tipo === 'novo' ? 'mk-bar-novo' : (/toscana/i.test(c.cond) ? 'mk-bar-destaque' : 'mk-bar-mercado') })),
+    formato: (v) => `R$ ${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(v)}`,
+    altura: 260, largura: Math.max(640, m.condominios.length * 78),
+  }));
+  root.appendChild(p1);
+
+  const p2 = mkPanel('Condomínios comparados', 'Vespasiano (Complexo Gran Park) e Lagoa Santa. Área e preço são medianas dos anúncios coletados.');
+  p2.insertAdjacentHTML('beforeend', `<div class="table-scroll"><table class="extrato-table rel-table"><thead><tr><th>Condomínio</th><th>Cidade</th><th>Fase</th><th class="num">Anúncios</th><th class="num">Área típica</th><th class="num">Preço típico</th><th class="num">R$/m²</th><th class="num">vs. Toscana</th></tr></thead><tbody>
+    ${m.condominios.map((c) => `<tr class="${/toscana/i.test(c.cond) ? 'extrato-residuo' : ''}"><td><strong>${esc(c.cond)}</strong></td><td>${esc(c.cidade)}</td><td><span class="badge ${c.tipo === 'novo' ? 'green' : 'gray'}">${c.tipo === 'novo' ? 'novo / em vendas' : 'consolidado'}</span></td><td class="num">${c.n}</td><td class="num">${fmtNum.format(c.area)} m²</td><td class="num">${money(c.preco)}</td><td class="num"><strong>${money(c.m2)}</strong></td><td class="num">${tos ? (c.m2 < tos.m2 ? '− ' : '+ ') + pct(Math.abs(c.m2 / tos.m2 - 1)) : 'n/d'}</td></tr>`).join('')}
+  </tbody></table></div>
+  <div class="mk-texto"><p><strong>Como ler.</strong> O lote novo do <em>${al ? al.cond : 'Gran Park Douro'}</em> custa ${al ? money(al.m2) : 'n/d'}/m² dentro do mesmo complexo em que o Toscana já vale ${tos ? money(tos.m2) : 'n/d'}/m². É a mesma tese do Toscana cinco anos atrás: entrar no lançamento, construir financiado e vender no condomínio maduro. Lagoa Santa oferece lotes maiores por m² mais baixo, mas com custo de construção e público diferentes, vale para casa de campo, não para o produto de ${m.area} m² em lote de 400.</p></div>`);
+  root.appendChild(p2);
+
+  const p3 = mkPanel('Base de lotes', READONLY ? 'Anúncios com fonte e data. Entre para lançar para editar.' : 'Edite direto na tabela. "Fase": novo, consolidado ou histórico (referência de lançamento).');
+  const wrap = document.createElement('div');
+  wrap.className = 'table-scroll';
+  const t = document.createElement('table');
+  t.className = 'extrato-table rel-table';
+  t.innerHTML = `<thead><tr><th>Condomínio</th><th>Cidade</th><th>Fase</th><th class="num">Área m²</th><th class="num">Preço</th><th class="num">R$/m²</th><th>Fonte</th><th>Data</th><th>Obs.</th>${READONLY ? '' : '<th class="no-print"></th>'}</tr></thead>`;
+  const tb = document.createElement('tbody');
+  for (const l of [...m.lotes].sort((a, b) => b.m2 - a.m2)) {
+    const tr = document.createElement('tr');
+    if (READONLY) {
+      tr.innerHTML = `<td>${esc(l.cond)}</td><td>${esc(l.cidade)}</td><td>${esc(l.tipo)}</td><td class="num">${l.area}</td><td class="num">${money(l.preco)}</td><td class="num"><strong>${money(l.m2)}</strong></td><td>${esc(l.fonte)}</td><td>${esc(l.data)}</td><td class="muted">${esc(l.obs || '')}</td>`;
+    } else {
+      tr.innerHTML = `<td></td><td></td><td></td><td class="num"></td><td class="num"></td><td class="num"><strong>${money(l.m2)}</strong></td><td></td><td></td><td></td><td class="no-print"></td>`;
+      const tds = tr.querySelectorAll('td');
+      const txt = (i, k, w) => { const inp = document.createElement('input'); inp.type = 'text'; inp.className = 'cell-input'; inp.value = l[k] || ''; if (w) inp.style.width = w; inp.addEventListener('blur', () => { if (inp.value !== (l[k] || '')) updateMercadoLinha('lotes', l.id, { [k]: inp.value }); }); tds[i].appendChild(inp); };
+      txt(0, 'cond', '150px'); txt(1, 'cidade', '100px');
+      const sel = document.createElement('select'); sel.className = 'cell-input';
+      for (const [v, n] of [['novo', 'novo'], ['consolidado', 'consolidado'], ['historico', 'histórico']]) { const o = document.createElement('option'); o.value = v; o.textContent = n; o.selected = l.tipo === v; sel.appendChild(o); }
+      sel.addEventListener('change', () => updateMercadoLinha('lotes', l.id, { tipo: sel.value })); tds[2].appendChild(sel);
+      tds[3].appendChild(numberInput({ value: l.area, step: '1', onSave: (v) => updateMercadoLinha('lotes', l.id, { area: v }) }));
+      tds[4].appendChild(moneyInput({ value: l.preco, onSave: (v) => updateMercadoLinha('lotes', l.id, { preco: v }) }));
+      txt(6, 'fonte', '110px'); txt(7, 'data', '80px'); txt(8, 'obs', '160px');
+      const del = document.createElement('button'); del.type = 'button'; del.className = 'icon-btn'; del.textContent = '✕'; del.title = 'Remover';
+      del.onclick = async () => { if (await confirmDialog('Remover este lote da base?')) removeMercadoLinha('lotes', l.id); };
+      tds[9].appendChild(del);
+    }
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb); wrap.appendChild(t); p3.appendChild(wrap);
+  if (!READONLY) {
+    const add = document.createElement('button'); add.type = 'button'; add.className = 'btn small'; add.textContent = '+ Novo lote';
+    add.onclick = () => addMercadoLinha('lotes', { cond: '', cidade: 'Vespasiano', tipo: 'novo', area: 400, preco: 300000, fonte: '', data: new Date().toISOString().slice(0, 7), obs: '' });
+    p3.appendChild(add);
+  }
+  root.appendChild(p3);
+}
+
+function renderMercadoTendencia(root, m) {
+  const cards = document.createElement('div');
+  cards.className = 'viab-destaques';
+  cards.innerHTML = [
+    mkCard('Lote Toscana em 5 anos', pct(m.valorizLote), `${money(m.loteLancM2)}/m² → ${money(m.toscana ? m.toscana.m2 : 0)}/m² · ${pct(m.valorizLoteAA)} a.a.`, 'bom'),
+    mkCard('CUB/MG em 5 anos', pct(m.cubVar), `${money(m.cubIni)} (jan/21) → ${money(m.cubFim)} (jun/26) · custo de construir`),
+    mkCard('FipeZap Brasil 2021–25', pct(m.fzAcum), 'acumulado dos 5 anos · imóveis residenciais'),
+    mkCard('Belo Horizonte hoje', money(Number(m.bh.precoM2) || 0) + '/m²', `+${pct(Number(m.bh.var12m) || 0)} em 12 meses (FipeZap ${m.bh.mes || ''})`),
+    mkCard('Casas Toscana mai → set/26', pct(m.varCasas), `mediana ${money(m.stats.medianaAntiga)} → ${money(m.stats.medianaRecente)} · amostras diferentes, leitura indicativa`, m.varCasas >= 0 ? 'bom' : 'ruim'),
+    mkCard('Selic', pct(m.selic), 'crédito imobiliário a 11,8% a.a. continua abaixo do CDI'),
+  ].join('');
+  root.appendChild(cards);
+
+  const p1 = mkPanel('Custo de construir × valor do lote × valor de venda (base 100 em 2021)', 'Três curvas no mesmo eixo: o CUB/MG (quanto custa construir), o índice FipeZap (quanto os imóveis valorizam no país) e o lote do Toscana (do lançamento ao preço de hoje). O que abriu a tesoura a favor de quem comprou cedo foi o terreno.');
+  const anos = ['2021', '2022', '2023', '2024', '2025', '2026'];
+  const cubSerie = anos.map((a) => { const it = m.cub.find(([k]) => k.startsWith(a)); return it ? (it[1] / m.cubIni) * 100 : null; }).map((v, i, arr) => v ?? arr[i - 1]);
+  let acc = 100; const fzSerie = [100];
+  for (const [, x] of m.fz) { acc *= 1 + x; fzSerie.push(acc); }
+  while (fzSerie.length < anos.length) fzSerie.push(fzSerie[fzSerie.length - 1] * (1 + (m.e.indices.fipezapBrasil12m || 0) * 0.4));
+  const loteFim = m.toscana && m.loteLancM2 ? (m.toscana.m2 / m.loteLancM2) * 100 : 100;
+  const loteSerie = anos.map((_, i) => 100 * Math.pow(loteFim / 100, i / (anos.length - 1)));
+  p1.insertAdjacentHTML('beforeend', svgLinhas({ labels: anos, series: [{ nome: 'CUB/MG', valores: cubSerie }, { nome: 'FipeZap Brasil', valores: fzSerie }, { nome: 'Lote Toscana', valores: loteSerie }], formato: (v) => fmtNum.format(Math.round(v)) }));
+  p1.insertAdjacentHTML('beforeend', `<div class="mk-legenda"><span class="mk-leg mk-line-0">CUB/MG (custo de construir)</span><span class="mk-leg mk-line-1">FipeZap Brasil (venda residencial)</span><span class="mk-leg mk-line-2">Lote Gran Park Toscana (interpolado entre lançamento e hoje)</span></div>
+  <div class="muted viab-explica">A curva do lote liga dois pontos, o proxy de lançamento (${money(m.loteLancM2)}/m², ${m.P.loteToscanaLancamentoAno}) e a mediana de hoje, com crescimento constante; não há série anual publicada para o condomínio. Edite o valor de lançamento em <em>Estratégia financiada › premissas</em> se tiver o contrato original.</div>`);
+  root.appendChild(p1);
+
+  const p2 = mkPanel('CUB/MG, série mensal (R$/m², padrão R8N)', 'Referência oficial do Sinduscon-MG para o custo de construção. Esta obra contrata a R$ ' + fmtNum.format(m.obra.custoConstrucaoM2) + '/m², acima do CUB porque o padrão é alto e o CUB não inclui projetos, fundação especial e acabamentos premium.');
+  p2.insertAdjacentHTML('beforeend', svgBarras({ itens: m.cub.map(([k, v]) => ({ nome: k.replace('-', '/'), valor: v, classe: 'mk-bar-custo' })), formato: (v) => `R$ ${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(v)}`, altura: 200 }));
+  root.appendChild(p2);
+
+  const p3 = mkPanel('FipeZap: variação anual, venda residencial (Brasil)', 'Belo Horizonte: ' + money(Number(m.bh.precoM2) || 0) + '/m² em ' + (m.bh.mes || '') + ', +' + pct(Number(m.bh.var12m) || 0) + ' em 12 meses.');
+  p3.insertAdjacentHTML('beforeend', svgBarras({ itens: m.fz.map(([a, x]) => ({ nome: a, valor: x * 100, classe: 'mk-bar-mercado' })), formato: (v) => `${fmtNum.format(v)}%`, altura: 180 }));
+  root.appendChild(p3);
+}
+
+function renderMercadoEstrategia(root, m) {
+  const s = simularEstrategia(m);
+  const P = m.P;
+  const cards = document.createElement('div');
+  cards.className = 'viab-destaques';
+  cards.innerHTML = [
+    mkCard('Lote', money(s.lote), `${P.condominioAlvo || (m.alvo ? m.alvo.cond : '')} · ${pct(s.loteSobreVgv)} do VGV`),
+    mkCard('Custo total da operação', money(s.custoTotal), `${money(s.custoM2)}/m² · construção ${money(s.construcao)} + ADM + indiretos + juros`),
+    mkCard('Venda na saída', money(s.vgvSaida), `${s.areaC} m² × ${money(s.m2Venda)}/m² hoje, +${pct(s.valorizacao)} em ${s.prazo} meses`),
+    mkCard('Lucro líquido', money(s.comFin.lucro), `margem ${pct(s.margemVgv)} sobre o VGV · após corretagem e IR`, s.comFin.lucro >= 0 ? 'bom' : 'ruim'),
+    mkCard('Capital próprio necessário', money(s.comFin.capital), `${pct(P.financiadoPercent)} da construção financiada`),
+    mkCard('ROI com financiamento', pct(s.comFin.roi), `sem financiamento seria ${pct(s.semFin.roi)} sobre ${money(s.semFin.capital)}`, 'bom'),
+  ].join('');
+  root.appendChild(cards);
+
+  const p0 = mkPanel('Premissas (edite e veja o efeito)', READONLY ? 'Sem senha as mudanças ficam só na tela (simulação). Custo de construção por m², ADM e corretagem/IR vêm desta obra.' : 'Gravado com os demais parâmetros do estudo.');
+  const grid = document.createElement('div');
+  grid.className = 'consumo-filtro';
+  const campo = (rot, el, dica) => { const l = document.createElement('label'); l.textContent = rot; if (dica) l.title = dica; el.classList.add('filter-control'); el.style.maxWidth = '150px'; l.appendChild(el); grid.appendChild(l); };
+  const numI = (k, step = '1') => { const i = document.createElement('input'); i.type = 'number'; i.step = step; i.className = 'cell-input'; i.value = P[k] ?? ''; i.addEventListener('blur', () => updateMercadoPremissa({ [k]: Number(i.value) || 0 })); return i; };
+  const txtI = (k) => { const i = document.createElement('input'); i.type = 'text'; i.className = 'cell-input'; i.value = P[k] || ''; i.addEventListener('blur', () => updateMercadoPremissa({ [k]: i.value })); return i; };
+  campo('Condomínio alvo', txtI('condominioAlvo'), 'Nome como está na base de lotes.');
+  campo('Preço do lote (R$)', moneyInput({ value: P.precoLoteAlvo, onSave: (v) => updateMercadoPremissa({ precoLoteAlvo: v }) }));
+  campo('Área do lote (m²)', numI('areaLoteM2'));
+  campo('Área construída (m²)', numI('areaConstruidaM2'));
+  campo('Construção (R$/m²)', moneyInput({ value: P.custoConstrucaoM2, onSave: (v) => updateMercadoPremissa({ custoConstrucaoM2: v }) }), 'Desta obra: contrato ÷ área.');
+  campo('Indiretos (% da construção)', percentInput({ value: P.indiretosPercent, onSave: (v) => updateMercadoPremissa({ indiretosPercent: v }) }), 'Projetos, registros, ITBI, CND.');
+  campo('Custo financeiro (% da construção)', percentInput({ value: P.custoFinanceiroPercent, onSave: (v) => updateMercadoPremissa({ custoFinanceiroPercent: v }) }), 'Desta obra: 203.893 ÷ 1.081.900 = 18,8%, com 75% financiado.');
+  campo('Construção financiada (%)', percentInput({ value: P.financiadoPercent, onSave: (v) => updateMercadoPremissa({ financiadoPercent: v }) }));
+  campo('Prazo até a venda (meses)', numI('prazoMeses'));
+  campo('Valorização esperada (% a.a.)', percentInput({ value: P.valorizacaoAnualEsperada, onSave: (v) => updateMercadoPremissa({ valorizacaoAnualEsperada: v }) }), 'FipeZap 12m: +5,6%. Toscana lote: bem acima.');
+  campo('Lote Toscana no lançamento (R$/m²)', moneyInput({ value: P.loteToscanaLancamentoM2, onSave: (v) => updateMercadoPremissa({ loteToscanaLancamentoM2: v }) }), 'Proxy do anúncio encerrado (R$ 190.080 / 520 m²). Substitua pelo contrato.');
+  campo('Ano do lançamento', numI('loteToscanaLancamentoAno'));
+  p0.appendChild(grid);
+  root.appendChild(p0);
+
+  const p1 = mkPanel('Composição do custo e resultado', 'Mesma estrutura da DRE de viabilidade desta obra, aplicada ao lote novo.');
+  const linha = (r, v, forte) => `<tr class="${forte ? 'extrato-residuo' : ''}"><td>${forte ? `<strong>${r}</strong>` : r}</td><td class="num">${forte ? `<strong>${typeof v === 'number' ? money(v) : v}</strong>` : (typeof v === 'number' ? money(v) : v)}</td></tr>`;
+  p1.insertAdjacentHTML('beforeend', `<div class="table-scroll"><table class="extrato-table"><tbody>
+    <tr class="extrato-grupo"><td colspan="2">Custo econômico</td></tr>
+    ${linha('Lote', s.lote)}${linha(`Construção (${s.areaC} m² × ${money(P.custoConstrucaoM2)})`, s.construcao)}${linha('Administração', s.adm)}${linha('Indiretos (projetos, registros, CND)', s.indiretos)}${linha('Custo financeiro (juros, seguro, tarifas)', s.custoFin)}${linha('Custo total', s.custoTotal, true)}
+    <tr class="extrato-grupo"><td colspan="2">Resultado</td></tr>
+    ${linha(`Venda (${money(s.m2Venda)}/m² hoje + ${pct(s.valorizacao)} no prazo)`, s.vgvSaida)}${linha('Resultado bruto', s.comFin.bruto)}${linha('Lucro líquido (após corretagem e IR)', s.comFin.lucro, true)}
+    <tr class="extrato-grupo"><td colspan="2">Retorno sobre o capital próprio</td></tr>
+    ${linha('Financiado pelo banco', s.financiado)}${linha('Capital próprio com financiamento', s.comFin.capital)}${linha('ROI com financiamento', pct(s.comFin.roi), true)}${linha('Capital próprio sem financiamento', s.semFin.capital)}${linha('ROI sem financiamento', pct(s.semFin.roi))}
+  </tbody></table></div>`);
+  p1.insertAdjacentHTML('beforeend', svgBarras({ itens: [
+    { nome: 'Lote', valor: s.lote, classe: 'mk-bar-novo' }, { nome: 'Construção', valor: s.construcao, classe: 'mk-bar-custo' }, { nome: 'ADM + indiretos', valor: s.adm + s.indiretos, classe: 'mk-bar-custo' }, { nome: 'Custo financeiro', valor: s.custoFin, classe: 'mk-bar-custo' }, { nome: 'Venda', valor: s.vgvSaida, classe: 'mk-bar-mercado' }, { nome: 'Lucro líquido', valor: Math.max(0, s.comFin.lucro), classe: 'mk-bar-destaque' },
+  ], formato: (v) => moneyCurto(v), altura: 220 }));
+  root.appendChild(p1);
+
+  const p2 = mkPanel('A tese, em uma página', '');
+  p2.insertAdjacentHTML('beforeend', `<div class="mk-texto">
+    <p><strong>1. Comprar o lote onde o Toscana estava há cinco anos.</strong> O ${P.condominioAlvo || 'Gran Park Douro'} vende a ${m.alvo ? money(m.alvo.m2) : 'n/d'}/m² com financiamento próprio; o Toscana, no mesmo complexo, já está em ${m.toscana ? money(m.toscana.m2) : 'n/d'}/m². O lote entra na conta por ${pct(s.loteSobreVgv)} do VGV, no Toscana hoje seria ${m.toscana ? pct(m.toscana.preco / s.vgvSaida) : 'n/d'}.</p>
+    <p><strong>2. Construir com o custo que já conhecemos.</strong> ${money(P.custoConstrucaoM2)}/m² é o contrato desta obra, com administração da RS Engenharia e o mesmo empreiteiro, não é estimativa, é preço praticado.</p>
+    <p><strong>3. Financiar ${pct(P.financiadoPercent)} da construção.</strong> Pelo crédito imobiliário a ${pct(P.taxaCreditoAnual)} a.a., abaixo da Selic de ${pct(m.selic)}, o capital próprio cai de ${money(s.semFin.capital)} para ${money(s.comFin.capital)} e o ROI sobe de ${pct(s.semFin.roi)} para <strong>${pct(s.comFin.roi)}</strong>. O custo financeiro (${money(s.custoFin)}) é o preço de não imobilizar ${money(s.financiado)}.</p>
+    <p><strong>4. Vender no condomínio maduro.</strong> A ${money(s.m2Venda)}/m² de hoje mais ${pct(P.valorizacaoAnualEsperada)} ao ano, a casa sai por ${money(s.vgvSaida)} em ${s.prazo} meses, com lucro líquido de <strong>${money(s.comFin.lucro)}</strong> e margem de ${pct(s.margemVgv)} sobre a venda.</p>
+    <p class="muted"><strong>Riscos que o investidor deve ouvir de nós, não descobrir depois:</strong> preço de anúncio não é preço de venda (desconte 5 a 10% na negociação); o Douro é loteamento novo e leva anos para ter a liquidez do Toscana; o CUB subiu ${pct(m.cubVar)} em cinco anos e pode continuar subindo durante a obra; e a curva do lote foi interpolada entre dois pontos, não observada ano a ano.</p>
+  </div>`);
+  root.appendChild(p2);
+}
+
+function renderMercadoFontes(root, m) {
+  const p = mkPanel('Fontes, datas e limitações', 'Tudo que alimenta este estudo, com o que cada fonte serve e o que ela não garante. Anúncios são preço pedido.');
+  p.insertAdjacentHTML('beforeend', `<div class="table-scroll"><table class="extrato-table rel-table"><thead><tr><th>Fonte</th><th>Data</th><th>Uso no estudo</th><th>Limitação</th></tr></thead><tbody>
+    ${m.e.fontes.map((f) => `<tr><td><a href="${esc(f.url)}" target="_blank" rel="noopener">${esc(f.nome)}</a></td><td>${esc(f.data)}</td><td>${esc(f.uso)}</td><td class="muted">${esc(f.limite || '')}</td></tr>`).join('')}
+    <tr><td>Este app (Viabilidade)</td><td>hoje</td><td>Custo econômico, construção, VGV, ADM, corretagem, IR e custo financeiro desta obra</td><td class="muted">Projetado = realizado + a incorrer; ver rastreabilidade.</td></tr>
+  </tbody></table></div>
+  <div class="mk-texto"><p><strong>Método.</strong> R$/m² = preço pedido ÷ área construída anunciada. Mediana em vez de média para não deixar um anúncio fora da curva puxar o número. P25/P75 delimitam a faixa central. Para lotes, mediana por condomínio. As séries de índice (CUB, FipeZap, Selic) são oficiais; a curva do lote do Toscana é interpolada entre o proxy de lançamento e a mediana de hoje.</p></div>`);
+  root.appendChild(p);
+}
+
+/* Apresentação completa: todas as sub-abas numa tela só, em tela cheia,
+   pronta para imprimir/PDF e mostrar a investidor. */
+function xlsxDoEstudoMercado(m) {
+  const obra = VIEW.meta?.obra || 'Obra';
+  const hoje = new Date().toISOString().slice(0, 10);
+  const sub = `Gerado em ${dateBR(hoje)} · base ${dateBR(m.e.atualizadoEm || hoje)} · preços de anúncio (pedidos, não fechados)`;
+  const o = m.obra || {};
+  const P = m.P || {};
+  const resumo = [
+    { ind: 'Mercado pede hoje por m² (mediana set/26)', val: m.stats.medianaRecente || m.stats.mediana, obs: `${m.stats.nRecentes || m.stats.n} anúncios` },
+    { ind: 'Custo total desta obra por m²', val: o.custoTotalM2, obs: 'terreno, construção, ADM, projetos, CND e juros' },
+    { ind: 'Custo de construção por m²', val: o.custoConstrucaoM2, obs: 'contrato do empreiteiro ÷ área' },
+    { ind: 'VGV do projeto por m²', val: o.vgvAtualM2, obs: money(o.vgvAtual) },
+    { ind: 'Lote Toscana por m² (mediana)', val: m.toscana ? m.toscana.m2 : 0, obs: m.toscana ? `${m.toscana.n} lotes` : '' },
+    { ind: 'Lote novo no complexo por m²', val: m.alvo ? m.alvo.m2 : 0, obs: m.alvo ? m.alvo.cond : '' },
+    { ind: 'CUB/MG (último mês, R$/m²)', val: m.cub && m.cub.length ? m.cub[m.cub.length - 1][1] : 0, obs: m.cub && m.cub.length ? m.cub[m.cub.length - 1][0] : '' },
+    { ind: 'FipeZap BH (R$/m²)', val: Number(m.bh.precoM2) || 0, obs: m.bh.mes || '' },
+  ];
+  const abas = [
+    xlsxAbaTabela({ nome: 'Resumo', titulo: `${obra} · Estudo de Mercado · resumo`, subtitulo: sub,
+      colunas: [{ t: 'Indicador', k: 'ind', tipo: 'texto' }, { t: 'Valor (R$)', k: 'val', tipo: 'money' }, { t: 'Observação', k: 'obs', tipo: 'texto' }],
+      linhas: resumo, rotuloTotal: 'Fim do resumo', rodape: `${obra} · Estudo de Mercado` }),
+    xlsxAbaTabela({ nome: 'Comparáveis (casas)', titulo: `${obra} · casas à venda no Gran Park Toscana`, subtitulo: sub,
+      colunas: [{ t: 'Condomínio', k: 'cond', tipo: 'texto' }, { t: 'Área (m²)', k: 'area', tipo: 'num' }, { t: 'Preço (R$)', k: 'preco', tipo: 'money', total: true }, { t: 'R$/m²', k: 'm2', tipo: 'money' }, { t: 'Quartos', k: 'q', tipo: 'num' }, { t: 'Fonte', k: 'fonte', tipo: 'texto' }, { t: 'Data', k: 'data', tipo: 'texto' }, { t: 'Obs.', k: 'obs', tipo: 'texto' }],
+      linhas: m.casas, rodape: `${obra} · Estudo de Mercado` }),
+    xlsxAbaTabela({ nome: 'Lotes', titulo: `${obra} · lotes anunciados (Vespasiano e Lagoa Santa)`, subtitulo: sub,
+      colunas: [{ t: 'Condomínio', k: 'cond', tipo: 'texto' }, { t: 'Cidade', k: 'cidade', tipo: 'texto' }, { t: 'Fase', k: 'tipo', tipo: 'texto' }, { t: 'Área (m²)', k: 'area', tipo: 'num' }, { t: 'Preço (R$)', k: 'preco', tipo: 'money', total: true }, { t: 'R$/m²', k: 'm2', tipo: 'money' }, { t: 'Fonte', k: 'fonte', tipo: 'texto' }, { t: 'Data', k: 'data', tipo: 'texto' }, { t: 'Obs.', k: 'obs', tipo: 'texto' }],
+      linhas: m.lotes, rodape: `${obra} · Estudo de Mercado` }),
+    xlsxAbaTabela({ nome: 'Condomínios', titulo: `${obra} · R$/m² de lote por condomínio (mediana)`, subtitulo: sub,
+      colunas: [{ t: 'Condomínio', k: 'cond', tipo: 'texto' }, { t: 'Cidade', k: 'cidade', tipo: 'texto' }, { t: 'Fase', k: 'tipo', tipo: 'texto' }, { t: 'Anúncios', k: 'n', tipo: 'num' }, { t: 'Área típica (m²)', k: 'area', tipo: 'num' }, { t: 'Preço típico (R$)', k: 'preco', tipo: 'money' }, { t: 'R$/m²', k: 'm2', tipo: 'money' }, { t: 'vs. Toscana', k: 'vsToscana', tipo: 'pct' }],
+      linhas: m.condominios.map((c) => ({ ...c, vsToscana: m.toscana ? c.m2 / m.toscana.m2 - 1 : null })), rotuloTotal: 'Fim da lista', rodape: `${obra} · Estudo de Mercado` }),
+    xlsxAbaTabela({ nome: 'Premissas', titulo: `${obra} · premissas da estratégia financiada`, subtitulo: sub,
+      colunas: [{ t: 'Premissa', k: 'k', tipo: 'texto' }, { t: 'Valor', k: 'v', tipo: 'texto' }],
+      linhas: Object.entries(P).map(([k, v]) => ({ k, v: typeof v === 'number' ? (Math.abs(v) < 1 && v !== 0 ? pct(v) : fmtNum.format(v)) : String(v) })), rotuloTotal: 'Fim', rodape: `${obra} · Estudo de Mercado` }),
+    xlsxAbaTabela({ nome: 'Fontes', titulo: `${obra} · fontes, datas e limitações`, subtitulo: sub,
+      colunas: [{ t: 'Fonte', k: 'nome', tipo: 'texto' }, { t: 'Data', k: 'data', tipo: 'texto' }, { t: 'Uso', k: 'uso', tipo: 'texto' }, { t: 'Limite', k: 'limite', tipo: 'texto' }, { t: 'Endereço', k: 'url', tipo: 'texto' }],
+      linhas: (m.e.fontes || []), rotuloTotal: 'Fim', rodape: `${obra} · Estudo de Mercado` }),
+  ];
+  return xlsxGerar(abas, { titulo: `${obra} · Estudo de Mercado`, autor: 'Controle de obra', app: 'Controle de obra' });
+}
+
+function abrirApresentacaoMercado() {
+  const m = resumoMercado();
+  openModal('Estudo de Mercado: apresentação para investidores', (body) => {
+    const cab = document.createElement('div');
+    cab.className = 'rel-cabecalho';
+    cab.innerHTML = `<div><div class="rel-obra">${esc(VIEW.meta?.obra || 'Obra')}</div><div class="muted">Estudo de mercado · Gran Park Toscana, Complexo Gran Park (Vespasiano) e condomínios de Lagoa Santa · base ${dateBR(m.e.atualizadoEm || '2026-09-03')}</div><div class="muted rel-periodo">Emitido em ${dateBR(new Date().toISOString().slice(0, 10))} · ${esc(VIEW.meta?.incorporador ? 'Incorporador: ' + VIEW.meta.incorporador : '')}</div></div>`;
+    body.appendChild(cab);
+    const acoes = document.createElement('div');
+    acoes.className = 'rel-acoes no-print';
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn small primary filter-control'; b.textContent = 'Imprimir / PDF'; b.onclick = () => window.print();
+    acoes.appendChild(b); body.appendChild(acoes);
+    const ordem = [['Visão executiva', renderMercadoVisao], ['Comparáveis', renderMercadoComparaveis], ['Lotes e novos loteamentos', renderMercadoLotes], ['Tendência e valorização', renderMercadoTendencia], ['Estratégia financiada', renderMercadoEstrategia], ['Fontes', renderMercadoFontes]];
+    const salvo = READONLY;
+    for (const [t, fn] of ordem) {
+      const sec = document.createElement('section'); sec.className = 'mk-secao-print';
+      const h = document.createElement('h3'); h.className = 'mk-h3 mk-h3-secao'; h.textContent = t; sec.appendChild(h);
+      const box = document.createElement('div'); box.className = 'mk-secao-corpo';
+      // Na apresentação as tabelas são só leitura, mesmo com sessão aberta.
+      READONLY = true; try { fn(box, m); } finally { READONLY = salvo; }
+      sec.appendChild(box);
+      body.appendChild(sec);
+    }
+  }, { wide: true, fullscreen: true });
 }
 
 function renderRastreabilidade() {
@@ -10609,6 +11950,7 @@ restaurarRascunhoLocal();
 // edição. Roda depois do rascunho para valer sobre o estado que será exibido;
 // é só em memória — quem grava é a próxima alteração de verdade.
 if (STATE.parametros.cartaoAutoSync && aplicarCartaoDerivado()) VIEW = recompute(STATE);
+if (aplicarPixDerivadoDosAvancos()) VIEW = recompute(STATE);
 setupTabs();
 document.getElementById('btnSessao').onclick = () => { if (SESSAO) sairDaSessao(); else abrirLogin(); };
 aplicarModo();
