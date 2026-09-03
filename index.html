@@ -352,6 +352,10 @@
   .pix-celula { white-space: nowrap; }
   .pix-celula .btn-pix { margin: 1px 2px 1px 0; }
   .btn-pix:hover { background: var(--good-soft) !important; }
+  .pix-editar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .pix-editar label { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 600; color: var(--ink-soft); }
+  .pix-editar input { border: 1px solid var(--accent) !important; background: var(--surface) !important; border-radius: 7px; padding: 5px 9px; font-weight: 700; color: var(--accent-ink); }
+  .pix-atalhos { display: flex; gap: 6px; flex-wrap: wrap; }
   .pix-cadastro { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
   .pix-cadastro-titulo { font-weight: 700; font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   @media (max-width: 620px) { .pix-grid { grid-template-columns: 1fr; } .pix-qr svg { width: 100%; height: auto; } }
@@ -9624,11 +9628,12 @@ function abrirCobrancaPix({ recebedorId, valor, descricao, txid, titulo }) {
     toast('Cadastre a chave PIX deste recebedor em Parâmetros › Recebedores PIX.', true);
     return;
   }
+  const valorSugerido = round2(Number(valor) || 0);
+  let valorAtual = valorSugerido;
   let payload = '';
+  const montar = () => pixPayload({ chave: rec.chave, nome: rec.nome, cidade: rec.cidade, valor: valorAtual, descricao, txid });
   let erro = '';
-  try {
-    payload = pixPayload({ chave: rec.chave, nome: rec.nome, cidade: rec.cidade, valor, descricao, txid });
-  } catch (e) { erro = e.message; }
+  try { payload = montar(); } catch (e) { erro = e.message; }
 
   openModal('Pagamento por PIX', (body) => {
     if (erro) {
@@ -9638,25 +9643,45 @@ function abrirCobrancaPix({ recebedorId, valor, descricao, txid, titulo }) {
     }
     const topo = document.createElement('div');
     topo.className = 'extrato-total-line';
-    topo.innerHTML = `<span>${esc(titulo || 'Pagamento')}</span><strong>${Number(valor) > 0 ? money(valor) : 'valor livre'}</strong>`;
+    topo.innerHTML = `<span>${esc(titulo || 'Pagamento')}</span><strong class="pix-topo-valor"></strong>`;
     body.appendChild(topo);
+
+    /* Valor editável: o QR e o copia e cola são refeitos a cada mudança.
+       Serve para pagamento parcial, para arredondar ou para um teste de
+       R$ 1,00 antes de pagar o valor cheio. Zerado = QR sem valor (quem
+       paga digita no banco). */
+    const edit = document.createElement('div');
+    edit.className = 'pix-editar';
+    const lab = document.createElement('label');
+    lab.innerHTML = '<span>Valor a pagar</span>';
+    const inp = moneyInput({ value: valorAtual, onSave: (x) => { valorAtual = round2(Number(x) || 0); atualizar(); } });
+    inp.classList.add('filter-control');
+    inp.style.maxWidth = '170px';
+    lab.appendChild(inp);
+    edit.appendChild(lab);
+    const atalhos = document.createElement('div');
+    atalhos.className = 'pix-atalhos no-print';
+    const atalho = (txt, v, dica) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn small filter-control';
+      b.textContent = txt; b.title = dica || '';
+      b.onclick = () => { valorAtual = round2(v); inp.value = money(valorAtual); atualizar(); };
+      atalhos.appendChild(b);
+    };
+    if (valorSugerido > 0) atalho(`Valor da conta ${money(valorSugerido)}`, valorSugerido, 'Volta ao valor que veio da tela.');
+    atalho('Teste R$ 1,00', 1, 'Pague R$ 1,00 primeiro e confira o nome que o banco mostra.');
+    atalho('Sem valor', 0, 'QR sem valor definido — quem paga digita no app do banco.');
+    edit.appendChild(atalhos);
+    body.appendChild(edit);
 
     const grid = document.createElement('div');
     grid.className = 'pix-grid';
-
     const qr = document.createElement('div');
     qr.className = 'pix-qr';
-    qr.innerHTML = qrSvg(payload, { modulo: 5, margem: 3 });
     grid.appendChild(qr);
-
     const dados = document.createElement('div');
     dados.className = 'pix-dados';
-    dados.innerHTML = `
-      <div class="pix-linha"><span>Recebedor</span><strong>${esc(rec.nome || '—')}</strong></div>
-      <div class="pix-linha"><span>Chave PIX (${esc(pixTipoChave(rec.chave))})</span><strong class="pix-chave">${esc(pixChaveFormatada(rec.chave))}</strong></div>
-      <div class="pix-linha"><span>Cidade</span><strong>${esc(rec.cidade || '—')}</strong></div>
-      ${Number(valor) > 0 ? `<div class="pix-linha"><span>Valor</span><strong>${money(valor)}</strong></div>` : '<div class="pix-linha"><span>Valor</span><strong>a digitar no app do banco</strong></div>'}
-      ${descricao ? `<div class="pix-linha"><span>Identificação</span><strong>${esc(descricao)}</strong></div>` : ''}`;
     grid.appendChild(dados);
     body.appendChild(grid);
 
@@ -9669,9 +9694,23 @@ function abrirCobrancaPix({ recebedorId, valor, descricao, txid, titulo }) {
     cx.className = 'pix-copia';
     cx.readOnly = true;
     cx.rows = 3;
-    cx.value = payload;
     cx.onclick = () => cx.select();
     body.appendChild(cx);
+
+    const atualizar = () => {
+      try { payload = montar(); } catch (e) { toast(e.message, true); return; }
+      qr.innerHTML = qrSvg(payload, { modulo: 5, margem: 3 });
+      cx.value = payload;
+      topo.querySelector('.pix-topo-valor').textContent = valorAtual > 0 ? money(valorAtual) : 'valor livre';
+      const difere = valorSugerido > 0 && Math.abs(valorAtual - valorSugerido) > 0.005;
+      dados.innerHTML = `
+        <div class="pix-linha"><span>Recebedor</span><strong>${esc(rec.nome || '—')}</strong></div>
+        <div class="pix-linha"><span>Chave PIX (${esc(pixTipoChave(rec.chave))})</span><strong class="pix-chave">${esc(pixChaveFormatada(rec.chave))}</strong></div>
+        <div class="pix-linha"><span>Cidade</span><strong>${esc(rec.cidade || '—')}</strong></div>
+        <div class="pix-linha"><span>Valor no QR</span><strong>${valorAtual > 0 ? money(valorAtual) : 'a digitar no app do banco'}</strong>${difere ? `<span class="muted" style="font-size:11px">diferente do valor da conta (${money(valorSugerido)})</span>` : ''}</div>
+        ${descricao ? `<div class="pix-linha"><span>Identificação</span><strong>${esc(descricao)}</strong></div>` : ''}`;
+    };
+    atualizar();
 
     const acoes = document.createElement('div');
     acoes.className = 'rel-acoes no-print';
