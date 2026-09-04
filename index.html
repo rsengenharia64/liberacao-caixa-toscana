@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260904T000257">
+<meta name="app-version" content="20260904T001150">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1921,7 +1921,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260904T000257';
+const APP_VERSAO = '20260904T001150';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -8496,7 +8496,10 @@ function renderControleCaixa() {
   obraEl.textContent = (STATE.meta && STATE.meta.obra) || '—';
   ident.appendChild(campo('Empreendimento / imóvel', obraEl));
   ident.appendChild(campo('Contrato CAIXA', textInput({ value: reg.contratoCaixa || '', onSave: (v) => updateControleCliente(cliente, { contratoCaixa: v }) })));
-  ident.appendChild(campo('Responsável', textInput({ value: reg.responsavel || ((STATE.meta && STATE.meta.responsavelTecnico) || ''), onSave: (v) => updateControleCliente(cliente, { responsavel: v }) })));
+  // Responsável pelo controle: o incorporador (não o responsável técnico da obra).
+  const respPadrao = (STATE.meta && STATE.meta.incorporador) || '';
+  const respAtual = (reg.responsavel && reg.responsavel !== (STATE.meta && STATE.meta.responsavelTecnico)) ? reg.responsavel : respPadrao;
+  ident.appendChild(campo('Responsável (incorporador)', textInput({ value: respAtual, onSave: (v) => updateControleCliente(cliente, { responsavel: v }) })));
 
   const anoWrap = document.createElement('div');
   anoWrap.className = 'controle-ano';
