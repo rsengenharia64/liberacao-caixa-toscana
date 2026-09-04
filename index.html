@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260904T002721">
+<meta name="app-version" content="20260904T010455">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -617,11 +617,18 @@
 
   /* Contas a Pagar: fixa a coluna de excluir (🗑) na borda direita — a tabela
      é larga (14 colunas) e o ícone ficava fora da tela sem rolar até o fim. */
-  #tblParcelas th:last-child, #tblParcelas td:last-child {
+  .tbl-parcelas th:last-child, .tbl-parcelas td:last-child {
     position: sticky; right: 0; background: var(--surface); border-left: 1px solid var(--border);
   }
-  #tblParcelas th:last-child { background: var(--surface-2); z-index: 2; }
-  #tblParcelas tbody tr:hover td:last-child { background: var(--surface-2); }
+  .tbl-parcelas th:last-child { background: var(--surface-2); z-index: 2; }
+  .tbl-parcelas tbody tr:hover td:last-child { background: var(--surface-2); }
+  .tbl-parcelas tfoot td:last-child { background: var(--surface-2); }
+  /* Totalizadores sempre visíveis: o rodapé gruda no fim da área rolável. */
+  .tbl-parcelas tfoot td { position: sticky; bottom: 0; z-index: 1; }
+  .painel-acoes { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .painel-expandido .table-scroll { max-height: calc(100vh - 240px); overflow: auto; }
+  .painel-expandido table.data thead th { z-index: 3; }
+  .modal.fullscreen .tbl-parcelas { font-size: 13px; }
 
   .cell-input {
     border: 1px solid transparent; background: transparent; font: inherit; color: var(--ink);
@@ -656,8 +663,8 @@
   table.data tbody tr.row-realizada > td:first-child { box-shadow: inset 3px 0 0 0 var(--good); }
   /* A última coluna de Contas a Pagar é sticky e precisa de fundo opaco —
      senão o conteúdo passa por baixo dela. Aqui ela acompanha o tom da linha. */
-  #tblParcelas tbody tr.row-planejada td:last-child { background: color-mix(in srgb, var(--warn-soft) 45%, var(--surface)); }
-  #tblParcelas tbody tr.row-planejada:hover td:last-child { background: color-mix(in srgb, var(--warn-soft) 75%, var(--surface)); }
+  .tbl-parcelas tbody tr.row-planejada td:last-child { background: color-mix(in srgb, var(--warn-soft) 45%, var(--surface)); }
+  .tbl-parcelas tbody tr.row-planejada:hover td:last-child { background: color-mix(in srgb, var(--warn-soft) 75%, var(--surface)); }
 
   .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; }
   .badge.green { background: var(--good-soft); color: var(--good); }
@@ -1921,7 +1928,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260904T002721';
+const APP_VERSAO = '20260904T010455';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -3017,7 +3024,8 @@ function aplicarModo() {
 
   const btn = document.getElementById('btnSessao');
   if (btn) {
-    btn.textContent = SESSAO ? `${SESSAO.usuario} · sair` : 'Entrar para lançar';
+    // Sem o nome na tela: quem olha por cima do ombro vê só que há uma sessão aberta.
+    btn.textContent = SESSAO ? 'Lançamento ativo · sair' : 'Entrar para lançar';
     btn.classList.toggle('ativo', !!SESSAO);
     btn.title = SESSAO ? 'Encerrar a sessão de lançamento' : 'Entrar para inserir e editar lançamentos';
   }
@@ -3032,7 +3040,7 @@ function aplicarModo() {
     } else if (PODE_PUBLICAR === false) {
       banner.hidden = false;
       banner.className = 'modo-banner local';
-      banner.innerHTML = `<span>Modo lançamento — ${esc(SESSAO.usuario)}. Esta cópia não publica no servidor: o que você lançar fica guardado <strong>só neste navegador</strong>. Exporte o arquivo para tornar oficial.</span>`;
+      banner.innerHTML = `<span>Modo lançamento. Esta cópia não publica no servidor: o que você lançar fica guardado <strong>só neste navegador</strong>. Exporte o arquivo para tornar oficial.</span>`;
       const acao = document.createElement('button');
       acao.type = 'button';
       acao.className = 'btn small modo-acao filter-control';
@@ -3079,7 +3087,7 @@ function abrirLogin() {
       close();
       aplicarModo();
       renderAll();
-      toast(`Modo lançamento ativo — ${SESSAO.usuario}.`);
+      toast('Modo lançamento ativo.');
     });
     body.appendChild(form);
     setTimeout(() => form.querySelector('input[name="usuario"]').focus(), 30);
@@ -3403,7 +3411,7 @@ function nuvemQuandoPor() {
 function nuvemAtualizarChip() {
   const chip = document.getElementById('statusChip');
   if (!chip) return;
-  if (NUVEM.conectada) chip.title = `Nuvem: versão ${NUVEM.versao}${NUVEM.atualizadoEm ? ` · última gravação ${nuvemQuandoPor()}` : ''} · atualiza em tempo real`;
+  if (NUVEM.conectada) chip.title = `Nuvem: versão ${NUVEM.versao} · atualiza em tempo real`;
   else if (NUVEM.habilitada) chip.title = NUVEM.erro ? `Sem conexão com a nuvem (${NUVEM.erro}). Lançamentos ficam neste navegador até a conexão voltar.` : 'Conectando à nuvem…';
 }
 
@@ -3438,7 +3446,7 @@ function nuvemAdotarEstado(row, motivo) {
   renderAll();
   nuvemGuardarCache();
   nuvemAtualizarChip();
-  if (motivo === 'tempo-real') toast(`Dados atualizados ${nuvemQuandoPor() || 'na nuvem'}.`);
+  if (motivo === 'tempo-real') toast('Dados atualizados na nuvem por outro usuário.');
   return true;
 }
 
@@ -3558,7 +3566,7 @@ async function nuvemSalvar() {
     if (r && r.erro === 'conflito') {
       NUVEM.salvando = false;
       nuvemAdotarEstado(r, 'conflito');
-      toast(`Outra pessoa gravou antes (${nuvemQuandoPor()}). A tela foi atualizada com a versão dela; confira e refaça o seu lançamento se preciso.`, true);
+      toast('Outra pessoa gravou antes. A tela foi atualizada com a versão dela; confira e refaça o seu lançamento se preciso.', true);
       setStatus(SESSAO ? 'saved' : 'readonly');
       return false;
     }
@@ -4860,6 +4868,7 @@ function renderAll() {
     const bs = document.getElementById('btnSairSimulacao');
     if (bs) bs.disabled = false;
   }
+  atualizarPainelExpandido();
 }
 
 /* ==========================================================================
@@ -6983,84 +6992,22 @@ function renderPainel() {
 /* ==========================================================================
    TAB 1 — Dashboard "Contas a Pagar" (visão do cliente)
    ========================================================================== */
-function renderDashboard() {
-  const root = document.getElementById('tab-dashboard');
-  const r = VIEW.resumo;
-  root.innerHTML = '';
-
-  const cards = document.createElement('div');
-  cards.className = 'cards-grid';
-  cards.innerHTML = `
-    <div class="card accent">
-      <div class="card-label">Contrato total empreiteiro</div>
-      <div class="card-value">${money(r.contratoTotalEmpreiteiro)}</div>
-      <div class="card-sub">Medido (obra executada): ${money(r.totalMedido)} · ${pct(r.percObraGeral)}</div>
-    </div>
-    <div class="card good">
-      <div class="card-label">Avanço empreiteiro (% pago)</div>
-      <div class="card-value">${pct(r.percValorTotalPago)}</div>
-      <div class="progress-bar" style="margin-top:6px"><span style="width:${Math.min(100, r.percValorTotalPago * 100)}%"></span></div>
-      <div class="card-sub"><button type="button" class="value-drill tiny filter-control" data-drill="empreiteiro" title="Clique para ver o extrato — PIX, cartão e transferências ao empreiteiro"><span class="drill-value">Consumido (PIX + cartão): ${money(r.totalConsumidoContrato)}</span><span class="drill-hint">extrato</span></button> · Saldo a pagar: ${money(r.saldoAPagarEmpreiteiro)}</div>
-    </div>
-    <div class="card">
-      <div class="card-label">Saldo empreiteiro (falta do contrato)</div>
-      <div class="card-value">${money(r.saldoContratoAPagarEmpreiteiro)}</div>
-      <div class="card-sub">Contrato total − já consumido (PIX + cartão)</div>
-    </div>
-    <div class="card accent">
-      <div class="card-label">% Execução financeira</div>
-      <div class="card-value">${pct(r.percExecucaoFinanceira)}</div>
-      <div class="progress-bar" style="margin-top:6px"><span style="width:${Math.min(100, r.percExecucaoFinanceira * 100)}%"></span></div>
-      <div class="card-sub">Gasto PLS + provisão da quinzena (${money(r.gastoAcumuladoPLS)}) sobre o financiamento total disponível: crédito CAIXA (${money(r.creditoCaixaTotalPCI)}) + recurso próprio planejado (${money(r.recursoProprioPlanejado)})</div>
-    </div>
-    <div class="card">
-      <div class="card-label">Crédito CAIXA disponível</div>
-      <div class="card-value">${money(r.creditoCaixaDisponivelContabil)}</div>
-      <div class="card-sub">Crédito CAIXA total − gasto PLS + provisão da quinzena</div>
-    </div>
-    <div class="card">
-      <div class="card-label">Valor caixa liberado</div>
-      ${cardValueDrill('caixaLiberado', r.caixaLiberadaAcumulada)}
-      <div class="card-sub">Medições liberadas pelo banco (${money(r.caixaLiberadaAcumulada - (Number(VIEW.parametros.custoLoteExecutado) || 0))}) + valor que o CAIXA já passou do lote (${money(VIEW.parametros.custoLoteExecutado)})</div>
-    </div>
-    <div class="card ${r.saldoRecursoDisponivel < 0 ? 'warn' : 'good'}">
-      <div class="card-label">Saldo de recurso próprio disponível</div>
-      ${cardValueDrill('recursoProprio', r.saldoRecursoDisponivel)}
-      <div class="card-sub">${origemSaldoRecursoLabel(r.origemSaldoRecurso, r)}</div>
-    </div>
-    <div class="card">
-      <div class="card-label">Total administração (RS Engenharia)</div>
-      <div class="card-value">${money(r.totalAdmPago)}</div>
-      <div class="card-sub">Taxa: ${pct(VIEW.parametros.taxaAdministracaoPercent)}</div>
-    </div>
-    <div class="card">
-      <div class="card-label">Gasto no cartão (realizado)</div>
-      <div class="card-value">${money(r.totalCartaoPago)}</div>
-      <div class="card-sub">Total gasto acumulado: ${money(r.totalGastoAcumulado)}</div>
-    </div>
-    <div class="card">
-      <div class="card-label">Serviços preliminares</div>
-      <div class="card-value">${money(r.totalPagoDiretoProprietario)}</div>
-      <div class="card-sub">Pago direto pelo proprietário (fora do empreiteiro): topografia, projetos, prefeitura, cartório. Já descontado do saldo de recurso próprio disponível.</div>
-    </div>
-  `;
-  ligarDrills(cards);
-  root.appendChild(cards);
-  root.appendChild(renderConciliacaoEmpreiteiro());
-  root.appendChild(renderVerbaFuturaBlock());
-
+function buildContasPagarPanel(expandido = false) {
   const panel = document.createElement('div');
-  panel.className = 'panel';
+  panel.className = expandido ? 'panel painel-expandido' : 'panel';
   panel.innerHTML = `
     <div class="panel-header">
       <div>
         <h2>Contas a Pagar — parcelas quinzenais (documento enviado ao cliente)</h2>
         <div class="muted">Editável em qualquer campo. "Total a transferir" e "Custo total" são calculados automaticamente, mas podem ser sobrescritos quando o valor real vier diferente do planejado.</div>
       </div>
-      <button class="btn primary" id="btnNovaParcela">+ Nova parcela</button>
+      <div class="painel-acoes">
+        ${expandido ? '' : '<button type="button" class="btn small filter-control" data-acao="expandir" title="Abre esta tabela em tela cheia, com mais espaço para as colunas.">⤢ Expandir</button>'}
+        <button class="btn primary btnNovaParcela">+ Nova parcela</button>
+      </div>
     </div>
     <div class="mesFilterSlot"></div>
-    <div class="table-scroll"><table class="data" id="tblParcelas">
+    <div class="table-scroll"><table class="data tbl-parcelas">
       <thead><tr>
         <th>Parcela</th><th>Mês / Parcela</th><th class="num">Empreiteiro (PIX)</th><th class="num">ADM (PIX)</th>
         <th class="num">Cartão</th><th class="num">Total a transferir</th><th class="num">Evolução Caixa</th>
@@ -7070,14 +7017,13 @@ function renderDashboard() {
       <tfoot></tfoot>
     </table></div>
   `;
-  root.appendChild(panel);
 
   // Filtro por QUINZENA (não por mês): a parcela é quinzenal, então filtrar
   // pelo mês inteiro junta duas parcelas diferentes. Mesmas pílulas do
   // "Custo total do período", para a leitura ser a mesma nas duas telas.
   panel.querySelector('.mesFilterSlot').appendChild(renderQuinzenaChips({
     selecionada: FILTRO_QUINZENA_PARCELAS,
-    onChange: (v) => { FILTRO_QUINZENA_PARCELAS = v; renderDashboard(); },
+    onChange: (v) => { FILTRO_QUINZENA_PARCELAS = v; renderDashboard(); atualizarPainelExpandido(); },
   }));
   const parcelasFiltradas = VIEW.parcelas.filter((p) => {
     if (!FILTRO_QUINZENA_PARCELAS) return true;
@@ -7158,7 +7104,7 @@ function renderDashboard() {
     <td>${esc(rotulo)}</td>
     <td></td>
     ${COLUNAS_TOTAL.map((f) => `<td class="num">${money(somaDe(f, filtro))}</td>`).join('')}
-    <td colspan="6"></td>
+    <td></td><td></td><td></td><td></td><td></td><td></td>
   </tr>`;
 
   tfoot.innerHTML = [
@@ -7171,7 +7117,79 @@ function renderDashboard() {
     linhaTotal(`TOTAL ${escopo}`.trim() || 'TOTAL', () => true, 'total-geral', 'Realizado + planejado. Só coincide com os cards do topo quando não há nenhuma quinzena planejada na lista.'),
   ].join('');
 
-  document.getElementById('btnNovaParcela').onclick = () => openNovaParcelaModal();
+  panel.querySelector('.btnNovaParcela').onclick = () => openNovaParcelaModal();
+  const bExp = panel.querySelector('button[data-acao="expandir"]');
+  if (bExp) bExp.onclick = () => abrirPainelExpandido('Contas a Pagar: parcelas quinzenais', () => buildContasPagarPanel(true));
+  return panel;
+}
+
+function renderDashboard() {
+  const root = document.getElementById('tab-dashboard');
+  const r = VIEW.resumo;
+  root.innerHTML = '';
+
+  const cards = document.createElement('div');
+  cards.className = 'cards-grid';
+  cards.innerHTML = `
+    <div class="card accent">
+      <div class="card-label">Contrato total empreiteiro</div>
+      <div class="card-value">${money(r.contratoTotalEmpreiteiro)}</div>
+      <div class="card-sub">Medido (obra executada): ${money(r.totalMedido)} · ${pct(r.percObraGeral)}</div>
+    </div>
+    <div class="card good">
+      <div class="card-label">Avanço empreiteiro (% pago)</div>
+      <div class="card-value">${pct(r.percValorTotalPago)}</div>
+      <div class="progress-bar" style="margin-top:6px"><span style="width:${Math.min(100, r.percValorTotalPago * 100)}%"></span></div>
+      <div class="card-sub"><button type="button" class="value-drill tiny filter-control" data-drill="empreiteiro" title="Clique para ver o extrato — PIX, cartão e transferências ao empreiteiro"><span class="drill-value">Consumido (PIX + cartão): ${money(r.totalConsumidoContrato)}</span><span class="drill-hint">extrato</span></button> · Saldo a pagar: ${money(r.saldoAPagarEmpreiteiro)}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Saldo empreiteiro (falta do contrato)</div>
+      <div class="card-value">${money(r.saldoContratoAPagarEmpreiteiro)}</div>
+      <div class="card-sub">Contrato total − já consumido (PIX + cartão)</div>
+    </div>
+    <div class="card accent">
+      <div class="card-label">% Execução financeira</div>
+      <div class="card-value">${pct(r.percExecucaoFinanceira)}</div>
+      <div class="progress-bar" style="margin-top:6px"><span style="width:${Math.min(100, r.percExecucaoFinanceira * 100)}%"></span></div>
+      <div class="card-sub">Gasto PLS + provisão da quinzena (${money(r.gastoAcumuladoPLS)}) sobre o financiamento total disponível: crédito CAIXA (${money(r.creditoCaixaTotalPCI)}) + recurso próprio planejado (${money(r.recursoProprioPlanejado)})</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Crédito CAIXA disponível</div>
+      <div class="card-value">${money(r.creditoCaixaDisponivelContabil)}</div>
+      <div class="card-sub">Crédito CAIXA total − gasto PLS + provisão da quinzena</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Valor caixa liberado</div>
+      ${cardValueDrill('caixaLiberado', r.caixaLiberadaAcumulada)}
+      <div class="card-sub">Medições liberadas pelo banco (${money(r.caixaLiberadaAcumulada - (Number(VIEW.parametros.custoLoteExecutado) || 0))}) + valor que o CAIXA já passou do lote (${money(VIEW.parametros.custoLoteExecutado)})</div>
+    </div>
+    <div class="card ${r.saldoRecursoDisponivel < 0 ? 'warn' : 'good'}">
+      <div class="card-label">Saldo de recurso próprio disponível</div>
+      ${cardValueDrill('recursoProprio', r.saldoRecursoDisponivel)}
+      <div class="card-sub">${origemSaldoRecursoLabel(r.origemSaldoRecurso, r)}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Total administração (RS Engenharia)</div>
+      <div class="card-value">${money(r.totalAdmPago)}</div>
+      <div class="card-sub">Taxa: ${pct(VIEW.parametros.taxaAdministracaoPercent)}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Gasto no cartão (realizado)</div>
+      <div class="card-value">${money(r.totalCartaoPago)}</div>
+      <div class="card-sub">Total gasto acumulado: ${money(r.totalGastoAcumulado)}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Serviços preliminares</div>
+      <div class="card-value">${money(r.totalPagoDiretoProprietario)}</div>
+      <div class="card-sub">Pago direto pelo proprietário (fora do empreiteiro): topografia, projetos, prefeitura, cartório. Já descontado do saldo de recurso próprio disponível.</div>
+    </div>
+  `;
+  ligarDrills(cards);
+  root.appendChild(cards);
+  root.appendChild(renderConciliacaoEmpreiteiro());
+  root.appendChild(renderVerbaFuturaBlock());
+
+  root.appendChild(buildContasPagarPanel());
 }
 
 function openNovaParcelaModal() {
@@ -12133,6 +12151,38 @@ function confirmDialog(message, { title = 'Confirmar', okLabel = 'Remover', dang
 /* Tela cheia dos modais: preferência do usuário, lembrada enquanto a aba
    estiver aberta. Relatórios e extratos largos já nascem expandidos. */
 let MODAL_FULLSCREEN = (() => { try { return sessionStorage.getItem('modalFullscreen') === '1'; } catch { return false; } })();
+
+/* Painel expandido: qualquer painel com tabela larga abre em tela cheia. O
+   conteúdo é reconstruído a cada renderAll (lançamentos feitos dentro do modal
+   aparecem na hora) e respeita a trava de somente leitura. */
+let PAINEL_EXPANDIDO = null;
+function abrirPainelExpandido(titulo, build) {
+  const m = openModal(titulo, (body) => { body.appendChild(build()); }, { wide: true, fullscreen: true });
+  PAINEL_EXPANDIDO = { titulo, build, body: m.body };
+  travarSomenteLeitura(m.body);
+  const obs = new MutationObserver(() => {
+    if (!document.body.contains(m.backdrop)) { obs.disconnect(); if (PAINEL_EXPANDIDO && PAINEL_EXPANDIDO.body === m.body) PAINEL_EXPANDIDO = null; }
+  });
+  obs.observe(document.body, { childList: true });
+}
+function atualizarPainelExpandido() {
+  if (!PAINEL_EXPANDIDO) return;
+  const b = PAINEL_EXPANDIDO.body;
+  if (!document.body.contains(b)) { PAINEL_EXPANDIDO = null; return; }
+  const scrollTop = b.scrollTop;
+  const ts = b.querySelector('.table-scroll');
+  const scrollLeft = ts ? ts.scrollLeft : 0;
+  b.innerHTML = '';
+  b.appendChild(PAINEL_EXPANDIDO.build());
+  travarSomenteLeitura(b);
+  b.scrollTop = scrollTop;
+  const ts2 = b.querySelector('.table-scroll');
+  if (ts2) ts2.scrollLeft = scrollLeft;
+}
+function travarSomenteLeitura(raiz) {
+  if (!READONLY || !raiz) return;
+  raiz.querySelectorAll('input:not(.filter-control), select:not(.filter-control), textarea, button:not(.filter-control)').forEach((el) => { el.disabled = true; });
+}
 
 function openModal(title, buildBody, opts = {}) {
   const tpl = document.getElementById('tpl-modal');
