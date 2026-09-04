@@ -1,8 +1,8 @@
-/* Service worker do painel Liberação Caixa — versão 20260903T233548.
+/* Service worker do painel Liberação Caixa — versão 20260904T000257.
    Estratégia: rede primeiro, SEM passar pelo cache HTTP do navegador (o
    GitHub Pages manda index.html com validade de 10 minutos, e isso segurava
    versões velhas). Cache próprio só como reserva para abrir sem internet. */
-const CACHE = 'liberacao-caixa-20260903T233548';
+const CACHE = 'liberacao-caixa-20260904T000257';
 const ARQUIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-512-maskable.png'];
 
 self.addEventListener('install', (e) => {

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260903T233548">
+<meta name="app-version" content="20260904T000257">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -378,6 +378,14 @@
   .mk-leg { display: inline-flex; align-items: center; gap: 6px; }
   .mk-leg::before { content: ""; width: 14px; height: 3px; border-radius: 2px; background: currentColor; }
   .mk-leg.mk-line-0 { color: var(--accent); } .mk-leg.mk-line-1 { color: var(--good); } .mk-leg.mk-line-2 { color: var(--ink-soft); }
+  #tab-mercado .consumo-filtro .cell-input, .mk-secao-corpo .consumo-filtro .cell-input { border: 1px solid var(--border); background: var(--surface); padding: 5px 8px; border-radius: 6px; min-width: 120px; box-shadow: inset 0 1px 2px rgba(15,33,55,.06); }
+  #tab-mercado .consumo-filtro .cell-input:focus { border-color: var(--accent); outline: none; }
+  #tab-mercado .consumo-filtro label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+  .mk-glossario { margin: 10px 0 4px; border: 1px dashed var(--border); border-radius: var(--radius); padding: 8px 12px; background: var(--surface); }
+  .mk-glossario summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--accent-ink); }
+  .mk-glossario dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 8px 18px; margin: 10px 0 2px; }
+  .mk-glossario dt { font-weight: 700; font-size: 12.5px; color: var(--ink); }
+  .mk-glossario dd { margin: 2px 0 0; font-size: 12px; line-height: 1.45; color: var(--ink-soft); }
   .mk-fonte-link { color: var(--accent-ink); text-decoration: underline; overflow-wrap: anywhere; }
   @media print {
     .mk-subnav { display: none !important; }
@@ -1913,7 +1921,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260903T233548';
+const APP_VERSAO = '20260904T000257';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -11087,6 +11095,7 @@ const MERCADO_SUBS = [
 let MERCADO_SUB = (() => { try { return sessionStorage.getItem('mercadoSub') || 'visao'; } catch { return 'visao'; } })();
 // Premissas de simulação (sem senha): ficam só na memória.
 const MERCADO_SIM = {};
+let MODO_APRESENTACAO_MERCADO = false;
 
 function estudoMercado() {
   if (!STATE.estudoMercado) STATE.estudoMercado = JSON.parse(JSON.stringify(MERCADO_SEED));
@@ -11226,7 +11235,9 @@ function simularEstrategia(m) {
   const custoFin = construcao * (Number(P.custoFinanceiroPercent) || 0) * ((Number(P.financiadoPercent) || 0) / 0.75);
   const custoSemFin = lote + construcao + adm + indiretos;
   const custoTotal = custoSemFin + custoFin;
-  const m2Venda = m.stats.medianaRecente || m.stats.mediana;
+  const m2Mercado = m.stats.medianaRecente || m.stats.mediana;
+  const m2Venda = Number(P.vendaM2) > 0 ? Number(P.vendaM2) : m2Mercado;
+  const vendaEditada = Number(P.vendaM2) > 0;
   const prazo = Number(P.prazoMeses) || 20;
   const valorizacao = Math.pow(1 + (Number(P.valorizacaoAnualEsperada) || 0), prazo / 12) - 1;
   const vgvHoje = m2Venda * areaC;
@@ -11239,7 +11250,7 @@ function simularEstrategia(m) {
   const capitalCom = custoTotal - financiado;
   const capitalSem = custoSemFin;
   return {
-    areaC, lote, construcao, adm, indiretos, financiado, custoFin, custoSemFin, custoTotal, m2Venda, vgvHoje, vgvSaida, valorizacao, prazo,
+    areaC, lote, construcao, adm, indiretos, financiado, custoFin, custoSemFin, custoTotal, m2Venda, m2Mercado, vendaEditada, vgvHoje, vgvSaida, valorizacao, prazo,
     custoM2: areaC ? custoTotal / areaC : 0,
     comFin: { ...comFin, capital: capitalCom, roi: capitalCom > 0 ? comFin.lucro / capitalCom : 0 },
     semFin: { ...semFin, capital: capitalSem, roi: capitalSem > 0 ? semFin.lucro / capitalSem : 0 },
@@ -11385,6 +11396,39 @@ function renderEstudoMercado() {
 function mkCard(rot, val, nota, classe = '') {
   return `<div class="viab-num"><span class="viab-rotulo">${rot}</span><strong class="viab-valor ${classe}">${val}</strong>${nota ? `<span class="viab-nota">${nota}</span>` : ''}</div>`;
 }
+// Legenda de termos do estudo: cada sub-aba mostra só os termos que usa.
+const MK_GLOSSARIO = {
+  mediana: ['Mediana', 'Valor do meio da lista ordenada: metade dos anúncios pede menos, metade pede mais. Preferida à média porque um anúncio fora da curva não a distorce.'],
+  media: ['Média', 'Soma dos valores dividida pela quantidade. Sensível a anúncios muito caros ou muito baratos; usada só como checagem.'],
+  p25: ['P25 (1º quartil)', 'Valor abaixo do qual estão os 25% anúncios mais baratos. Serve como piso de negociação ou preço de venda rápida.'],
+  p75: ['P75 (3º quartil)', 'Valor abaixo do qual estão 75% dos anúncios; só 25% pedem mais. Serve como teto, padrão premium.'],
+  m2: ['R$/m²', 'Preço pedido dividido pela área construída anunciada. É a régua que permite comparar casas de tamanhos diferentes.'],
+  vgv: ['VGV', 'Valor Geral de Venda: o preço pelo qual a casa será (ou foi projetada para ser) vendida. VGV/m² é esse valor dividido pela área construída.'],
+  custoM2: ['Custo total por m²', 'Tudo que a obra custa (terreno, construção, administração, projetos, CND e juros do financiamento) dividido pela área construída.'],
+  spread: ['Spread mercado × custo', 'Diferença entre o que o mercado pede por m² e o custo total por m². É a margem bruta por m² antes de corretagem e imposto.'],
+  comparavel: ['Comparável', 'Casa anunciada no mesmo condomínio (ou similar) usada como referência de preço. Preço de anúncio é preço pedido, não fechado: a venda costuma sair 5% a 10% abaixo.'],
+  faixa: ['Faixa de área', 'Agrupamento dos anúncios por tamanho. Casas menores costumam ter R$/m² maior porque o terreno pesa mais no preço.'],
+  lote: ['Lote consolidado × novo', 'Consolidado: condomínio pronto, com casas construídas e liquidez. Novo / em vendas: loteamento em lançamento, preço de entrada menor e menos liquidez.'],
+  valorizacao: ['Valorização a.a.', 'Quanto o preço subiu por ano, em média, no período (juros compostos). Exemplo: de R$ 365 para R$ 1.114 por m² em 6 anos são 20,4% ao ano.'],
+  proxy: ['Proxy de lançamento', 'Valor aproximado do lote no lançamento, tirado de um anúncio antigo, usado no lugar do contrato original. Substitua pelo valor real quando tiver.'],
+  cub: ['CUB/MG (R8N)', 'Custo Unitário Básico da construção em Minas Gerais, publicado todo mês pelo Sinduscon-MG. R8N = residência padrão normal de 8 pavimentos, referência oficial de custo por m².'],
+  fipezap: ['FipeZap', 'Índice da FIPE com os preços de anúncio de imóveis residenciais nas capitais. Mostra a tendência de valorização, não o preço de um imóvel específico.'],
+  selic: ['Selic', 'Taxa básica de juros do Banco Central. É a régua para comparar o rendimento de deixar o dinheiro aplicado contra investir na obra.'],
+  roi: ['ROI', 'Retorno sobre o capital próprio: lucro líquido dividido pelo dinheiro que o investidor precisou colocar. Com financiamento o capital próprio cai e o ROI sobe.'],
+  margem: ['Margem sobre o VGV', 'Lucro líquido dividido pelo valor de venda. Diz quanto de cada real vendido sobra depois de custo, corretagem e imposto.'],
+  capital: ['Capital próprio necessário', 'Parte do custo que o investidor banca com dinheiro próprio: custo total menos o que o banco financia.'],
+  corretagem: ['Corretagem e IR', 'Corretagem: comissão do corretor na venda (6% nesta obra). IR: imposto sobre o ganho de capital (15%). Os dois saem do resultado bruto para chegar ao lucro líquido.'],
+  custoFin: ['Custo financeiro', 'Juros, seguro e tarifas do crédito imobiliário ao longo da obra. Nesta obra: R$ 203.893 sobre R$ 1.081.900 de construção (18,8%) com 75% financiado.'],
+  cenario: ['Cenário de venda', 'Preço de venda testado: conservador (P25), mediana, anúncios recentes, média ou teto (P75). Cada um gera um valor de mercado para esta casa.'],
+};
+function mkGlossario(chaves, aberto) {
+  const d = document.createElement('details');
+  d.className = 'mk-glossario';
+  if (aberto) d.open = true;
+  d.innerHTML = `<summary>Legenda de termos usados nesta tela</summary><dl>${chaves.map((k) => MK_GLOSSARIO[k]).filter(Boolean).map(([t, e]) => `<div><dt>${esc(t)}</dt><dd>${esc(e)}</dd></div>`).join('')}</dl>`;
+  return d;
+}
+
 function mkPanel(titulo, sub) {
   const p = document.createElement('div');
   p.className = 'panel';
@@ -11442,6 +11486,7 @@ function renderMercadoVisao(root, m) {
     <p><strong>A próxima operação.</strong> No mesmo complexo, o ${m.alvo ? m.alvo.cond : 'Gran Park Douro'} vende lote a ${m.alvo ? money(m.alvo.m2) : 'n/d'}/m², ${m.alvo && m.toscana ? pct(1 - m.alvo.m2 / m.toscana.m2) : 'n/d'} abaixo do Toscana consolidado, com financiamento próprio da urbanizadora. A sub-aba <em>Estratégia financiada</em> simula repetir esta obra lá, com o custo real desta e o preço de venda do mercado.</p>
   </div>`);
   root.appendChild(p3);
+  root.appendChild(mkGlossario(['mediana', 'p25', 'p75', 'm2', 'vgv', 'custoM2', 'spread', 'comparavel', 'valorizacao', 'cub', 'fipezap'], !READONLY || MODO_APRESENTACAO_MERCADO));
 }
 
 function renderMercadoComparaveis(root, m) {
@@ -11506,6 +11551,7 @@ function renderMercadoComparaveis(root, m) {
     p2.appendChild(add);
   }
   root.appendChild(p2);
+  root.appendChild(mkGlossario(['comparavel', 'mediana', 'media', 'p25', 'p75', 'm2', 'faixa', 'cenario', 'vgv'], MODO_APRESENTACAO_MERCADO));
 }
 
 function renderMercadoLotes(root, m) {
@@ -11571,6 +11617,7 @@ function renderMercadoLotes(root, m) {
     p3.appendChild(add);
   }
   root.appendChild(p3);
+  root.appendChild(mkGlossario(['lote', 'mediana', 'm2', 'valorizacao', 'proxy'], MODO_APRESENTACAO_MERCADO));
 }
 
 function renderMercadoTendencia(root, m) {
@@ -11606,6 +11653,7 @@ function renderMercadoTendencia(root, m) {
   const p3 = mkPanel('FipeZap: variação anual, venda residencial (Brasil)', 'Belo Horizonte: ' + money(Number(m.bh.precoM2) || 0) + '/m² em ' + (m.bh.mes || '') + ', +' + pct(Number(m.bh.var12m) || 0) + ' em 12 meses.');
   p3.insertAdjacentHTML('beforeend', svgBarras({ itens: m.fz.map(([a, x]) => ({ nome: a, valor: x * 100, classe: 'mk-bar-mercado' })), formato: (v) => `${fmtNum.format(v)}%`, altura: 180 }));
   root.appendChild(p3);
+  root.appendChild(mkGlossario(['valorizacao', 'proxy', 'cub', 'fipezap', 'selic'], MODO_APRESENTACAO_MERCADO));
 }
 
 function renderMercadoEstrategia(root, m) {
@@ -11616,7 +11664,7 @@ function renderMercadoEstrategia(root, m) {
   cards.innerHTML = [
     mkCard('Lote', money(s.lote), `${P.condominioAlvo || (m.alvo ? m.alvo.cond : '')} · ${pct(s.loteSobreVgv)} do VGV`),
     mkCard('Custo total da operação', money(s.custoTotal), `${money(s.custoM2)}/m² · construção ${money(s.construcao)} + ADM + indiretos + juros`),
-    mkCard('Venda na saída', money(s.vgvSaida), `${s.areaC} m² × ${money(s.m2Venda)}/m² hoje, +${pct(s.valorizacao)} em ${s.prazo} meses`),
+    mkCard('Venda na saída', money(s.vgvSaida), `${s.areaC} m² × ${money(s.m2Venda)}/m² ${s.vendaEditada ? '(VGV editado)' : '(mediana do mercado)'} = ${money(s.vgvHoje)} hoje, +${pct(s.valorizacao)} em ${s.prazo} meses`),
     mkCard('Lucro líquido', money(s.comFin.lucro), `margem ${pct(s.margemVgv)} sobre o VGV · após corretagem e IR`, s.comFin.lucro >= 0 ? 'bom' : 'ruim'),
     mkCard('Capital próprio necessário', money(s.comFin.capital), `${pct(P.financiadoPercent)} da construção financiada`),
     mkCard('ROI com financiamento', pct(s.comFin.roi), `sem financiamento seria ${pct(s.semFin.roi)} sobre ${money(s.semFin.capital)}`, 'bom'),
@@ -11637,6 +11685,9 @@ function renderMercadoEstrategia(root, m) {
   campo('Indiretos (% da construção)', percentInput({ value: P.indiretosPercent, onSave: (v) => updateMercadoPremissa({ indiretosPercent: v }) }), 'Projetos, registros, ITBI, CND.');
   campo('Custo financeiro (% da construção)', percentInput({ value: P.custoFinanceiroPercent, onSave: (v) => updateMercadoPremissa({ custoFinanceiroPercent: v }) }), 'Desta obra: 203.893 ÷ 1.081.900 = 18,8%, com 75% financiado.');
   campo('Construção financiada (%)', percentInput({ value: P.financiadoPercent, onSave: (v) => updateMercadoPremissa({ financiadoPercent: v }) }));
+  campo('Venda (R$/m²)', moneyInput({ value: s.m2Venda, onSave: (v) => updateMercadoPremissa({ vendaM2: v > 0 ? v : null }) }), `VGV por m² usado na conta. Em branco ou zero volta à mediana do mercado (${money(s.m2Mercado)}/m²).`);
+  campo('VGV de venda hoje (R$)', moneyInput({ value: s.vgvHoje, onSave: (v) => updateMercadoPremissa({ vendaM2: v > 0 && s.areaC ? round2(v / s.areaC) : null }) }), 'Valor total de venda hoje; o sistema converte para R$/m² pela área construída e recalcula tudo.');
+  if (s.vendaEditada) { const b = document.createElement('button'); b.type = 'button'; b.className = 'btn small filter-control'; b.textContent = `Usar mediana do mercado (${money(s.m2Mercado)}/m²)`; b.onclick = () => updateMercadoPremissa({ vendaM2: null }); const l = document.createElement('label'); l.textContent = ' '; l.appendChild(b); grid.appendChild(l); }
   campo('Prazo até a venda (meses)', numI('prazoMeses'));
   campo('Valorização esperada (% a.a.)', percentInput({ value: P.valorizacaoAnualEsperada, onSave: (v) => updateMercadoPremissa({ valorizacaoAnualEsperada: v }) }), 'FipeZap 12m: +5,6%. Toscana lote: bem acima.');
   campo('Lote Toscana no lançamento (R$/m²)', moneyInput({ value: P.loteToscanaLancamentoM2, onSave: (v) => updateMercadoPremissa({ loteToscanaLancamentoM2: v }) }), 'Proxy do anúncio encerrado (R$ 190.080 / 520 m²). Substitua pelo contrato.');
@@ -11650,7 +11701,7 @@ function renderMercadoEstrategia(root, m) {
     <tr class="extrato-grupo"><td colspan="2">Custo econômico</td></tr>
     ${linha('Lote', s.lote)}${linha(`Construção (${s.areaC} m² × ${money(P.custoConstrucaoM2)})`, s.construcao)}${linha('Administração', s.adm)}${linha('Indiretos (projetos, registros, CND)', s.indiretos)}${linha('Custo financeiro (juros, seguro, tarifas)', s.custoFin)}${linha('Custo total', s.custoTotal, true)}
     <tr class="extrato-grupo"><td colspan="2">Resultado</td></tr>
-    ${linha(`Venda (${money(s.m2Venda)}/m² hoje + ${pct(s.valorizacao)} no prazo)`, s.vgvSaida)}${linha('Resultado bruto', s.comFin.bruto)}${linha('Lucro líquido (após corretagem e IR)', s.comFin.lucro, true)}
+    ${linha(`Venda hoje (${s.areaC} m² × ${money(s.m2Venda)}/m²${s.vendaEditada ? ', VGV editado' : ', mediana do mercado'})`, s.vgvHoje)}${linha(`Venda na saída (+${pct(s.valorizacao)} em ${s.prazo} meses)`, s.vgvSaida)}${linha('Resultado bruto', s.comFin.bruto)}${linha('Lucro líquido (após corretagem e IR)', s.comFin.lucro, true)}
     <tr class="extrato-grupo"><td colspan="2">Retorno sobre o capital próprio</td></tr>
     ${linha('Financiado pelo banco', s.financiado)}${linha('Capital próprio com financiamento', s.comFin.capital)}${linha('ROI com financiamento', pct(s.comFin.roi), true)}${linha('Capital próprio sem financiamento', s.semFin.capital)}${linha('ROI sem financiamento', pct(s.semFin.roi))}
   </tbody></table></div>`);
@@ -11668,6 +11719,7 @@ function renderMercadoEstrategia(root, m) {
     <p class="muted"><strong>Riscos que o investidor deve ouvir de nós, não descobrir depois:</strong> preço de anúncio não é preço de venda (desconte 5 a 10% na negociação); o Douro é loteamento novo e leva anos para ter a liquidez do Toscana; o CUB subiu ${pct(m.cubVar)} em cinco anos e pode continuar subindo durante a obra; e a curva do lote foi interpolada entre dois pontos, não observada ano a ano.</p>
   </div>`);
   root.appendChild(p2);
+  root.appendChild(mkGlossario(['vgv', 'custoM2', 'custoFin', 'capital', 'roi', 'margem', 'corretagem', 'valorizacao', 'selic'], MODO_APRESENTACAO_MERCADO));
 }
 
 function renderMercadoFontes(root, m) {
@@ -11739,7 +11791,7 @@ function abrirApresentacaoMercado() {
       const h = document.createElement('h3'); h.className = 'mk-h3 mk-h3-secao'; h.textContent = t; sec.appendChild(h);
       const box = document.createElement('div'); box.className = 'mk-secao-corpo';
       // Na apresentação as tabelas são só leitura, mesmo com sessão aberta.
-      READONLY = true; try { fn(box, m); } finally { READONLY = salvo; }
+      READONLY = true; MODO_APRESENTACAO_MERCADO = true; try { fn(box, m); } finally { READONLY = salvo; MODO_APRESENTACAO_MERCADO = false; }
       sec.appendChild(box);
       body.appendChild(sec);
     }
