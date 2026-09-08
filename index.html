@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260908T141223">
+<meta name="app-version" content="20260908T142622">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -626,6 +626,9 @@
   /* Totalizadores sempre visíveis: o rodapé gruda no fim da área rolável. */
   .tbl-parcelas tfoot td { position: sticky; bottom: 0; z-index: 1; }
   .painel-acoes { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .mov-raiz .table-scroll { max-height: none; overflow: visible; }
+  .mov-raiz .extrato-table tfoot td { position: static; }
+  .mov-resumo { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
   .qz-faixa { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin: 6px 0 8px; }
   .qz-faixa label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
   .qz-faixa select { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 4px 8px; min-width: 190px; font-family: "Archivo", sans-serif; }
@@ -1931,7 +1934,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260908T141223';
+const APP_VERSAO = '20260908T142622';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -5513,13 +5516,191 @@ function abrirExtratoCustoRealizado() {
   abrirExtratoCustoTotal(realizadas, total);
 }
 
+/* ==========================================================================
+   MOVIMENTO DO DINHEIRO: entradas, saídas e natureza do recurso
+   --------------------------------------------------------------------------
+   Uma leitura só, rápida, de tudo que entrou e saiu da obra: data, valor,
+   grupo e natureza (recurso próprio × conta da obra / CAIXA). Não cria
+   lançamento nenhum: lê as mesmas fontes que já alimentam o app (Liberação
+   PCI, Contas a Pagar, Detalhamento FC, consumos de recurso próprio) e
+   recalcula sozinho a cada lançamento.
+
+   Regra de natureza das quinzenas: o que foi pago ANTES da primeira
+   liberação da CAIXA saiu do bolso do proprietário (recurso próprio); daí em
+   diante a conta da obra já tinha dinheiro do banco (conta da obra / CAIXA).
+   Entrada do lote e serviços preliminares (pagos direto) são sempre recurso
+   próprio; a parte do lote paga pela CAIXA ao vendedor é CAIXA.
+   ========================================================================== */
+const MOV_GRUPOS = [
+  ['lote', 'Lote (terreno)'], ['preliminares', 'Serviços preliminares (pago direto)'],
+  ['pix', 'Empreiteiro (PIX)'], ['adm', 'Administração RS Engenharia'],
+  ['cartao', 'Cartão (materiais)'], ['evolucao', 'Evolução CAIXA (juros, seguro)'], ['ajuste', 'Ajustes manuais de custo'],
+];
+const MOV_NATUREZAS = { proprio: 'Recurso próprio', caixa: 'Conta da obra (CAIXA / banco)' };
+
+function movimentoDinheiro({ incluirPlanejado = false } = {}) {
+  const r = VIEW.resumo || {};
+  const P = VIEW.parametros || {};
+  const liberacoes = (VIEW.liberacoesCaixa || []).slice().sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
+  const primeiraLib = liberacoes.find((l) => (l.status || 'REALIZADO') === 'REALIZADO' && l.data);
+  const dataPrimeiraLib = primeiraLib ? primeiraLib.data : null;
+  const linhas = []; // { data, tipo:'entrada'|'saida', grupo, natureza, descricao, valor, status, origem }
+  const push = (x) => linhas.push(x);
+
+  // ENTRADAS
+  const lote = Number(P.custoLoteExecutado) || 0;
+  if (lote) push({ data: null, tipo: 'entrada', grupo: 'lote', natureza: 'caixa', descricao: 'Financiamento do lote (CAIXA paga direto ao vendedor)', valor: lote, status: 'REALIZADO', origem: 'Parâmetros › custo do lote executado' });
+  for (const l of liberacoes) {
+    const st = l.status || 'REALIZADO';
+    if (st !== 'REALIZADO' && !incluirPlanejado) continue;
+    push({ data: l.data, tipo: 'entrada', grupo: 'liberacao', natureza: 'caixa', descricao: `Liberação CAIXA · ${l.obs || 'Medição'}`, valor: Number(l.valor) || 0, status: st, origem: 'Liberação PCI › liberações' });
+  }
+  for (const c of (VIEW.consumosRecursoProprio || [])) {
+    push({ data: c.data || null, tipo: 'entrada', grupo: 'aporte', natureza: 'proprio', descricao: `Aporte de recurso próprio · ${c.descricao || ''}`, valor: Number(c.valor) || 0, status: 'REALIZADO', origem: 'Parâmetros › consumos de recurso próprio' });
+  }
+
+  // SAÍDAS
+  const entradaLote = round2(Math.max(0, (Number(P.custoTerreno) || 0) + (Number(P.multaLote) || 0) - lote));
+  if (lote) push({ data: null, tipo: 'saida', grupo: 'lote', natureza: 'caixa', descricao: 'Lote · parte financiada (CAIXA → vendedor)', valor: lote, status: 'REALIZADO', origem: 'Parâmetros › custo do lote executado' });
+  if (entradaLote) push({ data: null, tipo: 'saida', grupo: 'lote', natureza: 'proprio', descricao: 'Lote · entrada e multa pagas pelo proprietário', valor: entradaLote, status: 'REALIZADO', origem: 'Parâmetros › custo do terreno + multa − parte financiada' });
+  for (const cat of (VIEW.categorias || [])) {
+    if (!cat.pagoDiretoProprietario) continue;
+    for (const it of (cat.itens || [])) {
+      const v = Number(it.valorRealizado) || 0;
+      if (v <= 0) continue;
+      push({ data: it.dataPagamento ? String(it.dataPagamento).slice(0, 10) : null, tipo: 'saida', grupo: 'preliminares', natureza: 'proprio', descricao: `${it.descricao || 'item'} (${cat.nome})`, valor: v, status: 'REALIZADO', origem: 'Detalhamento FC › categoria paga direto' });
+    }
+  }
+  for (const p of (VIEW.parcelas || [])) {
+    if (p.status !== 'REALIZADO' && !incluirPlanejado) continue;
+    const d = p.vencimento || p.vencPlanejado || null;
+    const nat = (d && dataPrimeiraLib && d < dataPrimeiraLib) ? 'proprio' : 'caixa';
+    const add = (grupo, val, org) => { if (val) push({ data: d, tipo: 'saida', grupo, natureza: nat, descricao: `${p.label || 'Quinzena'}`, valor: round2(val), status: p.status, origem: org }); };
+    add('pix', Number(p.totalEmpreiteiroPix) || 0, 'Contas a Pagar › Empreiteiro (PIX)');
+    add('adm', Number(p.totalAdmPix) || 0, 'Contas a Pagar › ADM (PIX)');
+    add('cartao', Number(p.gastoCartao) || 0, 'Detalhamento FC › cartão da fatura');
+    add('evolucao', Number(p.parcelaEvolucaoCaixa) || 0, 'Contas a Pagar › Evolução CAIXA');
+    if (p.overrides && p.overrides.custoTotal) {
+      const soma = round2((Number(p.totalEmpreiteiroPix) || 0) + (Number(p.totalAdmPix) || 0) + (Number(p.gastoCartao) || 0) + (Number(p.parcelaEvolucaoCaixa) || 0));
+      const dif = round2((Number(p.custoTotal) || 0) - soma);
+      if (dif) push({ data: d, tipo: 'saida', grupo: 'ajuste', natureza: nat, descricao: `${p.label || 'Quinzena'} · custo total digitado à mão (${dif > 0 ? 'acréscimo' : 'redução'})`, valor: dif, status: p.status, origem: 'Contas a Pagar › custo total sobrescrito' });
+    }
+  }
+
+  linhas.sort((a, b) => String(a.data || '0000').localeCompare(String(b.data || '0000')) || (a.tipo === 'entrada' ? -1 : 1));
+  const somaSe = (f) => round2(linhas.filter(f).reduce((a, x) => a + x.valor, 0));
+  const real = (x) => x.status === 'REALIZADO';
+  const entradas = somaSe((x) => x.tipo === 'entrada' && real(x));
+  const saidas = somaSe((x) => x.tipo === 'saida' && real(x));
+  const porGrupo = MOV_GRUPOS.map(([id, nome]) => ({
+    id, nome,
+    proprio: somaSe((x) => x.tipo === 'saida' && x.grupo === id && x.natureza === 'proprio' && real(x)),
+    caixa: somaSe((x) => x.tipo === 'saida' && x.grupo === id && x.natureza === 'caixa' && real(x)),
+    planejado: somaSe((x) => x.tipo === 'saida' && x.grupo === id && !real(x)),
+  })).map((g) => ({ ...g, total: round2(g.proprio + g.caixa) })).filter((g) => g.total || g.planejado);
+  const saidasProprio = somaSe((x) => x.tipo === 'saida' && x.natureza === 'proprio' && real(x));
+  const saidasCaixa = somaSe((x) => x.tipo === 'saida' && x.natureza === 'caixa' && real(x));
+  const entradasCaixa = somaSe((x) => x.tipo === 'entrada' && x.natureza === 'caixa' && real(x));
+  const entradasProprio = somaSe((x) => x.tipo === 'entrada' && x.natureza === 'proprio' && real(x));
+  const custoQuinzenas = round2((VIEW.parcelas || []).filter((p) => p.status === 'REALIZADO').reduce((a, p) => a + (Number(p.custoTotal) || 0), 0));
+  return {
+    linhas, entradas, saidas, porGrupo, saidasProprio, saidasCaixa, entradasCaixa, entradasProprio,
+    dataPrimeiraLib, custoQuinzenas,
+    saldoConta: Number(r.saldoContaRealizado) || 0,
+    gastoTotalObra: saidas,                     // tudo que já saiu, com lote
+    gastoSemLote: round2(saidas - lote - entradaLote),
+    proprioNaoRegistrado: round2(saidasProprio - entradasProprio),
+  };
+}
+
+function abrirMovimentoDinheiro() {
+  let incluirPlanejado = false;
+  let filtroNat = 'todas';
+  openModal('Movimento do dinheiro: entradas, saídas e natureza do recurso', (body) => {
+    const desenhar = () => {
+      const m = movimentoDinheiro({ incluirPlanejado });
+      body.innerHTML = '';
+      const raiz = document.createElement('div');
+      raiz.className = 'mov-raiz';
+      body.appendChild(raiz);
+      const cab = document.createElement('div');
+      cab.className = 'rel-cabecalho';
+      cab.innerHTML = `<div><div class="rel-obra">${esc(VIEW.meta?.obra || 'Obra')}</div>
+        <div class="muted">Tudo que entrou e saiu, com data, valor e de onde veio o dinheiro. Lê as mesmas telas que alimentam o app (Liberação PCI, Contas a Pagar, Detalhamento FC, Parâmetros) e recalcula a cada lançamento.</div>
+        <div class="muted rel-periodo">Posição em ${dateBR(new Date().toISOString().slice(0, 10))}${m.dataPrimeiraLib ? ` · primeira liberação CAIXA em ${dateBR(m.dataPrimeiraLib)}: o que foi pago antes é recurso próprio, o que veio depois saiu da conta da obra` : ''}</div></div>`;
+      raiz.appendChild(cab);
+
+      const cards = document.createElement('div');
+      cards.className = 'viab-destaques';
+      const card = (rot, val, nota, cls = '') => mkCard(esc(rot), money(val), nota, cls);
+      cards.innerHTML = [
+        card('Entradas', m.entradas, `CAIXA ${money(m.entradasCaixa)} · recurso próprio ${money(m.entradasProprio)}`),
+        card('Saídas (gasto total)', m.saidas, `com o lote · sem o lote: ${money(m.gastoSemLote)}`),
+        card('Pago com recurso próprio', m.saidasProprio, m.proprioNaoRegistrado > 0.01 ? `<span class="badge amber">R$ ${fmtNum.format(m.proprioNaoRegistrado)} acima dos aportes registrados em Parâmetros</span>` : 'bate com os aportes registrados'),
+        card('Pago pela conta da obra (CAIXA)', m.saidasCaixa, `liberações recebidas ${money(m.entradasCaixa - (Number(VIEW.parametros?.custoLoteExecutado) || 0))}`),
+        card('Saldo em conta (realizado)', m.saldoConta, 'mesmo número do Dashboard', m.saldoConta >= 0 ? 'bom' : 'ruim'),
+        card('Custo das quinzenas realizadas', m.custoQuinzenas, 'é o card "Custo total realizado"'),
+      ].join('');
+      raiz.appendChild(cards);
+
+      const acoes = document.createElement('div');
+      acoes.className = 'rel-acoes no-print';
+      acoes.style.margin = '10px 0';
+      const btn = (txt, fn, primaria) => { const b = document.createElement('button'); b.type = 'button'; b.className = `btn small filter-control${primaria ? ' primary' : ''}`; b.textContent = txt; b.onclick = fn; acoes.appendChild(b); return b; };
+      btn(incluirPlanejado ? 'Ocultar planejado' : 'Incluir planejado', () => { incluirPlanejado = !incluirPlanejado; desenhar(); });
+      const sel = document.createElement('select'); sel.className = 'cell-input filter-control'; sel.style.maxWidth = '260px';
+      for (const [v, t] of [['todas', 'Todas as naturezas'], ['proprio', MOV_NATUREZAS.proprio], ['caixa', MOV_NATUREZAS.caixa]]) { const o = document.createElement('option'); o.value = v; o.textContent = t; if (v === filtroNat) o.selected = true; sel.appendChild(o); }
+      sel.onchange = () => { filtroNat = sel.value; desenhar(); };
+      acoes.appendChild(sel);
+      btn('Custo por quinzena', () => abrirExtratoCustoRealizado());
+      btn('Imprimir / PDF', () => window.print(), true);
+      btn('Planilha (Excel)', () => {
+        const rel = { id: 'movimento-dinheiro', nome: 'Movimento do dinheiro', colunas: [
+          { k: 'data', t: 'Data', tipo: 'data' }, { k: 'descricao', t: 'Descrição' }, { k: 'grupoNome', t: 'Grupo' }, { k: 'naturezaNome', t: 'Natureza' }, { k: 'status', t: 'Status' },
+          { k: 'entrada', t: 'Entrada', tipo: 'money', total: true }, { k: 'saida', t: 'Saída', tipo: 'money', total: true }, { k: 'origem', t: 'Origem do número' }],
+          notas: () => ['Natureza: pago antes da primeira liberação CAIXA = recurso próprio; depois = conta da obra (CAIXA/banco). Lote e serviços preliminares pagos direto = recurso próprio.'],
+          blocos: () => [{ titulo: 'Gasto por grupo (realizado)', itens: m.porGrupo.map((g) => [`${g.nome} · próprio ${money(g.proprio)} · CAIXA ${money(g.caixa)}`, g.total, false]).concat([['Total de saídas', m.saidas, true], ['Total de entradas', m.entradas, true]]) }],
+        };
+        const ls = m.linhas.map((x) => ({ ...x, grupoNome: (MOV_GRUPOS.find(([id]) => id === x.grupo) || [x.grupo, x.grupo === 'liberacao' ? 'Liberação CAIXA' : (x.grupo === 'aporte' ? 'Aporte próprio' : x.grupo)])[1], naturezaNome: MOV_NATUREZAS[x.natureza], entrada: x.tipo === 'entrada' ? x.valor : 0, saida: x.tipo === 'saida' ? x.valor : 0 }));
+        baixarArquivo(`movimento-dinheiro-${new Date().toISOString().slice(0, 10)}.xlsx`, xlsxDoRelatorio(rel, ls, totaisRelatorio(rel, ls)), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      });
+      raiz.appendChild(acoes);
+
+      // Resumo por grupo × natureza
+      const g = document.createElement('div');
+      g.className = 'table-scroll';
+      g.innerHTML = `<table class="extrato-table rel-table"><thead><tr><th>Grupo de gasto</th><th class="num">Recurso próprio</th><th class="num">Conta da obra (CAIXA)</th><th class="num">Total realizado</th>${incluirPlanejado ? '<th class="num">Planejado</th>' : ''}</tr></thead>
+        <tbody>${m.porGrupo.map((x) => `<tr><td>${esc(x.nome)}</td><td class="num">${money(x.proprio)}</td><td class="num">${money(x.caixa)}</td><td class="num"><strong>${money(x.total)}</strong></td>${incluirPlanejado ? `<td class="num muted">${money(x.planejado)}</td>` : ''}</tr>`).join('')}</tbody>
+        <tfoot><tr class="extrato-residuo"><td><strong>Gasto total</strong></td><td class="num"><strong>${money(m.saidasProprio)}</strong></td><td class="num"><strong>${money(m.saidasCaixa)}</strong></td><td class="num"><strong>${money(m.saidas)}</strong></td>${incluirPlanejado ? `<td class="num muted">${money(round2(m.porGrupo.reduce((a, x) => a + x.planejado, 0)))}</td>` : ''}</tr></tfoot></table></div>`;
+      raiz.appendChild(g);
+
+      // Lista cronológica
+      const lista = m.linhas.filter((x) => filtroNat === 'todas' || x.natureza === filtroNat);
+      let acum = 0;
+      const t = document.createElement('div');
+      t.className = 'table-scroll';
+      t.style.marginTop = '12px';
+      t.innerHTML = `<table class="extrato-table rel-table"><thead><tr><th>Data</th><th>Lançamento</th><th>Natureza</th><th>Status</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Acumulado</th><th>Onde está lançado</th></tr></thead>
+        <tbody>${lista.map((x) => { if (x.status === 'REALIZADO' && filtroNat === 'todas') acum = round2(acum + (x.tipo === 'entrada' ? x.valor : -x.valor)); return `<tr class="${x.status !== 'REALIZADO' ? 'mov-previsto' : ''}"><td>${x.data ? dateBR(x.data) : '<span class="muted">sem data</span>'}</td><td>${esc(x.descricao)}</td><td><span class="badge ${x.natureza === 'proprio' ? 'accent' : 'green'}">${x.natureza === 'proprio' ? 'próprio' : 'CAIXA / conta'}</span></td><td>${x.status === 'REALIZADO' ? 'Realizado' : 'Planejado'}</td><td class="num ${x.tipo === 'entrada' ? 'mov-entrada' : ''}">${x.tipo === 'entrada' ? money(x.valor) : ''}</td><td class="num ${x.tipo === 'saida' ? 'mov-saida' : ''}">${x.tipo === 'saida' ? money(x.valor) : ''}</td><td class="num">${filtroNat === 'todas' && x.status === 'REALIZADO' ? money(acum) : ''}</td><td class="muted">${esc(x.origem)}</td></tr>`; }).join('')}</tbody>
+        <tfoot><tr class="extrato-residuo"><td colspan="4"><strong>Totais (realizado${filtroNat !== 'todas' ? ', ' + MOV_NATUREZAS[filtroNat] : ''})</strong></td><td class="num"><strong>${money(round2(lista.filter((x) => x.tipo === 'entrada' && x.status === 'REALIZADO').reduce((a, x) => a + x.valor, 0)))}</strong></td><td class="num"><strong>${money(round2(lista.filter((x) => x.tipo === 'saida' && x.status === 'REALIZADO').reduce((a, x) => a + x.valor, 0)))}</strong></td><td></td><td></td></tr></tfoot></table></div>`;
+      raiz.appendChild(t);
+      const nota = document.createElement('div');
+      nota.className = 'muted';
+      nota.style.marginTop = '8px';
+      nota.textContent = 'O "Acumulado" soma entradas e subtrai saídas na ordem das datas (lançamentos sem data entram primeiro). Um acumulado negativo mostra que houve gasto pago com recurso próprio ainda não registrado como aporte em Parâmetros.';
+      raiz.appendChild(nota);
+    };
+    desenhar();
+  }, { wide: true, fullscreen: true });
+}
+
 const DRILLS = {
   cartaoMes: () => abrirExtratoCartaoMes(),
   empreiteiro: () => abrirExtratoEmpreiteiro(),
   creditoPCI: () => abrirExtratoCreditoPCI(),
   recursoPlanejado: () => abrirExtratoRecursoPlanejado(),
   obraRealPrevisto: () => abrirExtratoObraRealPrevisto(),
-  custoRealizado: () => abrirExtratoCustoRealizado(),
+  custoRealizado: () => abrirMovimentoDinheiro(),
   recursoProprio: () => abrirExtratoRecursoProprio(),
   caixaLiberado: () => abrirExtratoCaixaLiberado(),
   verbaDisponivel: () => abrirExtratoVerbaDisponivel(),
@@ -6874,6 +7055,7 @@ function renderPainel() {
   const kpis = document.createElement('div');
   kpis.className = 'cards-grid';
   const custoRealizado = round2((VIEW.parcelas || []).filter((p) => p.status === 'REALIZADO').reduce((a, p) => a + (Number(p.custoTotal) || 0), 0));
+  const mov = movimentoDinheiro();
   const qtdRealizadas = (VIEW.parcelas || []).filter((p) => p.status === 'REALIZADO').length;
   /* Dez cards em duas fileiras de cinco. A primeira responde "de onde vem o
      dinheiro e quanto vale a obra"; a segunda, "quanto já foi executado e o
@@ -6921,8 +7103,9 @@ function renderPainel() {
     </div>
     <div class="card accent">
       <div class="card-label">Custo total realizado</div>
-      ${cardValueDrill('custoRealizado', custoRealizado)}
-      <div class="card-sub">Só o que já aconteceu: ${qtdRealizadas} quinzena(s) REALIZADA(S). Planejado ainda por vir: ${money(r.totalPlanejadoFuturo)} · tudo junto: ${money(round2(custoRealizado + r.totalPlanejadoFuturo))}</div>
+      ${cardValueDrill('custoRealizado', custoRealizado, 'ver movimento do dinheiro')}
+      <div class="card-sub">${qtdRealizadas} quinzena(s) REALIZADA(S) · planejado por vir: ${money(r.totalPlanejadoFuturo)}</div>
+      <div class="card-sub mov-resumo">Movimento do dinheiro: entradas <strong>${money(mov.entradas)}</strong> · saídas <strong>${money(mov.saidas)}</strong> (com o lote) · recurso próprio ${money(mov.saidasProprio)} · conta da obra / CAIXA ${money(mov.saidasCaixa)}</div>
     </div>
     <div class="card ${r.saldoRecursoDisponivel < 0 ? 'warn' : 'good'}">
       <div class="card-label">Saldo de recurso próprio disponível</div>
