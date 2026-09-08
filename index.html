@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260908T171324">
+<meta name="app-version" content="20260908T192939">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -649,6 +649,16 @@
   .mov-fech-aviso { margin-top: 8px; padding: 7px 10px; border-radius: 8px; background: var(--danger-soft); color: var(--danger); font-size: 12.5px; }
   .mov-fech-ok { margin-top: 8px; padding: 7px 10px; border-radius: 8px; background: var(--good-soft); color: var(--good); font-size: 12.5px; }
   .mov-saldo-ini td { background: var(--surface-2); }
+  .analise-cards .card-value { font-size: 26px; font-weight: 700; font-family: "IBM Plex Mono", monospace; }
+  .analise-tabela td { white-space: normal; vertical-align: top; font-size: 12px; }
+  .analise-tabela td.analise-titulo { min-width: 240px; font-weight: 600; }
+  .analise-tabela td.analise-onde { min-width: 180px; color: var(--ink-soft); }
+  .analise-tabela td.analise-valores { min-width: 220px; font-family: "IBM Plex Mono", monospace; font-size: 11.5px; }
+  .analise-tabela td.analise-fazer { min-width: 240px; color: var(--ink-soft); }
+  .analise-tabela td:last-child { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
+  .analise-tabela.analise-verif td { color: var(--muted); }
+  .analise-fonte { font-size: 10.5px; margin-top: 3px; }
+  @media print { #tab-analise .no-print { display: none !important; } }
   .mov-raiz .extrato-table tfoot td { position: static; }
   .mov-resumo { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
   .qz-faixa { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin: 6px 0 8px; }
@@ -1073,6 +1083,7 @@
     <button class="tab-btn" data-tab="controle-caixa">Controle Mensal CAIXA</button>
     <button class="tab-btn" data-tab="relatorios">Relatórios</button>
     <button class="tab-btn" data-tab="mercado">Estudo de Mercado</button>
+    <button class="tab-btn" data-tab="analise">Análise</button>
     <button class="tab-btn" data-tab="rastreabilidade">Rastreabilidade</button>
     <button class="tab-btn" data-tab="parametros">Parâmetros</button>
   </nav>
@@ -1090,6 +1101,7 @@
   <section id="tab-controle-caixa" class="tab-panel" hidden=""></section>
   <section id="tab-relatorios" class="tab-panel" hidden=""></section>
   <section id="tab-mercado" class="tab-panel" hidden=""></section>
+  <section id="tab-analise" class="tab-panel" hidden=""></section>
   <section id="tab-rastreabilidade" class="tab-panel" hidden=""></section>
   <section id="tab-parametros" class="tab-panel" hidden=""></section>
 </main>
@@ -1338,12 +1350,14 @@ function calcularViabilidade(ctx) {
   const entradaLote = round2(sum(consumos.filter((c) => /lote/i.test(c.descricao || '') && !/servi/i.test(c.descricao || '')), (c) => c.valor));
   const custoTerreno = num(p.custoTerreno);
   const multaLote = num(p.multaLote);
-  const loteRealizado = round2(num(ctx.custoLoteExecutado) + entradaLote);
+  const estornosLote = num(ctx.estornosLote); // devolvido pelo terrenista à conta da obra
+  const loteBrutoPago = round2(num(ctx.custoLoteExecutado) + entradaLote);
+  const loteRealizado = round2(loteBrutoPago - estornosLote);
   const taxaAdm = num(p.taxaAdministracaoPercent);
   const contrato = num(ctx.contratoTotalEmpreiteiro);
   const rubricas = [
     rubrica('terreno', 'Terreno + multa de lote', custoTerreno + multaLote, loteRealizado, 0,
-      'Parâmetros: custo do terreno e multa. Realizado = parte financiada pelo CAIXA (custo do lote executado) + entrada do lote paga com recurso próprio.',
+      'Parâmetros: custo do terreno e multa. Realizado = parte financiada pelo CAIXA (custo do lote executado) + entrada do lote paga com recurso próprio, menos o que o terrenista devolveu (estorno).',
       entradaLote ? 'A entrada do lote vem da lista de consumos de recurso próprio.' : '',
       num(ctx.custoLoteExecutado)),
     rubrica('construcao', 'Construção — contrato empreiteiro', contrato,
@@ -1434,13 +1448,14 @@ function calcularViabilidade(ctx) {
     entradaCaixaLote: num(ctx.custoLoteExecutado),
     entradaCaixaMedicoes: round2(creditoLiberado - num(ctx.custoLoteExecutado)),
     entradaAporteProprio: capitalProprioAportado,
-    saidaLote: loteRealizado,
+    entradaEstornos: estornosLote,
+    saidaLote: loteBrutoPago,
     // Quinzenas realizadas pelo "Custo total" de Contas a Pagar (respeita
     // ajustes manuais) — a mesma base do Saldo em conta.
     saidaQuinzenas: num(ctx.custoParcelasRealizadas),
     saidaPagoDireto: num(ctx.totalPagoDiretoProprietario),
   };
-  fluxo.entradas = round2(fluxo.entradaCaixaLote + fluxo.entradaCaixaMedicoes + fluxo.entradaAporteProprio);
+  fluxo.entradas = round2(fluxo.entradaCaixaLote + fluxo.entradaCaixaMedicoes + fluxo.entradaAporteProprio + fluxo.entradaEstornos);
   fluxo.saidas = round2(fluxo.saidaLote + fluxo.saidaQuinzenas + fluxo.saidaPagoDireto);
   fluxo.saldo = round2(fluxo.entradas - fluxo.saidas);
   fluxo.saldoContaRealizado = num(ctx.saldoContaRealizado);
@@ -1718,7 +1733,9 @@ function recompute(state) {
     (p) => p.custoTotal,
   ));
 
+  const estornosLote = round2(sum(liberacoesCaixaRealizadas.filter((l) => ehEntradaFora(l) && l.tipo === 'estorno'), (l) => l.valor));
   const viabilidade = calcularViabilidade({
+    estornosLote,
     parametros,
     liberacaoPCI,
     creditoCaixaTotalPCI,
@@ -1960,7 +1977,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260908T171324';
+const APP_VERSAO = '20260908T192939';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -2913,7 +2930,7 @@ function abrirExtratoCustoTotal(parcelas, total) {
             <td class="num">${money(p.totalAdmPix)}</td>
             <td class="num">${money(p.gastoCartao)}</td>
             <td class="num">${money(p.parcelaEvolucaoCaixa)}</td>
-            <td class="num"><strong>${money(p.custoTotal)}</strong>${p.overrides && p.overrides.custoTotal ? ' <span title="Valor sobrescrito manualmente">✎</span>' : ''}</td>
+            <td class="num"><strong>${money(p.custoTotal)}</strong></td>
             <td class="no-print pix-celula" data-pix="${esc(p.id)}"></td>
           </tr>`).join('')}
         </tbody>
@@ -2956,38 +2973,10 @@ function abrirExtratoCustoTotal(parcelas, total) {
       .map((p) => ({ p, dif: divergenciaParcela(p) }))
       .filter((x) => Math.abs(x.dif) > 0.02);
 
-    if (divergentes.length) {
-      const box = document.createElement('div');
-      box.className = 'divergencia-box';
-      const totalDif = round2(divergentes.reduce((a2, x) => a2 + x.dif, 0));
-      box.innerHTML = `<div class="divergencia-titulo">Custo total não fecha com a soma das colunas — diferença de ${money(totalDif)}</div>
-        <div class="divergencia-texto">Nestas parcelas o "Custo total" foi sobrescrito na mão e não corresponde a Empreiteiro + ADM + Cartão + Evolução Caixa. Enquanto a diferença existir, o total acima está usando o valor sobrescrito, não os lançamentos.</div>`;
-      for (const { p: parc, dif } of divergentes) {
-        const linha = document.createElement('div');
-        linha.className = 'divergencia-linha';
-        linha.innerHTML = `<span>${esc(parc.mesReferenciaLabel || parc.label)}</span>
-          <span class="mono">soma ${money(somaComponentesParcela(parc))} · lançado ${money(parc.custoTotal)} · <strong>${dif > 0 ? '+' : ''}${money(dif)}</strong></span>`;
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'btn small';
-        btn.textContent = 'Recalcular pela soma';
-        btn.title = 'Descarta o valor sobrescrito e refaz o custo pela soma das colunas desta parcela.';
-        btn.onclick = () => {
-          recalcularParcelaPelaSoma(parc.id);
-          const bd = body.closest('.modal-backdrop');
-          if (bd) bd.remove();
-        };
-        linha.appendChild(btn);
-        box.appendChild(linha);
-      }
-      body.appendChild(box);
-    }
 
     const nota = document.createElement('div');
     nota.className = 'muted';
-    nota.innerHTML = temOverride
-      ? '✎ = parcela com "Custo total" sobrescrito na mão. A partir de agora, todo lançamento novo (cartão, PIX, evolução) é somado ao valor sobrescrito, em vez de ser ignorado — então o total volta a acompanhar os lançamentos.'
-      : 'Custo total = Empreiteiro (PIX) + ADM (PIX) + Cartão + Evolução Caixa, parcela a parcela. É a mesma coluna "Custo total" da aba Contas a Pagar.';
+    nota.innerHTML = 'Custo total apurado por quinzena, a mesma coluna "Custo total" da aba Contas a Pagar. Quinzenas cuja composição precise de conferência estão listadas na aba Análise.';
     body.appendChild(nota);
   }, { wide: true });
 }
@@ -4932,6 +4921,7 @@ function renderAll() {
   renderControleCaixa();
   renderRelatorios();
   renderEstudoMercado();
+  renderAnalise();
   renderRastreabilidade();
   renderParametros();
   marcarSimulacaoNoCabecalho();
@@ -5562,7 +5552,7 @@ function abrirExtratoCustoRealizado() {
 const MOV_GRUPOS = [
   ['lote', 'Lote (terreno)'], ['preliminares', 'Serviços preliminares (pago direto)'],
   ['pix', 'Empreiteiro (PIX)'], ['adm', 'Administração RS Engenharia'],
-  ['cartao', 'Cartão (materiais)'], ['evolucao', 'Evolução CAIXA (juros, seguro)'], ['ajuste', 'Ajustes manuais de custo'],
+  ['cartao', 'Cartão (materiais)'], ['evolucao', 'Evolução CAIXA (juros, seguro)'], ['ajuste', 'Diferença de apuração da quinzena'],
 ];
 const MOV_NATUREZAS = { proprio: 'Recurso próprio', caixa: 'Conta da obra (CAIXA / banco)' };
 // Serviços preliminares abrem em subgrupos, lidos da descrição do item do
@@ -5659,7 +5649,7 @@ function movimentoDinheiro({ incluirPlanejado = false } = {}) {
     if (p.overrides && p.overrides.custoTotal) {
       const soma = round2((Number(p.totalEmpreiteiroPix) || 0) + (Number(p.totalAdmPix) || 0) + (Number(p.gastoCartao) || 0) + (Number(p.parcelaEvolucaoCaixa) || 0));
       const dif = round2((Number(p.custoTotal) || 0) - soma);
-      if (dif) push({ data: d, tipo: 'saida', grupo: 'ajuste', natureza: nat, descricao: `${p.label || 'Quinzena'} · custo total digitado à mão (${dif > 0 ? 'acréscimo' : 'redução'})`, valor: dif, status: p.status, origem: 'Contas a Pagar › custo total sobrescrito', quinzenaId: p.id });
+      if (dif) push({ data: d, tipo: 'saida', grupo: 'ajuste', natureza: nat, descricao: `${p.label || 'Quinzena'} · diferença entre o custo total apurado e a soma das colunas`, valor: dif, status: p.status, origem: 'Contas a Pagar › custo total da quinzena (detalhe na aba Análise)', quinzenaId: p.id });
     }
   }
 
@@ -5734,7 +5724,7 @@ function conciliacaoRecursoProprio(m) {
     if (q.adm) partes.push(`ADM ${money(q.adm)}`);
     if (q.cartao) partes.push(`cartão ${money(q.cartao)}`);
     if (q.evolucao) partes.push(`evolução CAIXA ${money(q.evolucao)}`);
-    if (q.ajuste) partes.push(`ajuste manual ${money(q.ajuste)}`);
+    if (q.ajuste) partes.push(`diferença de apuração ${money(q.ajuste)}`);
     linhas.push({ item: `${q.label} (${q.data ? dateBR(q.data) : 'sem data'})`, pago: q.total, aporte: a ? a.valor : 0, aporteDesc: a ? a.descricao : '', obs: partes.join(' + ') });
   }
   for (const a of aportes.filter((x) => !x.usado)) linhas.push({ item: 'Aporte sem saída correspondente', pago: 0, aporte: a.valor, aporteDesc: `${a.descricao}${a.data ? ` (${dateBR(a.data)})` : ''}`, obs: 'registrado em Parâmetros, sem gasto casado' });
@@ -5776,7 +5766,7 @@ function abrirMovimentoDinheiro() {
       cards.innerHTML = [
         card('Custo total realizado (gasto total)', m.custoTotal, `quinzenas ${money(m.custoQuinzenas)} + lote ${money(m.lote)}${m.estornos ? ` (bruto ${money(m.loteBruto)} − estorno ${money(m.estornos)})` : ''} + preliminares ${money(m.preliminares)}`, 'accent'),
         card('Conta da obra (CAIXA / banco): saídas', m.saidasCaixa, `entradas ${money(m.entradasCaixa)} · saldo ${money(m.saldoConta)} (mesmo número do Dashboard)`),
-        card('Recurso próprio: saídas', m.saidasProprio, m.proprioNaoRegistrado > 0.01 ? `aportes registrados ${money(m.entradasProprio)} · <span class="badge amber">R$ ${fmtNum.format(m.proprioNaoRegistrado)} pagos sem aporte registrado em Parâmetros</span>` : `aportes registrados ${money(m.entradasProprio)} · bate com os aportes`),
+        card('Recurso próprio: saídas', m.saidasProprio, `aportes registrados ${money(m.entradasProprio)}${Math.abs(m.proprioNaoRegistrado) > 0.01 ? ` · conferência dos aportes na aba Análise` : ' · bate com os aportes'}`),
         card('Entradas totais', m.entradas, `CAIXA ${money(m.entradasCaixa)} · recurso próprio ${money(m.entradasProprio)}`),
       ].join('');
       raiz.appendChild(cards);
@@ -5917,23 +5907,18 @@ function abrirMovimentoDinheiro() {
           <tbody>${linhas.map((x) => { const real = x.status === 'REALIZADO'; if (real || modoMes) acum = round2(acum + (x.tipo === 'entrada' ? x.valor : -x.valor)); return `<tr class="${real ? '' : 'mov-previsto'}"><td>${x.data ? dateBR(x.data) : `<span class="muted" title="${x.grupo === 'lote' ? 'Valor do contrato do lote, sem data de pagamento' : 'Sem data preenchida na tela de origem'}">sem data</span>`}</td><td>${esc(x.descricao)}</td><td class="muted">${esc(nomeGrupoMov(x))}</td><td>${real ? 'Realizado' : `<span class="badge amber">${modoMes ? 'Provisão' : 'Planejado'}</span>`}</td><td class="num ${x.tipo === 'entrada' ? 'mov-entrada' : ''}">${x.tipo === 'entrada' ? money(x.valor) : ''}</td><td class="num ${x.tipo === 'saida' ? 'mov-saida' : ''}">${x.tipo === 'saida' ? money(x.valor) : ''}</td><td class="num ${acum < -0.005 ? 'mov-saida' : ''}">${real || modoMes ? money(acum) : ''}</td><td class="muted">${esc(x.origem)}</td></tr>`; }).join('')}${linhas.length ? '' : `<tr><td colspan="8" class="muted">${modoMes ? 'Nenhum lançamento neste mês nesta conta.' : 'Nenhum lançamento deste grupo nesta conta.'}</td></tr>`}</tbody>
           <tfoot>${modoMes ? `<tr class="extrato-residuo"><td colspan="4"><strong>Realizado no mês${filtrando ? ' (no filtro)' : ''}</strong></td><td class="num"><strong>${money(entF)}</strong></td><td class="num"><strong>${money(saiF)}</strong></td><td></td><td></td></tr><tr class="extrato-residuo"><td colspan="4"><strong>Provisão do mês${filtrando ? ' (no filtro)' : ''}</strong></td><td class="num mov-prov"><strong>${money(somaL((x) => x.tipo === 'entrada' && x.status !== 'REALIZADO'))}</strong></td><td class="num mov-prov"><strong>${money(somaL((x) => x.tipo === 'saida' && x.status !== 'REALIZADO'))}</strong></td><td class="num"><strong>${filtrando ? '' : money(fech.saldoFinal)}</strong></td><td class="muted">${filtrando ? '' : 'saldo projetado no fim do mês'}</td></tr>` : `<tr class="extrato-residuo"><td colspan="4"><strong>${filtrando ? 'Totais no filtro (realizado)' : 'Totais da conta (realizado)'}</strong></td><td class="num"><strong>${money(filtrando ? entF : c.entradas)}</strong></td><td class="num"><strong>${money(filtrando ? saiF : c.saidas)}</strong></td><td class="num"><strong>${money(filtrando ? round2(entF - saiF) : c.saldo)}</strong></td><td></td></tr>`}</tfoot></table></div>`;
         sec.appendChild(t);
-        if (c.id === 'proprio' && !filtrando && !modoMes) {
-          const cr = conciliacaoRecursoProprio(m);
-          const box = document.createElement('div');
-          box.className = 'table-scroll';
-          box.style.marginTop = '12px';
-          box.innerHTML = `<h3 class="mov-h3">Conciliação: pago com recurso próprio × aportes registrados em Parâmetros</h3>
-            <div class="muted" style="margin-bottom:6px">Cada saída paga pelo proprietário casada com o aporte da mesma data (quinzenas) ou do mesmo assunto (lote, preliminares). A coluna Diferença mostra o que foi pago sem aporte registrado: é o valor do aviso "${money(Math.abs(cr.dif))} acima dos aportes".</div>
-            <table class="extrato-table rel-table"><thead><tr><th>Item</th><th class="num">Pago (saída)</th><th class="num">Aporte registrado</th><th>Aporte (descrição)</th><th class="num">Diferença</th><th>Composição do pago</th></tr></thead>
-            <tbody>${cr.linhas.map((l) => `<tr><td>${esc(l.item)}</td><td class="num mov-saida">${money(l.pago)}</td><td class="num mov-entrada">${money(l.aporte)}</td><td class="muted">${esc(l.aporteDesc || 'nenhum')}</td><td class="num ${Math.abs(l.dif) > 0.005 ? 'mov-saida' : 'muted'}"><strong>${money(l.dif)}</strong></td><td class="muted">${esc(l.obs || '')}</td></tr>`).join('')}</tbody>
-            <tfoot><tr class="extrato-residuo"><td><strong>Total</strong></td><td class="num"><strong>${money(cr.totPago)}</strong></td><td class="num"><strong>${money(cr.totAporte)}</strong></td><td></td><td class="num"><strong>${money(cr.dif)}</strong></td><td>${cr.dif > 0.005 ? 'pago com recurso próprio sem aporte registrado' : (cr.dif < -0.005 ? 'aportes acima do gasto casado' : 'bate')}</td></tr></tfoot></table>`;
-          sec.appendChild(box);
+        if (c.id === 'proprio' && !filtrando && !modoMes && Math.abs(m.proprioNaoRegistrado) > 0.01) {
+          const b = document.createElement('button');
+          b.type = 'button'; b.className = 'btn small filter-control'; b.style.marginTop = '10px';
+          b.textContent = 'Conferir aportes × pagamentos (aba Análise)';
+          b.onclick = () => { const bd = b.closest('.modal-backdrop'); if (bd) bd.remove(); irParaAba('analise'); };
+          sec.appendChild(b);
         }
         const nota = document.createElement('div');
         nota.className = 'muted';
         nota.style.marginTop = '6px';
         nota.textContent = c.id === 'proprio'
-          ? 'Saldo negativo nesta conta significa gasto pago pelo proprietário sem aporte registrado em Parâmetros › consumos de recurso próprio. Registrar o aporte zera a diferença; os totais do card não mudam.'
+          ? 'Entradas desta conta são os aportes registrados em Parâmetros › consumos de recurso próprio; saídas são os pagamentos feitos pelo proprietário. A conferência linha a linha entre os dois fica na aba Análise.'
           : 'Entradas da conta da obra: liberações da CAIXA e o financiamento do lote (pago direto ao vendedor). O saldo acumulado ao fim é o saldo em conta do Dashboard.';
         sec.appendChild(nota);
         raiz.appendChild(sec);
@@ -5981,6 +5966,84 @@ function ligarDrills(root) {
    calcularViabilidade). Três blocos separados de propósito — DRE (custo
    econômico), Fontes × Aplicações e Fluxo de caixa — mais a conciliação/
    auditoria e a tabela "regra anterior × nova". Nada aqui recalcula. */
+/* Conferência da viabilidade (antes seções D e E do modal): alertas e
+   rastreamento da regra antiga. Renderizado na aba Análise, não nos relatórios. */
+function auditoriaViabilidadeHtml() {
+  const r = VIEW.resumo;
+  const v = r.viabilidade;
+  const f = v.fontes;
+  const fx = v.fluxo;
+  const linha = (rotulo, valor, opts = {}) => `<tr class="${opts.classe || ''}"><td${opts.sub ? ' class="sub-item"' : ''}>${rotulo}</td><td class="num">${opts.raw !== undefined ? opts.raw : ((opts.neg || valor < 0) ? '− ' : '') + money(Math.abs(valor))}</td></tr>`;
+  const grupo = (t, colspan = 2) => `<tr class="extrato-grupo"><td colspan="${colspan}">${t}</td></tr>`;
+    /* D. Conciliação / auditoria financeira -------------------------------- */
+    const L0 = v.legado;
+    const alertas = [];
+    if (v.sobreposicaoPagoDireto > 0) alertas.push(`Categorias pagas direto pelo proprietário somam <strong>${money(v.sobreposicaoPagoDireto)}</strong> de orçado <em>dentro</em> do contrato do empreiteiro e também aparecem em "Projetos/ITBI". Se o empreiteiro não cobrar essa parte, o custo de construção projetado cai nesse valor — confirmar com o contrato. Nada foi ajustado.`);
+    if (fx.ajustesManuaisQuinzenas) alertas.push(`Quinzenas com "Custo total" ajustado manualmente diferem em <strong>${money(Math.abs(fx.ajustesManuaisQuinzenas))}</strong> da soma dos componentes (PIX + cartão + ADM + evolução). O fluxo usa o valor ajustado, a DRE usa os componentes — ver Demonstrativo (Junho/1ª, Agosto/1ª).`);
+    if (Math.abs(fx.diferencaConciliar) > 0.01) alertas.push(`Saldo em conta (${money(fx.saldoContaRealizado)}) difere do teórico entradas − saídas (${money(fx.saldo)}) em <strong>${money(Math.abs(fx.diferencaConciliar))}</strong>: pagamentos feitos antes do marco com recurso próprio que não estão na lista de aportes (ex.: cartão e ADM de Maio/Junho). Registre-os em Parâmetros › Consumos de recurso próprio para zerar.`);
+    if (f.giroGap < 0) alertas.push(`O capital de giro disponível (${money(f.giroDisponivel)}) está <strong>abaixo do orçado</strong> (${money(f.giroOrcado)}): faltam ${money(-f.giroGap)} de colchão. Não é custo — é risco de descasamento de caixa.`);
+    if (f.giroProprio < 0) alertas.push(`O capital próprio planejado (${money(f.capitalProprioPlanejado)}) é <strong>menor</strong> que o necessário (${money(f.capitalProprioNecessario)}): faltam ${money(-f.giroProprio)}. Reveja as premissas ou o aporte planejado.`);
+    if (f.loteNaoUtilizado > 0) alertas.push(`Etapa 1 do PCI (lote) contratada em ${money(f.creditoLoteContratado)}, executada em ${money(f.creditoLoteContratado - f.loteNaoUtilizado)}: <strong>${money(f.loteNaoUtilizado)}</strong> de crédito do lote não foram aplicados e compõem a verba de contingência do financiamento.`);
+    for (const rb of v.rubricas) if (rb.excedente > 0) alertas.push(`"${esc(rb.nome)}" já passou do orçado em <strong>${money(rb.excedente)}</strong> — o excedente entrou no custo projetado.`);
+    const audit = `
+      <div class="table-scroll"><table class="extrato-table"><tbody>
+        ${grupo('Conciliação')}
+        ${linha('Custo econômico total (projetado)', v.custoEconomicoProjetado)}
+        ${linha('Fontes totais contratadas', f.fontesDisponiveis)}
+        ${linha('Crédito CAIXA contratado', f.creditoContratado, { sub: true })}
+        ${linha('Crédito CAIXA aplicado no custo', f.creditoAplicado, { sub: true })}
+        ${linha('Crédito CAIXA já utilizado', f.creditoUtilizado, { sub: true })}
+        ${linha('Capital próprio necessário', f.capitalProprioNecessario, { sub: true })}
+        ${linha('Capital próprio aportado', f.capitalProprioAportado, { sub: true })}
+        ${linha('Capital próprio ainda a aportar', f.capitalProprioAindaNecessario, { sub: true })}
+        ${linha(f.conciliacao >= 0 ? '<strong>Capital de giro (fonte não aplicada no custo)</strong>' : '<strong>Necessidade adicional de recursos</strong>', f.conciliacao, { classe: 'extrato-residuo' })}
+        ${grupo('Rastreamento do valor antigo — de onde vinham os ' + money(L0.investimentoTotal))}
+        ${linha('Crédito CAIXA contratado (PCI) — <em>fonte</em>, contava como custo', f.creditoContratado)}
+        ${linha('Recurso próprio planejado — <em>fonte</em>, contava como custo', f.capitalProprioPlanejado)}
+        ${linha('Custos financeiros avulsos (parâmetro)', Number(VIEW.parametros.custosFinanceiros) || 0)}
+        ${linha('<strong>Total antigo, chamado de "custo total da operação"</strong>', L0.investimentoTotal, { classe: 'extrato-residuo' })}
+        ${linha('Custo econômico real (base de custos da planilha)', v.custoEconomicoProjetado, { neg: true })}
+        ${linha('<strong>Diferença = capital de giro que virava custo</strong>', f.giroDisponivel, { classe: 'extrato-residuo' })}
+        ${linha('… crédito CAIXA contratado e não aplicado no custo', f.giroCaixa, { sub: true })}
+        ${linha('… capital próprio planejado acima do necessário', f.giroProprio, { sub: true })}
+      </tbody></table></div>
+      <div class="muted viab-explica">A duplicidade era estrutural, não um erro de digitação: o custo era a <strong>soma das fontes</strong>. Corrigido na origem — o custo passou a ser a soma das aplicações econômicas, e a folga de ${money(f.giroDisponivel)} foi reclassificada como <strong>capital de giro</strong> (fonte não aplicada), fora do resultado. Contra os ${money(f.giroOrcado)} de giro orçados, ${f.giroGap >= 0 ? `sobram ${money(f.giroGap)}` : `faltam ${money(-f.giroGap)}`}. Nenhum lançamento foi alterado.</div>
+      ${alertas.length ? `<ul class="viab-alertas">${alertas.map((a) => `<li>${a}</li>`).join('')}</ul>` : '<div class="muted viab-explica">Nenhuma divergência encontrada.</div>'}`;
+
+    /* E. Regra anterior × nova --------------------------------------------- */
+    const L = v.legado;
+    const antigo = {
+      custo: L.investimentoTotal,
+      bruto: round2(v.vgvAtual - L.investimentoTotal),
+    };
+    antigo.margem = L.investimentoTotal ? antigo.bruto / L.investimentoTotal : 0;
+    antigo.corr = round2(v.vgvAtual * v.corretagemPercent);
+    antigo.lucroAntes = round2(v.vgvAtual - antigo.corr - L.investimentoTotal);
+    antigo.ir = round2(Math.max(0, antigo.lucroAntes) * v.irPercent);
+    antigo.lucro = round2(antigo.lucroAntes - antigo.ir);
+    antigo.roi = f.capitalProprioPlanejado ? antigo.lucro / f.capitalProprioPlanejado : 0;
+    const rowA = (campo, fa, fn, va, vn, origem) => `<tr><td>${campo}</td><td class="muted">${fa}</td><td>${fn}</td><td class="num">${va}</td><td class="num"><strong>${vn}</strong></td><td class="muted">${origem}</td></tr>`;
+    const comparacao = `
+      <div class="muted viab-explica">Como era × como ficou. Os valores "anterior" são recalculados pela regra antiga sobre os dados de hoje, só para comparação — nenhum lançamento foi alterado.</div>
+      <div class="table-scroll"><table class="extrato-table viab-comp">
+        <thead><tr><th>Campo</th><th>Fórmula anterior</th><th>Fórmula nova</th><th class="num">Valor anterior</th><th class="num">Valor corrigido</th><th>Origem dos dados</th></tr></thead>
+        <tbody>
+          ${rowA('Custo total', 'Crédito CAIXA (PCI) + recurso próprio planejado + custos financeiros — <em>fontes somadas como custo</em>', 'Σ rubricas econômicas (terreno, construção, ADM, projetos, CND, custo financeiro, outros), cada uma = max(orçado, realizado + comprometido)', money(antigo.custo), money(v.custoEconomicoProjetado), 'Parâmetros de viabilidade + Contas a Pagar + Detalhamento FC + lote')}
+          ${rowA('Resultado bruto', 'VGV − custo (fontes)', 'VGV do cenário − custo econômico', money(antigo.bruto), money(v.resultadoBruto), 'VGV: Parâmetros (cenário ' + v.cenarioVgv + ')')}
+          ${rowA('Margem sobre o custo total → Retorno bruto sobre custo', 'resultado bruto ÷ (PCI + RP)', 'resultado bruto ÷ custo econômico', pct(antigo.margem), pct(v.retornoBrutoSobreCusto), 'calculado')}
+          ${rowA('Margem bruta sobre VGV', '— (não existia)', 'resultado bruto ÷ VGV', '—', pct(v.margemBrutaSobreVgv), 'calculado')}
+          ${rowA('Lucro líquido', 'VGV − corretagem − (PCI + RP) − IR', 'receita líquida − custo econômico − IR', money(antigo.lucro), money(v.lucroLiquido), 'calculado')}
+          ${rowA('Margem líquida sobre VGV', 'lucro ÷ VGV (não exibida)', 'lucro líquido ÷ VGV', pct(v.vgvAtual ? antigo.lucro / v.vgvAtual : 0), pct(v.margemLiquidaSobreVgv), 'calculado')}
+          ${rowA('Retorno líquido sobre custo', 'lucro ÷ (PCI + RP)', 'lucro líquido ÷ custo econômico', pct(L.investimentoTotal ? antigo.lucro / L.investimentoTotal : 0), pct(v.retornoLiquidoSobreCusto), 'calculado')}
+          ${rowA('Participação do incorporador', '— (não existia)', 'valor fixo ou % do lucro líquido (Parâmetros)', '—', money(v.participacaoIncorporador), 'planilha de viabilidade')}
+          ${rowA('ROI líquido sobre capital próprio', 'lucro líquido ÷ recurso próprio <em>planejado</em>', 'resultado do <em>investidor</em> ÷ capital próprio <em>efetivamente necessário</em>', pct(antigo.roi), pct(v.roiInvestidor), `calculado — sobre o planejado de ${money(f.capitalProprioPlanejado)} daria ${pct(v.roiInvestidorSobrePlanejado)}`)}
+          ${rowA('Capital próprio necessário', '— (usava o planejado ' + money(f.capitalProprioPlanejado) + ')', 'soma do que o financiamento NÃO banca por rubrica (multa, ADM, projetos/ITBI, CND, custo financeiro e a entrada do lote)', money(f.capitalProprioPlanejado), money(f.capitalProprioNecessario), 'Rubricas da DRE + contrato de financiamento — confere com a planilha de viabilidade')}
+          ${rowA('Capital de giro', '— (não existia: a folga entrava no custo e o inflava para ' + money(f.fontesDisponiveis) + ')', 'fontes contratadas − custo econômico, separado em folga do banco e folga própria, comparado ao giro orçado de ' + money(f.giroOrcado), '—', money(f.giroDisponivel), 'calculado')}
+          ${rowA('Custo financeiro da evolução', 'parâmetro avulso, zerado; principal e juros misturados na explicação', 'rubrica própria: projetado ' + money(v.rubricas.find((x) => x.id === 'financeiro')?.orcado || 0) + ', realizado pela coluna Evolução CAIXA; principal fora do custo', money(Number(VIEW.parametros.custosFinanceiros) || 0), money(v.rubricas.find((x) => x.id === 'financeiro')?.projetado || 0), 'Parâmetros + Contas a Pagar')}
+        </tbody></table></div>`;
+  return { alertas, audit, comparacao };
+}
+
 function abrirExtratoViabilidade(secaoInicial = null) {
   const r = VIEW.resumo;
   const v = r.viabilidade;
@@ -6201,9 +6264,10 @@ function abrirExtratoViabilidade(secaoInicial = null) {
         ${linha('CAIXA — lote (etapa 1)', fx.entradaCaixaLote)}
         ${linha('CAIXA — medições PLS realizadas', fx.entradaCaixaMedicoes)}
         ${linha('Aportes de recurso próprio registrados', fx.entradaAporteProprio)}
+        ${fx.entradaEstornos ? linha('Devoluções à conta da obra (estorno do terrenista)', fx.entradaEstornos) : ''}
         ${linha('<strong>Total de entradas</strong>', fx.entradas, { classe: 'extrato-residuo' })}
         ${grupo('Saídas realizadas')}
-        ${linha('Terreno + multa (entrada própria + parte financiada)', fx.saidaLote)}
+        ${linha(fx.entradaEstornos ? 'Terreno + multa, valor bruto pago ao terrenista (entrada própria + parte financiada)' : 'Terreno + multa (entrada própria + parte financiada)', fx.saidaLote)}
         ${linha('Quinzenas realizadas — Contas a Pagar (PIX, cartão, ADM, evolução)', fx.saidaQuinzenas)}
         ${linha('<button type="button" class="value-drill tiny filter-control" data-drill="pagoDireto" title="Clique para ver o extrato — item a item"><span class="drill-value">Pagos direto pelo proprietário (projetos, registros, ITBI)</span><span class="drill-hint">extrato</span></button>', fx.saidaPagoDireto)}
         ${linha('<strong>Total de saídas</strong>', fx.saidas, { classe: 'extrato-residuo' })}
@@ -6214,74 +6278,7 @@ function abrirExtratoViabilidade(secaoInicial = null) {
       </tbody></table></div>`;
     ligarDrills(secao('fluxo', 'C · DFC — Demonstrativo de Fluxo de Caixa (realizado)', fluxo, abrir('fluxo', false)));
 
-    /* D. Conciliação / auditoria financeira -------------------------------- */
-    const L0 = v.legado;
-    const alertas = [];
-    if (v.sobreposicaoPagoDireto > 0) alertas.push(`Categorias pagas direto pelo proprietário somam <strong>${money(v.sobreposicaoPagoDireto)}</strong> de orçado <em>dentro</em> do contrato do empreiteiro e também aparecem em "Projetos/ITBI". Se o empreiteiro não cobrar essa parte, o custo de construção projetado cai nesse valor — confirmar com o contrato. Nada foi ajustado.`);
-    if (fx.ajustesManuaisQuinzenas) alertas.push(`Quinzenas com "Custo total" ajustado manualmente diferem em <strong>${money(Math.abs(fx.ajustesManuaisQuinzenas))}</strong> da soma dos componentes (PIX + cartão + ADM + evolução). O fluxo usa o valor ajustado, a DRE usa os componentes — ver Demonstrativo (Junho/1ª, Agosto/1ª).`);
-    if (Math.abs(fx.diferencaConciliar) > 0.01) alertas.push(`Saldo em conta (${money(fx.saldoContaRealizado)}) difere do teórico entradas − saídas (${money(fx.saldo)}) em <strong>${money(Math.abs(fx.diferencaConciliar))}</strong>: pagamentos feitos antes do marco com recurso próprio que não estão na lista de aportes (ex.: cartão e ADM de Maio/Junho). Registre-os em Parâmetros › Consumos de recurso próprio para zerar.`);
-    if (f.giroGap < 0) alertas.push(`O capital de giro disponível (${money(f.giroDisponivel)}) está <strong>abaixo do orçado</strong> (${money(f.giroOrcado)}): faltam ${money(-f.giroGap)} de colchão. Não é custo — é risco de descasamento de caixa.`);
-    if (f.giroProprio < 0) alertas.push(`O capital próprio planejado (${money(f.capitalProprioPlanejado)}) é <strong>menor</strong> que o necessário (${money(f.capitalProprioNecessario)}): faltam ${money(-f.giroProprio)}. Reveja as premissas ou o aporte planejado.`);
-    if (f.loteNaoUtilizado > 0) alertas.push(`Etapa 1 do PCI (lote) contratada em ${money(f.creditoLoteContratado)}, executada em ${money(f.creditoLoteContratado - f.loteNaoUtilizado)}: <strong>${money(f.loteNaoUtilizado)}</strong> de crédito do lote não foram aplicados e compõem a verba de contingência do financiamento.`);
-    for (const rb of v.rubricas) if (rb.excedente > 0) alertas.push(`"${esc(rb.nome)}" já passou do orçado em <strong>${money(rb.excedente)}</strong> — o excedente entrou no custo projetado.`);
-    const audit = `
-      <div class="table-scroll"><table class="extrato-table"><tbody>
-        ${grupo('Conciliação')}
-        ${linha('Custo econômico total (projetado)', v.custoEconomicoProjetado)}
-        ${linha('Fontes totais contratadas', f.fontesDisponiveis)}
-        ${linha('Crédito CAIXA contratado', f.creditoContratado, { sub: true })}
-        ${linha('Crédito CAIXA aplicado no custo', f.creditoAplicado, { sub: true })}
-        ${linha('Crédito CAIXA já utilizado', f.creditoUtilizado, { sub: true })}
-        ${linha('Capital próprio necessário', f.capitalProprioNecessario, { sub: true })}
-        ${linha('Capital próprio aportado', f.capitalProprioAportado, { sub: true })}
-        ${linha('Capital próprio ainda a aportar', f.capitalProprioAindaNecessario, { sub: true })}
-        ${linha(f.conciliacao >= 0 ? '<strong>Capital de giro (fonte não aplicada no custo)</strong>' : '<strong>Necessidade adicional de recursos</strong>', f.conciliacao, { classe: 'extrato-residuo' })}
-        ${grupo('Rastreamento do valor antigo — de onde vinham os ' + money(L0.investimentoTotal))}
-        ${linha('Crédito CAIXA contratado (PCI) — <em>fonte</em>, contava como custo', f.creditoContratado)}
-        ${linha('Recurso próprio planejado — <em>fonte</em>, contava como custo', f.capitalProprioPlanejado)}
-        ${linha('Custos financeiros avulsos (parâmetro)', Number(VIEW.parametros.custosFinanceiros) || 0)}
-        ${linha('<strong>Total antigo, chamado de "custo total da operação"</strong>', L0.investimentoTotal, { classe: 'extrato-residuo' })}
-        ${linha('Custo econômico real (base de custos da planilha)', v.custoEconomicoProjetado, { neg: true })}
-        ${linha('<strong>Diferença = capital de giro que virava custo</strong>', f.giroDisponivel, { classe: 'extrato-residuo' })}
-        ${linha('… crédito CAIXA contratado e não aplicado no custo', f.giroCaixa, { sub: true })}
-        ${linha('… capital próprio planejado acima do necessário', f.giroProprio, { sub: true })}
-      </tbody></table></div>
-      <div class="muted viab-explica">A duplicidade era estrutural, não um erro de digitação: o custo era a <strong>soma das fontes</strong>. Corrigido na origem — o custo passou a ser a soma das aplicações econômicas, e a folga de ${money(f.giroDisponivel)} foi reclassificada como <strong>capital de giro</strong> (fonte não aplicada), fora do resultado. Contra os ${money(f.giroOrcado)} de giro orçados, ${f.giroGap >= 0 ? `sobram ${money(f.giroGap)}` : `faltam ${money(-f.giroGap)}`}. Nenhum lançamento foi alterado.</div>
-      ${alertas.length ? `<ul class="viab-alertas">${alertas.map((a) => `<li>${a}</li>`).join('')}</ul>` : '<div class="muted viab-explica">Nenhuma divergência encontrada.</div>'}`;
-    secao('auditoria', `D · Conciliação / auditoria financeira${alertas.length ? ` <span class="viab-badge">${alertas.length}</span>` : ''}`, audit, abrir('auditoria', false));
-
-    /* E. Regra anterior × nova --------------------------------------------- */
-    const L = v.legado;
-    const antigo = {
-      custo: L.investimentoTotal,
-      bruto: round2(v.vgvAtual - L.investimentoTotal),
-    };
-    antigo.margem = L.investimentoTotal ? antigo.bruto / L.investimentoTotal : 0;
-    antigo.corr = round2(v.vgvAtual * v.corretagemPercent);
-    antigo.lucroAntes = round2(v.vgvAtual - antigo.corr - L.investimentoTotal);
-    antigo.ir = round2(Math.max(0, antigo.lucroAntes) * v.irPercent);
-    antigo.lucro = round2(antigo.lucroAntes - antigo.ir);
-    antigo.roi = f.capitalProprioPlanejado ? antigo.lucro / f.capitalProprioPlanejado : 0;
-    const rowA = (campo, fa, fn, va, vn, origem) => `<tr><td>${campo}</td><td class="muted">${fa}</td><td>${fn}</td><td class="num">${va}</td><td class="num"><strong>${vn}</strong></td><td class="muted">${origem}</td></tr>`;
-    const comparacao = `
-      <div class="muted viab-explica">Como era × como ficou. Os valores "anterior" são recalculados pela regra antiga sobre os dados de hoje, só para comparação — nenhum lançamento foi alterado.</div>
-      <div class="table-scroll"><table class="extrato-table viab-comp">
-        <thead><tr><th>Campo</th><th>Fórmula anterior</th><th>Fórmula nova</th><th class="num">Valor anterior</th><th class="num">Valor corrigido</th><th>Origem dos dados</th></tr></thead>
-        <tbody>
-          ${rowA('Custo total', 'Crédito CAIXA (PCI) + recurso próprio planejado + custos financeiros — <em>fontes somadas como custo</em>', 'Σ rubricas econômicas (terreno, construção, ADM, projetos, CND, custo financeiro, outros), cada uma = max(orçado, realizado + comprometido)', money(antigo.custo), money(v.custoEconomicoProjetado), 'Parâmetros de viabilidade + Contas a Pagar + Detalhamento FC + lote')}
-          ${rowA('Resultado bruto', 'VGV − custo (fontes)', 'VGV do cenário − custo econômico', money(antigo.bruto), money(v.resultadoBruto), 'VGV: Parâmetros (cenário ' + v.cenarioVgv + ')')}
-          ${rowA('Margem sobre o custo total → Retorno bruto sobre custo', 'resultado bruto ÷ (PCI + RP)', 'resultado bruto ÷ custo econômico', pct(antigo.margem), pct(v.retornoBrutoSobreCusto), 'calculado')}
-          ${rowA('Margem bruta sobre VGV', '— (não existia)', 'resultado bruto ÷ VGV', '—', pct(v.margemBrutaSobreVgv), 'calculado')}
-          ${rowA('Lucro líquido', 'VGV − corretagem − (PCI + RP) − IR', 'receita líquida − custo econômico − IR', money(antigo.lucro), money(v.lucroLiquido), 'calculado')}
-          ${rowA('Margem líquida sobre VGV', 'lucro ÷ VGV (não exibida)', 'lucro líquido ÷ VGV', pct(v.vgvAtual ? antigo.lucro / v.vgvAtual : 0), pct(v.margemLiquidaSobreVgv), 'calculado')}
-          ${rowA('Retorno líquido sobre custo', 'lucro ÷ (PCI + RP)', 'lucro líquido ÷ custo econômico', pct(L.investimentoTotal ? antigo.lucro / L.investimentoTotal : 0), pct(v.retornoLiquidoSobreCusto), 'calculado')}
-          ${rowA('Participação do incorporador', '— (não existia)', 'valor fixo ou % do lucro líquido (Parâmetros)', '—', money(v.participacaoIncorporador), 'planilha de viabilidade')}
-          ${rowA('ROI líquido sobre capital próprio', 'lucro líquido ÷ recurso próprio <em>planejado</em>', 'resultado do <em>investidor</em> ÷ capital próprio <em>efetivamente necessário</em>', pct(antigo.roi), pct(v.roiInvestidor), `calculado — sobre o planejado de ${money(f.capitalProprioPlanejado)} daria ${pct(v.roiInvestidorSobrePlanejado)}`)}
-          ${rowA('Capital próprio necessário', '— (usava o planejado ' + money(f.capitalProprioPlanejado) + ')', 'soma do que o financiamento NÃO banca por rubrica (multa, ADM, projetos/ITBI, CND, custo financeiro e a entrada do lote)', money(f.capitalProprioPlanejado), money(f.capitalProprioNecessario), 'Rubricas da DRE + contrato de financiamento — confere com a planilha de viabilidade')}
-          ${rowA('Capital de giro', '— (não existia: a folga entrava no custo e o inflava para ' + money(f.fontesDisponiveis) + ')', 'fontes contratadas − custo econômico, separado em folga do banco e folga própria, comparado ao giro orçado de ' + money(f.giroOrcado), '—', money(f.giroDisponivel), 'calculado')}
-          ${rowA('Custo financeiro da evolução', 'parâmetro avulso, zerado; principal e juros misturados na explicação', 'rubrica própria: projetado ' + money(v.rubricas.find((x) => x.id === 'financeiro')?.orcado || 0) + ', realizado pela coluna Evolução CAIXA; principal fora do custo', money(Number(VIEW.parametros.custosFinanceiros) || 0), money(v.rubricas.find((x) => x.id === 'financeiro')?.projetado || 0), 'Parâmetros + Contas a Pagar')}
-        </tbody></table></div>`;
-    secao('comparacao', 'E · Auditoria da correção — regra anterior × nova', comparacao, abrir('comparacao', false));
+    /* D e E (conciliação / auditoria e regra anterior × nova) ficam na aba Análise. */
 
     /* F · Alavancagem: os juros isolados assustam; o painel mostra o outro
        lado da conta — capital que deixou de ser imobilizado e o retorno
@@ -12393,6 +12390,228 @@ function painelNuvemHtml() {
   return `<div class="panel"><div class="panel-header"><div><h2>Onde os dados moram</h2>
     <div class="muted">No site publicado, o estado da obra fica na nuvem (Supabase, tabela <code>obras</code>, projeto casa-newton-toscana, São Paulo). Quem entra para lançar grava lá; quem está com o app aberto recebe a mudança na hora. Sem sessão, só o Controle Mensal CAIXA grava. Cada gravação guarda uma versão em <code>obras_historico</code> (últimas 300), com quem gravou e quando. Dentro do Claude o app continua publicando no próprio artifact.</div></div></div>
     <div class="mk-texto">Situação agora: ${estado}.</div></div>`;
+}
+
+
+/* ==========================================================================
+   ANÁLISE: conferência e apontamentos
+   --------------------------------------------------------------------------
+   Tudo que precisa ser verificado, apurado ou ajustado fica aqui, com a
+   tela de origem e o que fazer. As telas de relatório mostram só o número
+   consolidado. Cada apontamento pode ser marcado como verificado (fica
+   registrado quem e quando); os apontamentos automáticos somem sozinhos
+   quando o dado é corrigido.
+   ========================================================================== */
+const ANALISE_GRAVIDADE = { ajustar: ['Ajustar', 'red'], apurar: ['Apurar', 'amber'], info: ['Informativo', 'gray'] };
+const ANALISE_CAMPOS_PARCELA = { custoTotal: 'Custo total', totalAdmPix: 'ADM (PIX)', totalEmpreiteiroPix: 'Empreiteiro (PIX)', gastoCartao: 'Cartão', parcelaEvolucaoCaixa: 'Evolução CAIXA', totalTransferir: 'Total a transferir' };
+// Apontamentos vindos da conciliação com a planilha do extrato (04/09/2026): não são calculáveis pelo app.
+const ANALISE_EXTERNOS = [
+  { id: 'ext-cartao-maio', grav: 'apurar', titulo: 'Cartão de Maio/1ª (519,51) coincide com a 1ª prestação CAIXA do extrato (03/06)', onde: 'Contas a Pagar › Maio/1ª › Cartão e Junho/1ª › Evolução CAIXA', valores: 'app: cartão 519,51 em Maio/1ª e evolução 519,51 em Junho/1ª', fazer: 'Conferir no extrato se os 519,51 são prestação CAIXA; se sim, zerar o cartão de Maio/1ª e retirar a diferença de apuração de Junho/1ª.', fonte: 'Planilha Controle_Financeiro_Obra' },
+  { id: 'ext-junho2', grav: 'apurar', titulo: 'Empreiteiro Junho/2ª: 44.000,00 no app × 35.000,00 no extrato (Fama 27/06)', onde: 'Contas a Pagar › Junho/2ª › Empreiteiro (PIX)', valores: 'diferença 9.000,00', fazer: 'Conferir se houve pagamento complementar de 9.000 fora do extrato analisado.', fonte: 'Planilha Controle_Financeiro_Obra' },
+  { id: 'ext-adm-maio', grav: 'apurar', titulo: 'ADM de Maio (3.151,95 + 6.000,00) sem correspondente no extrato', onde: 'Contas a Pagar › Maio/1ª e Maio/2ª › ADM (PIX)', valores: 'diferença 9.151,95', fazer: 'Conferir se a administração de maio foi paga por outro meio ou ficou pendente.', fonte: 'Planilha Controle_Financeiro_Obra' },
+  { id: 'ext-prelim', grav: 'apurar', titulo: 'Serviços preliminares: 61.417,41 na planilha × 60.060,87 no app', onde: 'Detalhamento FC › categoria 1 (pago direto)', valores: 'diferença 1.356,54 (cartório 13.944,18 × registro do lote 14.008,01; demais itens agrupados diferente)', fazer: 'Conferir item a item com os comprovantes e ajustar os valores realizados.', fonte: 'Planilha Controle_Financeiro_Obra' },
+  { id: 'ext-cartao-faturas', grav: 'info', titulo: 'Faturas do cartão com pequenas diferenças entre app e extrato', onde: 'Detalhamento FC › itens de cartão', valores: 'junho 29.479,00 × 29.270,50; julho 8.500,00 × 8.637,50; agosto 43.663,31 × 44.033,89', fazer: 'Conferir os itens de cada fatura com a fatura real do cartão.', fonte: 'Planilha Controle_Financeiro_Obra' },
+  { id: 'ext-multa-lote', grav: 'apurar', titulo: 'Valor retido pelo terrenista (23.520,00) acima da multa contratual informada anteriormente (20.168,00)', onde: 'Parâmetros › multa de lote', valores: 'bruto pago 528.000,00 − estorno 24.480,00 = 503.520,00 = 480.000,00 + 23.520,00', fazer: 'Confirmar no contrato / recibo do terrenista a composição dos 23.520,00 (multa de atraso e outros).', fonte: 'Conferência de 08/09/2026' },
+];
+
+function analiseVerificados() { return (STATE.analise && STATE.analise.verificados) || {}; }
+function marcarApontamento(id, on) {
+  STATE.analise = STATE.analise || { verificados: {} };
+  STATE.analise.verificados = STATE.analise.verificados || {};
+  if (on) STATE.analise.verificados[id] = { em: new Date().toISOString().slice(0, 16), por: (SESSAO && SESSAO.usuario) || 'sessão' };
+  else delete STATE.analise.verificados[id];
+  afterMutation();
+}
+function irParaAba(tab) {
+  const b = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  if (b) { b.click(); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+}
+
+function gerarApontamentos() {
+  const out = [];
+  const r = VIEW.resumo || {};
+  const P = VIEW.parametros || {};
+  const add = (a) => out.push(a);
+
+  // 1. Quinzenas cujo custo total difere da soma das colunas
+  for (const p of (VIEW.parcelas || [])) {
+    const dif = divergenciaParcela(p);
+    if (Math.abs(dif) <= 0.02) continue;
+    add({ id: `ct-${p.id}`, grav: 'ajustar', tela: 'dashboard', titulo: `${p.mesReferenciaLabel || p.label}: custo total apurado difere da soma das colunas`,
+      onde: `Contas a Pagar › ${p.mesReferenciaLabel || p.label} › Custo total`,
+      valores: `soma das colunas ${money(somaComponentesParcela(p))} · custo total ${money(p.custoTotal)} · diferença ${dif > 0 ? '+' : ''}${money(dif)}`,
+      fazer: 'Conferir qual valor está certo. Se a soma das colunas for a correta, use "Recalcular pela soma"; se o custo total estiver certo, ajuste a coluna que falta (cartão, ADM, PIX ou evolução).',
+      acao: { rotulo: 'Recalcular pela soma', fn: () => recalcularParcelaPelaSoma(p.id) } });
+  }
+  // 2. Valores informados diretamente em Contas a Pagar (fora da regra automática)
+  const informados = (VIEW.parcelas || []).map((p) => ({ p, campos: Object.entries(p.overrides || {}).filter(([k, v]) => v && k !== 'custoTotal' && ANALISE_CAMPOS_PARCELA[k]).map(([k]) => ANALISE_CAMPOS_PARCELA[k]) })).filter((x) => x.campos.length);
+  if (informados.length) add({ id: 'overrides-parcelas', grav: 'info', tela: 'dashboard', titulo: `${informados.length} quinzena(s) com valores informados diretamente em Contas a Pagar`,
+    onde: 'Contas a Pagar', valores: informados.map((x) => `${x.p.mesReferenciaLabel || x.p.label}: ${x.campos.join(', ')}`).join(' · '),
+    fazer: 'Esses campos não seguem a regra automática (ADM = taxa × base; PIX = conta dos avanços). Conferir se os valores informados batem com os comprovantes.' });
+
+  // 3. Recurso próprio × aportes registrados
+  const m = movimentoDinheiro();
+  const cr = conciliacaoRecursoProprio(m);
+  for (const l of cr.linhas) {
+    if (Math.abs(l.dif) <= 0.01) continue;
+    add({ id: `rp-${l.item.replace(/[^a-z0-9]+/gi, '-').slice(0, 40)}`, grav: 'apurar', tela: 'parametros', titulo: `${l.item}: pago com recurso próprio ${money(l.pago)} × aporte registrado ${money(l.aporte)}`,
+      onde: 'Parâmetros › consumos de recurso próprio', valores: `diferença ${money(l.dif)} · composição: ${l.obs || ''}${l.aporteDesc ? ` · aporte: ${l.aporteDesc}` : ' · nenhum aporte casado'}`,
+      fazer: l.dif > 0 ? 'Registrar o aporte correspondente em Parâmetros (data e valor) ou corrigir o pagamento na tela de origem.' : 'Aporte registrado acima do pagamento casado: conferir o valor do aporte ou o pagamento.' });
+  }
+
+  // 4. Cartão: itens do Detalhamento × coluna Cartão das quinzenas, por mês de fatura
+  const fat = new Map(faturasCartao().map((f) => [f.mes, f.total]));
+  const colCartao = new Map();
+  for (const p of (VIEW.parcelas || [])) {
+    const mk = monthKeyFromDateStr(p.vencimento || p.vencPlanejado || '');
+    if (!mk) continue;
+    colCartao.set(mk, round2((colCartao.get(mk) || 0) + (Number(p.gastoCartao) || 0)));
+  }
+  for (const mk of new Set([...fat.keys(), ...colCartao.keys()])) {
+    const a = fat.get(mk) || 0, b = colCartao.get(mk) || 0;
+    if (Math.abs(a - b) <= 0.02) continue;
+    add({ id: `cartao-${mk}`, grav: 'apurar', tela: 'detalhamento', titulo: `Cartão ${mesQuinzenaLabel(mk, 1).split(' — ')[0]}: itens do Detalhamento ${money(a)} × coluna Cartão em Contas a Pagar ${money(b)}`,
+      onde: 'Detalhamento FC › itens pagos com cartão · Contas a Pagar › coluna Cartão', valores: `diferença ${money(round2(b - a))}`,
+      fazer: a === 0 ? 'Não há itens de cartão lançados para esta fatura no Detalhamento FC: lançar os itens ou zerar a coluna Cartão da quinzena.' : 'Conferir os itens da fatura e a coluna Cartão da quinzena; com a sincronização automática ligada a coluna passa a ser a soma dos itens.' });
+  }
+
+  // 5. Itens realizados sem data / aportes sem data / liberações sem data
+  const semData = [];
+  for (const cat of (VIEW.categorias || [])) for (const it of (cat.itens || [])) if ((cat.pagoDiretoProprietario || ehCartao(it.formaPagamento)) && (Number(it.valorRealizado) || 0) > 0 && !it.dataPagamento) semData.push(`${it.descricao || 'item'} (${cat.nome}) ${money(it.valorRealizado)}`);
+  if (semData.length) add({ id: 'itens-sem-data', grav: 'ajustar', tela: 'detalhamento', titulo: `${semData.length} item(ns) realizados sem data de pagamento`, onde: 'Detalhamento FC › coluna Data', valores: semData.slice(0, 8).join(' · ') + (semData.length > 8 ? ` · e mais ${semData.length - 8}` : ''), fazer: 'Preencher a data do pagamento; sem ela o item aparece como "sem data" nos extratos e não entra na conta do mês.' });
+  const aportesSemData = (VIEW.consumosRecursoProprio || []).filter((c) => !c.data && (Number(c.valor) || 0) > 0);
+  if (aportesSemData.length) add({ id: 'aportes-sem-data', grav: 'info', tela: 'parametros', titulo: `${aportesSemData.length} aporte(s) de recurso próprio sem data`, onde: 'Parâmetros › consumos de recurso próprio', valores: aportesSemData.map((c) => `${c.descricao} ${money(c.valor)}`).join(' · '), fazer: 'Informar a data quando conhecida; aportes sem data entram como saldo inicial nos extratos por mês.' });
+  const libSemData = (VIEW.liberacoesCaixa || []).filter((l) => !l.data);
+  if (libSemData.length) add({ id: 'lib-sem-data', grav: 'ajustar', tela: 'pci', titulo: `${libSemData.length} liberação(ões) sem data`, onde: 'Liberação PCI › liberações reais', valores: libSemData.map((l) => `${l.obs || 'Medição'} ${money(l.valor)}`).join(' · '), fazer: 'Preencher a data da liberação.' });
+  const realSemVenc = (VIEW.parcelas || []).filter((p) => p.status === 'REALIZADO' && !p.vencimento && !p.vencPlanejado);
+  if (realSemVenc.length) add({ id: 'parc-sem-venc', grav: 'ajustar', tela: 'dashboard', titulo: `${realSemVenc.length} quinzena(s) realizadas sem data de vencimento`, onde: 'Contas a Pagar › Vencimento', valores: realSemVenc.map((p) => p.label).join(' · '), fazer: 'Preencher o vencimento; sem ele a quinzena não entra no saldo em conta nem na conta do mês.' });
+
+  // 6. Entradas na conta fora do crédito CAIXA (estorno / depósito)
+  for (const l of (VIEW.liberacoesCaixa || []).filter((x) => ehEntradaFora(x))) {
+    add({ id: `fora-${l.id}`, grav: 'info', tela: 'pci', titulo: `${TIPOS_ENTRADA_CONTA[l.tipo] || 'Entrada na conta'}: ${money(l.valor)}${l.data ? ` em ${dateBR(l.data)}` : ''}`, onde: 'Liberação PCI › liberações reais (tipo de entrada)', valores: l.obs || '', fazer: 'Entrada que soma no saldo em conta mas não no crédito CAIXA liberado. Manter o comprovante (extrato) junto ao lançamento.' });
+  }
+
+  // 7. Lote: custo × pagamentos
+  if (m.loteBruto) {
+    const custoLote = round2((Number(P.custoTerreno) || 0) + (Number(P.multaLote) || 0));
+    const liquido = round2(m.loteBruto - m.estornos);
+    if (Math.abs(custoLote - liquido) > 0.01) add({ id: 'lote-custo', grav: 'ajustar', tela: 'parametros', titulo: 'Lote: custo em Parâmetros difere do pago líquido ao terrenista', onde: 'Parâmetros › terreno, multa de lote, custo do lote executado', valores: `terreno + multa ${money(custoLote)} · pago bruto ${money(m.loteBruto)} − estorno ${money(m.estornos)} = ${money(liquido)}`, fazer: 'Ajustar terreno/multa ou a parte financiada para os dois lados fecharem.' });
+  }
+
+  // 8. Saldo em conta × teórico e alertas da viabilidade
+  const fx = (r.viabilidade && r.viabilidade.fluxo) || {};
+  if (Math.abs(fx.diferencaConciliar || 0) > 0.01) add({ id: 'saldo-teorico', grav: 'info', tela: 'painel', titulo: `Saldo em conta ${money(fx.saldoContaRealizado)} × teórico entradas − saídas ${money(fx.saldo)}`, onde: 'Dashboard Executivo › Saldo em conta', valores: `diferença ${money(fx.diferencaConciliar)}`, fazer: 'Diferença esperada quando há pagamentos com recurso próprio antes da primeira liberação ou entradas fora da lista; conferir no extrato por conta.' });
+  if (r.origemSaldoRecurso === 'manual') add({ id: 'saldo-rp-manual', grav: 'info', tela: 'parametros', titulo: 'Saldo de recurso próprio disponível informado em Parâmetros › Avançado', onde: 'Parâmetros › Avançado', valores: money(r.saldoRecursoDisponivel), fazer: 'Enquanto informado, o saldo não acompanha os lançamentos. Limpar o campo para voltar ao cálculo automático.' });
+  let viab = null;
+  try { viab = auditoriaViabilidadeHtml(); } catch (e) { viab = null; }
+  if (viab) for (const [i, a] of viab.alertas.entries()) if (!/ajustado manualmente|difere do teórico/.test(a)) add({ id: `viab-${i}`, grav: 'apurar', tela: 'dashboard', titulo: a.replace(/<[^>]+>/g, ''), onde: 'Demonstrativo Financeiro › Viabilidade', valores: '', fazer: 'Ver detalhe em "Conciliação da viabilidade" abaixo.', html: a });
+
+  // 9. Externos (planilha do extrato)
+  for (const e of ANALISE_EXTERNOS) add({ ...e, tela: e.onde.startsWith('Contas') ? 'dashboard' : (e.onde.startsWith('Detalhamento') ? 'detalhamento' : 'parametros') });
+
+  return { itens: out, viab };
+}
+
+function renderAnalise() {
+  const root = document.getElementById('tab-analise');
+  if (!root) return;
+  root.innerHTML = '';
+  renderAnaliseEm(root, {});
+}
+function renderAnaliseEm(root, opts = {}) {
+  const { itens, viab } = gerarApontamentos();
+  const verif = analiseVerificados();
+  const abertos = itens.filter((a) => !verif[a.id]);
+  const fechados = itens.filter((a) => verif[a.id]);
+  const conta = (g) => abertos.filter((a) => a.grav === g).length;
+
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  panel.innerHTML = `
+    <div class="panel-header">
+      <div>
+        <h2>Análise e conferência</h2>
+        <div class="muted">Tudo que precisa ser verificado, apurado ou ajustado fica nesta aba, com a tela de origem e o que fazer. As telas de relatório mostram só o número consolidado. Os apontamentos automáticos desaparecem sozinhos quando o dado é corrigido; os demais podem ser marcados como verificados.</div>
+      </div>
+      <div class="painel-acoes no-print">${opts.semAcoes ? '' : `
+        <button type="button" class="btn small filter-control" data-acao="excel">Planilha (Excel)</button>
+        <button type="button" class="btn small filter-control" data-acao="print">Imprimir / PDF</button>`}
+      </div>
+    </div>
+    <div class="cards-grid analise-cards">
+      <div class="card ${conta('ajustar') ? 'warn' : 'good'}"><div class="card-label">A ajustar</div><div class="card-value">${conta('ajustar')}</div><div class="card-sub">dado que precisa de correção na tela de origem</div></div>
+      <div class="card ${conta('apurar') ? 'accent' : 'good'}"><div class="card-label">A apurar</div><div class="card-value">${conta('apurar')}</div><div class="card-sub">valor a conferir com comprovante, extrato ou contrato</div></div>
+      <div class="card"><div class="card-label">Informativos</div><div class="card-value">${conta('info')}</div><div class="card-sub">registros que explicam um número, sem ação obrigatória</div></div>
+      <div class="card good"><div class="card-label">Verificados</div><div class="card-value">${fechados.length}</div><div class="card-sub">apontamentos já conferidos por alguém da equipe</div></div>
+    </div>`;
+  root.appendChild(panel);
+
+  const tabela = (lista, titulo, muted) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'panel';
+    if (!lista.length) { wrap.innerHTML = `<h3 class="mov-h3">${titulo}</h3><div class="muted">Nenhum apontamento.</div>`; return wrap; }
+    wrap.innerHTML = `<h3 class="mov-h3">${titulo} <span class="viab-badge">${lista.length}</span></h3><div class="table-scroll"><table class="extrato-table rel-table analise-tabela ${muted ? 'analise-verif' : ''}"><thead><tr><th>Situação</th><th>Apontamento</th><th>Onde (tela › local)</th><th>Valores</th><th>O que fazer</th><th class="no-print">Ações</th></tr></thead><tbody></tbody></table></div>`;
+    const tb = wrap.querySelector('tbody');
+    const ordem = { ajustar: 0, apurar: 1, info: 2 };
+    for (const a of lista.slice().sort((x, y) => (ordem[x.grav] - ordem[y.grav]))) {
+      const [rot, cor] = ANALISE_GRAVIDADE[a.grav] || ANALISE_GRAVIDADE.info;
+      const v = verif[a.id];
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><span class="badge ${cor}">${rot}</span>${a.fonte ? `<div class="muted analise-fonte">${esc(a.fonte)}</div>` : ''}</td>
+        <td class="analise-titulo">${a.html || esc(a.titulo)}${v ? `<div class="muted analise-fonte">verificado por ${esc(v.por)} em ${esc(v.em.replace('T', ' '))}</div>` : ''}</td>
+        <td class="analise-onde">${esc(a.onde)}</td><td class="analise-valores">${esc(a.valores || '')}</td><td class="analise-fazer">${esc(a.fazer || '')}</td><td class="no-print"></td>`;
+      const acoes = tr.lastElementChild;
+      const mk = (txt, fn, cls = 'btn small filter-control') => { const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = txt; b.onclick = fn; acoes.appendChild(b); };
+      if (a.tela) mk('Ir para a tela', () => irParaAba(a.tela));
+      if (a.acao) mk(a.acao.rotulo, async () => { if (await confirmDialog(`${a.acao.rotulo}?`)) a.acao.fn(); }, 'btn small');
+      mk(v ? 'Reabrir' : 'Marcar verificado', () => marcarApontamento(a.id, !v), 'btn small');
+      tb.appendChild(tr);
+    }
+    return wrap;
+  };
+  root.appendChild(tabela(abertos, 'Apontamentos em aberto'));
+  if (fechados.length) {
+    const d = document.createElement('details'); d.className = 'viab-secao';
+    d.innerHTML = `<summary>Verificados (${fechados.length})</summary>`;
+    d.appendChild(tabela(fechados, 'Apontamentos verificados', true));
+    root.appendChild(d);
+  }
+
+  // Conferência de recurso próprio × aportes (tabela completa)
+  {
+    const m = movimentoDinheiro();
+    const cr = conciliacaoRecursoProprio(m);
+    const p = document.createElement('div');
+    p.className = 'panel';
+    p.innerHTML = `<h3 class="mov-h3">Recurso próprio: pagamentos × aportes registrados em Parâmetros</h3>
+      <div class="muted" style="margin-bottom:6px">Cada pagamento feito pelo proprietário casado com o aporte da mesma data (quinzenas) ou do mesmo assunto (lote, preliminares). Diferença positiva: pagamento sem aporte registrado; negativa: aporte acima do pagamento casado.</div>
+      <div class="table-scroll"><table class="extrato-table rel-table"><thead><tr><th>Item</th><th class="num">Pago</th><th class="num">Aporte registrado</th><th>Aporte (descrição)</th><th class="num">Diferença</th><th>Composição do pago</th></tr></thead>
+      <tbody>${cr.linhas.map((l) => `<tr><td>${esc(l.item)}</td><td class="num">${money(l.pago)}</td><td class="num">${money(l.aporte)}</td><td class="muted">${esc(l.aporteDesc || 'nenhum')}</td><td class="num ${Math.abs(l.dif) > 0.005 ? 'mov-saida' : 'muted'}"><strong>${money(l.dif)}</strong></td><td class="muted">${esc(l.obs || '')}</td></tr>`).join('')}</tbody>
+      <tfoot><tr class="extrato-residuo"><td><strong>Total</strong></td><td class="num"><strong>${money(cr.totPago)}</strong></td><td class="num"><strong>${money(cr.totAporte)}</strong></td><td></td><td class="num"><strong>${money(cr.dif)}</strong></td><td></td></tr></tfoot></table></div>`;
+    root.appendChild(p);
+  }
+
+  // Conciliação da viabilidade (antes seções D e E do Demonstrativo)
+  if (viab) {
+    const p = document.createElement('div');
+    p.className = 'panel';
+    p.innerHTML = `<details class="viab-secao"><summary>Conciliação da viabilidade: fontes × custo${viab.alertas.length ? ` <span class="viab-badge">${viab.alertas.length}</span>` : ''}</summary>${viab.audit}</details>
+      <details class="viab-secao"><summary>Regra anterior × nova (auditoria da correção do custo)</summary>${viab.comparacao}</details>`;
+    root.appendChild(p);
+  }
+
+  if (opts.semAcoes) return;
+  panel.querySelector('button[data-acao="print"]').onclick = () => {
+    abrirPainelExpandido('Análise e conferência', () => { const box = document.createElement('div'); box.className = 'mov-raiz'; renderAnaliseEm(box, { semAcoes: true }); return box; });
+    setTimeout(() => window.print(), 300);
+  };
+  panel.querySelector('button[data-acao="excel"]').onclick = () => {
+    const rel = { id: 'analise', nome: 'Análise e conferência', colunas: [
+      { k: 'situacao', t: 'Situação' }, { k: 'titulo', t: 'Apontamento' }, { k: 'onde', t: 'Onde' }, { k: 'valores', t: 'Valores' }, { k: 'fazer', t: 'O que fazer' }, { k: 'fonte', t: 'Fonte' }, { k: 'verificado', t: 'Verificado' }],
+      notas: () => ['Apontamentos automáticos são recalculados a cada lançamento; os externos vêm da conciliação com a planilha do extrato.'] };
+    const ls = itens.map((a) => ({ situacao: (ANALISE_GRAVIDADE[a.grav] || ANALISE_GRAVIDADE.info)[0], titulo: a.titulo, onde: a.onde, valores: a.valores || '', fazer: a.fazer || '', fonte: a.fonte || 'app', verificado: verif[a.id] ? `${verif[a.id].por} ${verif[a.id].em}` : '' }));
+    baixarArquivo(`analise-${new Date().toISOString().slice(0, 10)}.xlsx`, xlsxDoRelatorio(rel, ls, totaisRelatorio(rel, ls)), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+  };
 }
 
 function renderRastreabilidade() {
