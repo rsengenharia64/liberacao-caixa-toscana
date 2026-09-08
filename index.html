@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260908T154905">
+<meta name="app-version" content="20260908T164027">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -636,6 +636,19 @@
   .mov-conta-tot strong { color: var(--ink); font-size: 14px; }
   .mov-h3 { font-size: 15px; margin: 0 0 6px; }
   .mov-grupos { max-width: 720px; }
+  .mov-prov { color: var(--warn); font-weight: 600; }
+  .mov-modo-mes { margin-top: 6px; padding: 6px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: 12.5px; }
+  .mov-fech { margin: 6px 0 12px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: var(--radius); background: var(--surface-2); }
+  .mov-fech-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 8px 28px; }
+  .mov-fech-linha { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--border); font-size: 12.5px; }
+  .mov-fech-linha strong { font-family: "IBM Plex Mono", monospace; white-space: nowrap; }
+  .mov-fech-linha em { font-style: normal; font-size: 11px; }
+  .mov-fech-linha.mov-fech-total { border-top: 2px solid var(--ink); border-bottom: none; font-weight: 700; margin-top: 2px; }
+  .mov-fech-linha.neg strong { color: var(--danger); } .mov-fech-linha.pos strong { color: var(--good); }
+  .mov-fech-sub { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; margin-bottom: 2px; }
+  .mov-fech-aviso { margin-top: 8px; padding: 7px 10px; border-radius: 8px; background: var(--danger-soft); color: var(--danger); font-size: 12.5px; }
+  .mov-fech-ok { margin-top: 8px; padding: 7px 10px; border-radius: 8px; background: var(--good-soft); color: var(--good); font-size: 12.5px; }
+  .mov-saldo-ini td { background: var(--surface-2); }
   .mov-raiz .extrato-table tfoot td { position: static; }
   .mov-resumo { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
   .qz-faixa { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin: 6px 0 8px; }
@@ -1943,7 +1956,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260908T154905';
+const APP_VERSAO = '20260908T164027';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -5619,10 +5632,13 @@ function movimentoDinheiro({ incluirPlanejado = false } = {}) {
     if (p.status !== 'REALIZADO' && !incluirPlanejado) continue;
     const d = p.vencimento || p.vencPlanejado || null;
     const nat = (d && dataPrimeiraLib && d < dataPrimeiraLib) ? 'proprio' : 'caixa';
-    const add = (grupo, val, org) => { if (val) push({ data: d, tipo: 'saida', grupo, natureza: nat, descricao: `${p.label || 'Quinzena'}`, valor: round2(val), status: p.status, origem: org }); };
+    const add = (grupo, val, org, extra) => { if (val) push({ data: d, tipo: 'saida', grupo, natureza: nat, descricao: `${p.label || 'Quinzena'}`, valor: round2(val), status: p.status, origem: org, quinzenaId: p.id, ...(extra || {}) }); };
     add('pix', Number(p.totalEmpreiteiroPix) || 0, 'Contas a Pagar › Empreiteiro (PIX)');
     add('adm', Number(p.totalAdmPix) || 0, 'Contas a Pagar › ADM (PIX)');
-    add('cartao', Number(p.gastoCartao) || 0, 'Detalhamento FC › cartão da fatura');
+    // Cartão: a fatura do mês da quinzena vence no dia de vencimento do cartão, e é nessa data que o dinheiro sai
+    const mesFat = monthKeyFromDateStr(d);
+    const vencFat = mesFat ? vencimentoDaFatura(mesFat) : null;
+    add('cartao', Number(p.gastoCartao) || 0, 'Detalhamento FC › itens de cartão da fatura do mês', { data: vencFat || d, descricao: `${p.label || 'Quinzena'} · fatura do cartão ${mesFat ? mesQuinzenaLabel(mesFat, 1).split(' — ')[0] : ''}${vencFat ? ` (vence ${dateBR(vencFat)})` : ''}` });
     add('evolucao', Number(p.parcelaEvolucaoCaixa) || 0, 'Contas a Pagar › Evolução CAIXA');
     if (p.overrides && p.overrides.custoTotal) {
       const soma = round2((Number(p.totalEmpreiteiroPix) || 0) + (Number(p.totalAdmPix) || 0) + (Number(p.gastoCartao) || 0) + (Number(p.parcelaEvolucaoCaixa) || 0));
@@ -5713,9 +5729,15 @@ function abrirMovimentoDinheiro() {
   let incluirPlanejado = false;
   let contaAberta = 'todas'; // 'todas' | 'caixa' | 'proprio'
   let filtroGrupo = 'todos';
+  let mesSel = 'todos'; // 'todos' | 'YYYY-MM': modo "conta do mês" (realizado + provisão)
+  const nomeMes = (k) => k && /^\d{4}-\d{2}$/.test(k) ? `${MESES_CONTROLE[Number(k.slice(5, 7)) - 1]} de ${k.slice(0, 4)}` : 'Todos os meses';
   openModal('Custo total realizado: extrato por conta contábil', (body) => {
     const desenhar = () => {
-      const m = movimentoDinheiro({ incluirPlanejado });
+      const modoMes = mesSel !== 'todos';
+      const m = movimentoDinheiro({ incluirPlanejado: incluirPlanejado || modoMes });
+      const mesesDisponiveis = [...new Set(movimentoDinheiro({ incluirPlanejado: true }).linhas.map((x) => x.data ? x.data.slice(0, 7) : null).filter(Boolean))].sort();
+      const noMes = (x) => !modoMes || (x.data && x.data.slice(0, 7) === mesSel);
+      const antesDoMes = (x) => !x.data || x.data.slice(0, 7) < mesSel;
       body.innerHTML = '';
       const raiz = document.createElement('div');
       raiz.className = 'mov-raiz';
@@ -5724,6 +5746,7 @@ function abrirMovimentoDinheiro() {
       cab.className = 'rel-cabecalho';
       cab.innerHTML = `<div><div class="rel-obra">${esc(VIEW.meta?.obra || 'Obra')}</div>
         <div class="muted">Gasto total da obra separado por conta contábil: o que passou pela conta da obra (CAIXA / banco) e o que saiu do bolso do proprietário (recurso próprio), cada conta com suas entradas e saídas. Lê as mesmas telas que alimentam o app (Liberação PCI, Contas a Pagar, Detalhamento FC, Parâmetros) e recalcula a cada lançamento.</div>
+        ${modoMes ? `<div class="mov-modo-mes">Conta do mês: <strong>${esc(nomeMes(mesSel))}</strong>. Mostra o que já aconteceu no mês e a <strong>provisão</strong> (despesas planejadas do mês: empreiteiro, administração, fatura do cartão, evolução CAIXA), para a conta do mês fechar.</div>` : ''}
         <div class="muted rel-periodo">Posição em ${dateBR(new Date().toISOString().slice(0, 10))}${m.dataPrimeiraLib ? ` · primeira liberação CAIXA em ${dateBR(m.dataPrimeiraLib)}: o que foi pago antes é recurso próprio, o que veio depois saiu da conta da obra` : ''}</div></div>`;
       raiz.appendChild(cab);
 
@@ -5753,18 +5776,27 @@ function abrirMovimentoDinheiro() {
       selG.onchange = () => { filtroGrupo = selG.value; desenhar(); };
       acoes.appendChild(selG);
       if (filtroGrupo !== 'todos') btn('Limpar grupo', () => { filtroGrupo = 'todos'; desenhar(); });
+      const selM = document.createElement('select'); selM.className = 'cell-input filter-control'; selM.style.maxWidth = '220px';
+      for (const [v, t] of [['todos', 'Todos os meses']].concat(mesesDisponiveis.map((k) => [k, nomeMes(k)]))) { const o = document.createElement('option'); o.value = v; o.textContent = t; if (v === mesSel) o.selected = true; selM.appendChild(o); }
+      selM.title = 'Conta do mês: realizado + provisão (despesas planejadas do mês: empreiteiro, administração, fatura do cartão, evolução CAIXA).';
+      selM.onchange = () => { mesSel = selM.value; desenhar(); };
+      acoes.appendChild(selM);
+      const hojeMes = new Date().toISOString().slice(0, 7);
+      const mesProvisao = mesesDisponiveis.includes(hojeMes) ? hojeMes : (mesesDisponiveis.find((k) => k > hojeMes) || mesesDisponiveis[mesesDisponiveis.length - 1]);
+      if (!modoMes && mesProvisao) btn(`Provisão do mês (${nomeMes(mesProvisao)})`, () => { mesSel = mesProvisao; desenhar(); });
+      if (modoMes) btn('Sair da conta do mês', () => { mesSel = 'todos'; desenhar(); });
       btn(incluirPlanejado ? 'Ocultar planejado' : 'Incluir planejado', () => { incluirPlanejado = !incluirPlanejado; desenhar(); });
       btn('Custo por quinzena', () => abrirExtratoCustoRealizado());
       btn('Imprimir / PDF', () => window.print(), true);
       btn('Planilha (Excel)', () => {
         const nomeGrupo = (x) => nomeGrupoMov(x);
-        const rel = { id: 'movimento-dinheiro', nome: 'Custo total realizado por conta contábil', colunas: [
+        const rel = { id: 'movimento-dinheiro', nome: modoMes ? `Conta do mês: ${nomeMes(mesSel)} (realizado + provisão)` : 'Custo total realizado por conta contábil', colunas: [
           { k: 'contaNome', t: 'Conta contábil' }, { k: 'data', t: 'Data', tipo: 'data' }, { k: 'descricao', t: 'Descrição' }, { k: 'grupoNome', t: 'Grupo' }, { k: 'status', t: 'Status' },
           { k: 'entrada', t: 'Entrada', tipo: 'money', total: true }, { k: 'saida', t: 'Saída', tipo: 'money', total: true }, { k: 'origem', t: 'Origem do número' }],
           notas: () => ['Conta contábil: pago antes da primeira liberação CAIXA = recurso próprio; depois = conta da obra (CAIXA/banco). Lote (entrada) e serviços preliminares pagos direto = recurso próprio; parte financiada do lote = CAIXA.'],
           blocos: () => m.contas.map((c) => ({ titulo: `${c.nome} (realizado)`, itens: c.grupos.map((g) => [g.nome, g.realizado, false]).concat([['Saídas da conta', c.saidas, true], ['Entradas da conta', c.entradas, true], ['Saldo da conta', c.saldo, true]]) })).concat([{ titulo: 'Consolidado', itens: [['Custo total realizado (gasto total)', m.saidas, true], ['Entradas totais', m.entradas, true]] }]),
         };
-        const ordem = m.contas.flatMap((c) => c.linhas.filter((x) => linhaMovNoFiltro(x, filtroGrupo)).map((x) => ({ ...x, contaNome: c.nome, grupoNome: nomeGrupo(x), entrada: x.tipo === 'entrada' ? x.valor : 0, saida: x.tipo === 'saida' ? x.valor : 0 })));
+        const ordem = m.contas.flatMap((c) => c.linhas.filter((x) => linhaMovNoFiltro(x, filtroGrupo)).filter(noMes).map((x) => ({ ...x, contaNome: c.nome, grupoNome: nomeGrupo(x), status: x.status === 'REALIZADO' ? 'REALIZADO' : (modoMes ? 'PROVISÃO' : 'PLANEJADO'), entrada: x.tipo === 'entrada' ? x.valor : 0, saida: x.tipo === 'saida' ? x.valor : 0 })));
         baixarArquivo(`custo-total-por-conta-${new Date().toISOString().slice(0, 10)}.xlsx`, xlsxDoRelatorio(rel, ordem, totaisRelatorio(rel, ordem)), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       });
       raiz.appendChild(acoes);
@@ -5774,19 +5806,67 @@ function abrirMovimentoDinheiro() {
       const nomeFiltro = filtrando ? (opcoesFiltroGrupoMov().find(([v]) => v === filtroGrupo) || ['', filtroGrupo])[1].trim().replace(/^› /, '') : '';
       for (const c of m.contas) {
         if (contaAberta !== 'todas' && contaAberta !== c.id) continue;
-        const linhas = c.linhas.filter((x) => linhaMovNoFiltro(x, filtroGrupo));
+        const linhas = c.linhas.filter((x) => linhaMovNoFiltro(x, filtroGrupo)).filter(noMes);
         const somaL = (f) => round2(linhas.filter(f).reduce((a, x) => a + x.valor, 0));
         const entF = somaL((x) => x.tipo === 'entrada' && x.status === 'REALIZADO');
         const saiF = somaL((x) => x.tipo === 'saida' && x.status === 'REALIZADO');
+        // Conta do mês: saldo que vem de antes, o que já aconteceu no mês e a provisão (planejado do mês)
+        let fech = null;
+        if (modoMes) {
+          const somaC = (f) => round2(c.linhas.filter(f).reduce((a, x) => a + x.valor, 0));
+          const real = (x) => x.status === 'REALIZADO';
+          const saldoInicial = round2(somaC((x) => antesDoMes(x) && real(x) && x.tipo === 'entrada') - somaC((x) => antesDoMes(x) && real(x) && x.tipo === 'saida'));
+          const mesL = c.linhas.filter((x) => x.data && x.data.slice(0, 7) === mesSel);
+          const somaM = (f) => round2(mesL.filter(f).reduce((a, x) => a + x.valor, 0));
+          const provPorGrupo = MOV_GRUPOS.map(([id, nome]) => ({ id, nome, valor: somaM((x) => x.tipo === 'saida' && !real(x) && x.grupo === id), itens: mesL.filter((x) => x.tipo === 'saida' && !real(x) && x.grupo === id) })).filter((g) => g.valor);
+          fech = {
+            saldoInicial,
+            entradasReal: somaM((x) => x.tipo === 'entrada' && real(x)),
+            entradasPrev: somaM((x) => x.tipo === 'entrada' && !real(x)),
+            saidasReal: somaM((x) => x.tipo === 'saida' && real(x)),
+            provisao: somaM((x) => x.tipo === 'saida' && !real(x)),
+            provPorGrupo,
+          };
+          fech.totalMes = round2(fech.saidasReal + fech.provisao);
+          fech.saldoFinal = round2(saldoInicial + fech.entradasReal + fech.entradasPrev - fech.saidasReal - fech.provisao);
+          fech.saldoSemPrevisto = round2(saldoInicial + fech.entradasReal - fech.saidasReal - fech.provisao);
+        }
         const sec = document.createElement('section');
         sec.className = `mov-conta mov-conta-${c.id}`;
         const badge = c.id === 'proprio' ? 'accent' : 'green';
         sec.innerHTML = `<div class="mov-conta-cab">
             <div><span class="badge ${badge}">${c.id === 'proprio' ? 'recurso próprio' : 'CAIXA / banco'}</span> <h3>${esc(c.nome)}</h3>${filtrando ? ` <span class="badge gray">filtro: ${esc(nomeFiltro)}</span>` : ''}</div>
-            <div class="mov-conta-tot">${filtrando
+            <div class="mov-conta-tot">${fech
+              ? `<span>Saldo inicial <strong>${money(fech.saldoInicial)}</strong></span><span>Realizado no mês <strong class="mov-saida">${money(fech.saidasReal)}</strong></span><span>Provisão <strong class="mov-prov">${money(fech.provisao)}</strong></span><span>Total do mês <strong>${money(fech.totalMes)}</strong></span><span>Saldo projetado <strong class="${fech.saldoFinal < -0.005 ? 'mov-saida' : 'mov-entrada'}">${money(fech.saldoFinal)}</strong></span>`
+              : filtrando
               ? `<span>No filtro: entradas <strong class="mov-entrada">${money(entF)}</strong></span><span>saídas <strong class="mov-saida">${money(saiF)}</strong></span><span class="muted">conta inteira: entradas ${money(c.entradas)} · saídas ${money(c.saidas)} · saldo ${money(c.saldo)}</span>`
               : `<span>Entradas <strong class="mov-entrada">${money(c.entradas)}</strong></span><span>Saídas <strong class="mov-saida">${money(c.saidas)}</strong></span><span>Saldo <strong class="${c.saldo < -0.005 ? 'mov-saida' : ''}">${money(c.saldo)}</strong></span>${incluirPlanejado ? `<span class="muted">planejado: entradas ${money(c.entradasPlanejadas)} · saídas ${money(c.saidasPlanejadas)}</span>` : ''}`}</div>
           </div>`;
+        if (fech) {
+          const fb = document.createElement('div');
+          fb.className = 'mov-fech';
+          const linha = (rot, val, cls = '', nota = '') => `<div class="mov-fech-linha ${cls}"><span>${rot}${nota ? ` <em class="muted">${nota}</em>` : ''}</span><strong>${money(val)}</strong></div>`;
+          fb.innerHTML = `<h3 class="mov-h3">Conta do mês: ${esc(nomeMes(mesSel))}</h3>
+            <div class="mov-fech-grid">
+              <div>
+                ${linha('Saldo inicial (realizado até o mês anterior)', fech.saldoInicial)}
+                ${linha('+ Entradas realizadas no mês', fech.entradasReal, 'mov-entrada')}
+                ${fech.entradasPrev ? linha('+ Entradas previstas no mês', fech.entradasPrev, 'mov-prov', 'liberação planejada') : ''}
+                ${linha('− Saídas realizadas no mês', fech.saidasReal, 'mov-saida')}
+                ${linha('− Provisão (despesas planejadas do mês)', fech.provisao, 'mov-prov')}
+                ${linha('= Saldo projetado no fim do mês', fech.saldoFinal, `mov-fech-total ${fech.saldoFinal < -0.005 ? 'neg' : 'pos'}`)}
+                ${fech.entradasPrev ? linha('Saldo se a entrada prevista não vier', fech.saldoSemPrevisto, fech.saldoSemPrevisto < -0.005 ? 'neg' : '') : ''}
+                ${fech.saldoFinal < -0.005 ? `<div class="mov-fech-aviso">Para a conta do mês fechar faltam <strong>${money(-fech.saldoFinal)}</strong>${c.id === 'proprio' ? ' de aporte do proprietário (registrar em Parâmetros › consumos de recurso próprio quando entrar)' : ' na conta da obra (liberação CAIXA ou aporte)'}.</div>` : `<div class="mov-fech-ok">A conta do mês fecha com folga de <strong>${money(fech.saldoFinal)}</strong>.</div>`}
+              </div>
+              <div>
+                <div class="mov-fech-sub">Provisão por grupo</div>
+                ${fech.provPorGrupo.length ? fech.provPorGrupo.map((g) => `<div class="mov-fech-linha"><span>${esc(g.nome)} <em class="muted">${g.itens.map((i) => `${i.descricao.split(' · ')[0]}${i.data ? ' ' + dateBR(i.data) : ''}`).filter((v, i, a) => a.indexOf(v) === i).join('; ')}</em></span><strong class="mov-prov">${money(g.valor)}</strong></div>`).join('') : '<div class="muted">Nenhuma despesa planejada neste mês nesta conta.</div>'}
+                ${linha('Total da provisão', fech.provisao, 'mov-fech-total')}
+                ${linha('Realizado + provisão = total do mês', fech.totalMes, 'mov-fech-total')}
+              </div>
+            </div>`;
+          sec.appendChild(fb);
+        }
         // resumo por grupo (e subgrupo dos preliminares) da conta
         const chaves = [];
         const porChave = new Map();
@@ -5803,20 +5883,22 @@ function abrirMovimentoDinheiro() {
         const totalPrelim = round2(gruposC.filter((e) => e.sub).reduce((a, e) => a + e.realizado, 0));
         const g = document.createElement('div');
         g.className = 'table-scroll';
-        g.innerHTML = `<table class="extrato-table rel-table mov-grupos"><thead><tr><th>Grupo de gasto (saídas)</th><th class="num">Realizado</th>${incluirPlanejado ? '<th class="num">Planejado</th>' : ''}<th class="num">% da conta</th></tr></thead>
-          <tbody>${gruposC.map((x) => `<tr><td class="${x.sub ? 'sub-item' : ''}">${esc(x.nome)}</td><td class="num"><strong>${money(x.realizado)}</strong></td>${incluirPlanejado ? `<td class="num muted">${money(x.planejado)}</td>` : ''}<td class="num">${c.saidas ? pct(x.realizado / c.saidas) : ''}</td></tr>`).join('')}${totalPrelim && gruposC.filter((e) => e.sub).length > 1 ? `<tr><td><em>Serviços preliminares (soma dos subgrupos)</em></td><td class="num"><em>${money(totalPrelim)}</em></td>${incluirPlanejado ? '<td></td>' : ''}<td class="num"><em>${c.saidas ? pct(totalPrelim / c.saidas) : ''}</em></td></tr>` : ''}</tbody>
-          <tfoot><tr class="extrato-residuo"><td><strong>${filtrando ? 'Saídas no filtro' : 'Saídas da conta'}</strong></td><td class="num"><strong>${money(filtrando ? saiF : c.saidas)}</strong></td>${incluirPlanejado ? `<td class="num muted">${money(filtrando ? somaL((x) => x.tipo === 'saida' && x.status !== 'REALIZADO') : c.saidasPlanejadas)}</td>` : ''}<td class="num">${c.saidas ? pct((filtrando ? saiF : c.saidas) / c.saidas) : ''}</td></tr></tfoot></table></div>`;
+        const comPlan = incluirPlanejado || modoMes;
+        g.innerHTML = `<table class="extrato-table rel-table mov-grupos"><thead><tr><th>Grupo de gasto (saídas)</th><th class="num">Realizado</th>${comPlan ? `<th class="num">${modoMes ? 'Provisão' : 'Planejado'}</th>` : ''}<th class="num">${modoMes ? '% do mês' : '% da conta'}</th></tr></thead>
+          <tbody>${gruposC.map((x) => `<tr><td class="${x.sub ? 'sub-item' : ''}">${esc(x.nome)}</td><td class="num"><strong>${money(x.realizado)}</strong></td>${comPlan ? `<td class="num ${modoMes ? 'mov-prov' : 'muted'}">${money(x.planejado)}</td>` : ''}<td class="num">${modoMes ? (fech && fech.totalMes ? pct((x.realizado + x.planejado) / fech.totalMes) : '') : (c.saidas ? pct(x.realizado / c.saidas) : '')}</td></tr>`).join('')}${totalPrelim && gruposC.filter((e) => e.sub).length > 1 ? `<tr><td><em>Serviços preliminares (soma dos subgrupos)</em></td><td class="num"><em>${money(totalPrelim)}</em></td>${comPlan ? '<td></td>' : ''}<td class="num"><em>${c.saidas ? pct(totalPrelim / c.saidas) : ''}</em></td></tr>` : ''}</tbody>
+          <tfoot><tr class="extrato-residuo"><td><strong>${filtrando || modoMes ? (modoMes ? `Saídas do mês (${filtrando ? 'no filtro' : 'realizado'})` : 'Saídas no filtro') : 'Saídas da conta'}</strong></td><td class="num"><strong>${money(filtrando || modoMes ? saiF : c.saidas)}</strong></td>${comPlan ? `<td class="num ${modoMes ? 'mov-prov' : 'muted'}">${money(filtrando || modoMes ? somaL((x) => x.tipo === 'saida' && x.status !== 'REALIZADO') : c.saidasPlanejadas)}</td>` : ''}<td class="num">${modoMes ? (fech && fech.totalMes ? pct((saiF + somaL((x) => x.tipo === 'saida' && x.status !== 'REALIZADO')) / fech.totalMes) : '') : (c.saidas ? pct((filtrando ? saiF : c.saidas) / c.saidas) : '')}</td></tr></tfoot></table></div>`;
         sec.appendChild(g);
         // movimentos da conta
-        let acum = 0;
+        let acum = fech && !filtrando ? fech.saldoInicial : 0;
         const t = document.createElement('div');
         t.className = 'table-scroll';
         t.style.marginTop = '10px';
-        t.innerHTML = `<table class="extrato-table rel-table"><thead><tr><th>Data</th><th>Lançamento</th><th>Grupo</th><th>Status</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">${filtrando ? 'Acumulado (filtro)' : 'Saldo acumulado'}</th><th>Onde está lançado</th></tr></thead>
-          <tbody>${linhas.map((x) => { const real = x.status === 'REALIZADO'; if (real) acum = round2(acum + (x.tipo === 'entrada' ? x.valor : -x.valor)); return `<tr class="${real ? '' : 'mov-previsto'}"><td>${x.data ? dateBR(x.data) : `<span class="muted" title="${x.grupo === 'lote' ? 'Valor do contrato do lote, sem data de pagamento' : 'Sem data preenchida na tela de origem'}">sem data</span>`}</td><td>${esc(x.descricao)}</td><td class="muted">${esc(nomeGrupoMov(x))}</td><td>${real ? 'Realizado' : 'Planejado'}</td><td class="num ${x.tipo === 'entrada' ? 'mov-entrada' : ''}">${x.tipo === 'entrada' ? money(x.valor) : ''}</td><td class="num ${x.tipo === 'saida' ? 'mov-saida' : ''}">${x.tipo === 'saida' ? money(x.valor) : ''}</td><td class="num ${acum < -0.005 ? 'mov-saida' : ''}">${real ? money(acum) : ''}</td><td class="muted">${esc(x.origem)}</td></tr>`; }).join('')}${linhas.length ? '' : '<tr><td colspan="8" class="muted">Nenhum lançamento deste grupo nesta conta.</td></tr>'}</tbody>
-          <tfoot><tr class="extrato-residuo"><td colspan="4"><strong>${filtrando ? 'Totais no filtro (realizado)' : 'Totais da conta (realizado)'}</strong></td><td class="num"><strong>${money(filtrando ? entF : c.entradas)}</strong></td><td class="num"><strong>${money(filtrando ? saiF : c.saidas)}</strong></td><td class="num"><strong>${money(filtrando ? round2(entF - saiF) : c.saldo)}</strong></td><td></td></tr></tfoot></table></div>`;
+        t.innerHTML = `<table class="extrato-table rel-table"><thead><tr><th>Data</th><th>Lançamento</th><th>Grupo</th><th>Status</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">${filtrando ? 'Acumulado (filtro)' : (modoMes ? 'Saldo (com provisão)' : 'Saldo acumulado')}</th><th>Onde está lançado</th></tr></thead>
+          ${fech && !filtrando ? `<tbody><tr class="mov-saldo-ini"><td colspan="6"><strong>Saldo inicial de ${esc(nomeMes(mesSel))}</strong> <span class="muted">(realizado até o mês anterior, inclusive lançamentos sem data)</span></td><td class="num"><strong>${money(fech.saldoInicial)}</strong></td><td></td></tr></tbody>` : ''}
+          <tbody>${linhas.map((x) => { const real = x.status === 'REALIZADO'; if (real || modoMes) acum = round2(acum + (x.tipo === 'entrada' ? x.valor : -x.valor)); return `<tr class="${real ? '' : 'mov-previsto'}"><td>${x.data ? dateBR(x.data) : `<span class="muted" title="${x.grupo === 'lote' ? 'Valor do contrato do lote, sem data de pagamento' : 'Sem data preenchida na tela de origem'}">sem data</span>`}</td><td>${esc(x.descricao)}</td><td class="muted">${esc(nomeGrupoMov(x))}</td><td>${real ? 'Realizado' : `<span class="badge amber">${modoMes ? 'Provisão' : 'Planejado'}</span>`}</td><td class="num ${x.tipo === 'entrada' ? 'mov-entrada' : ''}">${x.tipo === 'entrada' ? money(x.valor) : ''}</td><td class="num ${x.tipo === 'saida' ? 'mov-saida' : ''}">${x.tipo === 'saida' ? money(x.valor) : ''}</td><td class="num ${acum < -0.005 ? 'mov-saida' : ''}">${real || modoMes ? money(acum) : ''}</td><td class="muted">${esc(x.origem)}</td></tr>`; }).join('')}${linhas.length ? '' : `<tr><td colspan="8" class="muted">${modoMes ? 'Nenhum lançamento neste mês nesta conta.' : 'Nenhum lançamento deste grupo nesta conta.'}</td></tr>`}</tbody>
+          <tfoot>${modoMes ? `<tr class="extrato-residuo"><td colspan="4"><strong>Realizado no mês${filtrando ? ' (no filtro)' : ''}</strong></td><td class="num"><strong>${money(entF)}</strong></td><td class="num"><strong>${money(saiF)}</strong></td><td></td><td></td></tr><tr class="extrato-residuo"><td colspan="4"><strong>Provisão do mês${filtrando ? ' (no filtro)' : ''}</strong></td><td class="num mov-prov"><strong>${money(somaL((x) => x.tipo === 'entrada' && x.status !== 'REALIZADO'))}</strong></td><td class="num mov-prov"><strong>${money(somaL((x) => x.tipo === 'saida' && x.status !== 'REALIZADO'))}</strong></td><td class="num"><strong>${filtrando ? '' : money(fech.saldoFinal)}</strong></td><td class="muted">${filtrando ? '' : 'saldo projetado no fim do mês'}</td></tr>` : `<tr class="extrato-residuo"><td colspan="4"><strong>${filtrando ? 'Totais no filtro (realizado)' : 'Totais da conta (realizado)'}</strong></td><td class="num"><strong>${money(filtrando ? entF : c.entradas)}</strong></td><td class="num"><strong>${money(filtrando ? saiF : c.saidas)}</strong></td><td class="num"><strong>${money(filtrando ? round2(entF - saiF) : c.saldo)}</strong></td><td></td></tr>`}</tfoot></table></div>`;
         sec.appendChild(t);
-        if (c.id === 'proprio' && !filtrando) {
+        if (c.id === 'proprio' && !filtrando && !modoMes) {
           const cr = conciliacaoRecursoProprio(m);
           const box = document.createElement('div');
           box.className = 'table-scroll';
@@ -5839,7 +5921,7 @@ function abrirMovimentoDinheiro() {
       }
 
       // Consolidado das duas contas (grupo × conta)
-      if (contaAberta === 'todas' && !filtrando) {
+      if (contaAberta === 'todas' && !filtrando && !modoMes) {
         const g = document.createElement('div');
         g.className = 'table-scroll';
         g.style.marginTop = '14px';
