@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260904T010455">
+<meta name="app-version" content="20260908T141223">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -626,6 +626,9 @@
   /* Totalizadores sempre visíveis: o rodapé gruda no fim da área rolável. */
   .tbl-parcelas tfoot td { position: sticky; bottom: 0; z-index: 1; }
   .painel-acoes { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .qz-faixa { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin: 6px 0 8px; }
+  .qz-faixa label { display: flex; flex-direction: column; gap: 3px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .qz-faixa select { border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 4px 8px; min-width: 190px; font-family: "Archivo", sans-serif; }
   .painel-expandido .table-scroll { max-height: calc(100vh - 240px); overflow: auto; }
   .painel-expandido table.data thead th { z-index: 3; }
   .modal.fullscreen .tbl-parcelas { font-size: 13px; }
@@ -1928,7 +1931,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260904T010455';
+const APP_VERSAO = '20260908T141223';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -2075,6 +2078,8 @@ let FILTRO_QUINZENA_PCI = null;
 let FILTRO_MES_PARCELAS = null;
 // Quinzena selecionada no Demonstrativo Financeiro ("mes|quinzena") ou null.
 let FILTRO_QUINZENA_PARCELAS = null;
+// Intervalo de quinzenas (Contas a Pagar): { de: 'YYYY-MM|q', ate: 'YYYY-MM|q' } ou null.
+let FILTRO_PERIODO_PARCELAS = null;
 // Até qual quinzena projetar o "Saldo em conta" (janela com planejado) no
 // Dashboard Executivo — {mes, quinzena, vencPlanejado, label} ou null = até
 // o fim do contrato. A janela "só realizado" tem seu próprio filtro
@@ -2218,16 +2223,63 @@ function renderQuinzenaChips({ selecionada, onChange }) {
   barra.className = 'qz-toolbar';
   const btnTodas = document.createElement('button');
   btnTodas.type = 'button';
-  btnTodas.className = `btn small filter-control${selecionada ? '' : ' primary'}`;
+  btnTodas.className = `btn small filter-control${selecionada || FILTRO_PERIODO_PARCELAS ? '' : ' primary'}`;
   btnTodas.textContent = 'Todas as quinzenas';
-  btnTodas.onclick = () => onChange(null);
+  btnTodas.onclick = () => { FILTRO_PERIODO_PARCELAS = null; onChange(null); };
   barra.appendChild(btnTodas);
   const contador = document.createElement('span');
   contador.className = 'qz-count';
   const atual = selecionada ? periodos.find((p) => `${p.mes}|${p.quinzena}` === selecionada) : null;
-  contador.textContent = atual ? atual.label : `${periodos.length} quinzenas lançadas`;
+  contador.textContent = atual ? atual.label : (FILTRO_PERIODO_PARCELAS ? 'intervalo escolhido abaixo' : `${periodos.length} quinzenas lançadas`);
   barra.appendChild(contador);
   wrap.appendChild(barra);
+
+  // Intervalo "de … até": os três primeiros meses, janeiro a setembro, etc.
+  if (periodos.length > 1) {
+    const faixa = document.createElement('div');
+    faixa.className = 'qz-faixa';
+    const mk = (rot, valor) => {
+      const l = document.createElement('label');
+      l.textContent = rot;
+      const s = document.createElement('select');
+      s.className = 'cell-input filter-control';
+      for (const p of periodos) { const o = document.createElement('option'); o.value = `${p.mes}|${p.quinzena}`; o.textContent = p.label; s.appendChild(o); }
+      s.value = valor;
+      l.appendChild(s);
+      faixa.appendChild(l);
+      return s;
+    };
+    const per = FILTRO_PERIODO_PARCELAS || {};
+    const primeiro = `${periodos[0].mes}|${periodos[0].quinzena}`;
+    const ultimo = `${periodos[periodos.length - 1].mes}|${periodos[periodos.length - 1].quinzena}`;
+    const sDe = mk('De', per.de || primeiro);
+    const sAte = mk('Até', per.ate || ultimo);
+    const aplicar = () => {
+      let de = sDe.value, ate = sAte.value;
+      if (de > ate) { const t = de; de = ate; ate = t; }
+      FILTRO_PERIODO_PARCELAS = (de === primeiro && ate === ultimo) ? null : { de, ate };
+      onChange(null);
+    };
+    sDe.addEventListener('change', aplicar);
+    sAte.addEventListener('change', aplicar);
+    const bAplicar = document.createElement('button');
+    bAplicar.type = 'button'; bAplicar.className = 'btn small filter-control'; bAplicar.textContent = 'Aplicar intervalo';
+    bAplicar.onclick = aplicar;
+    faixa.appendChild(bAplicar);
+    if (FILTRO_PERIODO_PARCELAS) {
+      const bLimpar = document.createElement('button');
+      bLimpar.type = 'button'; bLimpar.className = 'btn small filter-control'; bLimpar.textContent = 'Limpar intervalo';
+      bLimpar.onclick = () => { FILTRO_PERIODO_PARCELAS = null; onChange(null); };
+      faixa.appendChild(bLimpar);
+      const rot = document.createElement('span');
+      rot.className = 'qz-count';
+      const pDe = periodos.find((p) => `${p.mes}|${p.quinzena}` === FILTRO_PERIODO_PARCELAS.de);
+      const pAte = periodos.find((p) => `${p.mes}|${p.quinzena}` === FILTRO_PERIODO_PARCELAS.ate);
+      rot.textContent = `Mostrando de ${pDe ? pDe.label : '?'} até ${pAte ? pAte.label : '?'}`;
+      faixa.appendChild(rot);
+    }
+    wrap.appendChild(faixa);
+  }
 
   const grupos = document.createElement('div');
   grupos.className = 'qz-groups';
@@ -2251,7 +2303,7 @@ function renderQuinzenaChips({ selecionada, onChange }) {
       chip.className = `qz-chip filter-control${selecionada === key ? ' on' : ''}`;
       chip.textContent = `${p.quinzena}ª`;
       chip.title = p.label;
-      chip.onclick = () => onChange(selecionada === key ? null : key);
+      chip.onclick = () => { FILTRO_PERIODO_PARCELAS = null; onChange(selecionada === key ? null : key); };
       grupo.appendChild(chip);
     }
     grupos.appendChild(grupo);
@@ -7026,13 +7078,15 @@ function buildContasPagarPanel(expandido = false) {
     onChange: (v) => { FILTRO_QUINZENA_PARCELAS = v; renderDashboard(); atualizarPainelExpandido(); },
   }));
   const parcelasFiltradas = VIEW.parcelas.filter((p) => {
-    if (!FILTRO_QUINZENA_PARCELAS) return true;
-    return `${p.mesReferencia}|${p.quinzena || 1}` === FILTRO_QUINZENA_PARCELAS;
+    const chave = `${p.mesReferencia}|${p.quinzena || 1}`;
+    if (FILTRO_QUINZENA_PARCELAS) return chave === FILTRO_QUINZENA_PARCELAS;
+    if (FILTRO_PERIODO_PARCELAS) return !!p.mesReferencia && chave >= FILTRO_PERIODO_PARCELAS.de && chave <= FILTRO_PERIODO_PARCELAS.ate;
+    return true;
   });
 
   const tbody = panel.querySelector('tbody');
   if (!parcelasFiltradas.length) {
-    tbody.innerHTML = `<tr><td colspan="14" class="muted">${FILTRO_QUINZENA_PARCELAS ? 'Nenhuma parcela nessa quinzena.' : 'Nenhuma parcela lançada ainda.'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" class="muted">${FILTRO_QUINZENA_PARCELAS || FILTRO_PERIODO_PARCELAS ? 'Nenhuma parcela nesse período.' : 'Nenhuma parcela lançada ainda.'}</td></tr>`;
   }
   for (const p of parcelasFiltradas) {
     const tr = document.createElement('tr');
@@ -7099,7 +7153,7 @@ function buildContasPagarPanel(expandido = false) {
   const ehPlan = (p) => p.status !== 'REALIZADO';
   const temPlanejadas = parcelasFiltradas.some(ehPlan);
   const temRealizadas = parcelasFiltradas.some(ehReal);
-  const escopo = FILTRO_QUINZENA_PARCELAS ? 'DA QUINZENA' : '';
+  const escopo = FILTRO_QUINZENA_PARCELAS ? 'DA QUINZENA' : (FILTRO_PERIODO_PARCELAS ? 'DO INTERVALO' : '');
   const linhaTotal = (rotulo, filtro, cls, dica) => `<tr class="${cls}" title="${esc(dica)}">
     <td>${esc(rotulo)}</td>
     <td></td>
