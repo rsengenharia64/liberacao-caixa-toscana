@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260908T164027">
+<meta name="app-version" content="20260908T165208">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1956,7 +1956,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260908T164027';
+const APP_VERSAO = '20260908T165208';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -5643,7 +5643,7 @@ function movimentoDinheiro({ incluirPlanejado = false } = {}) {
     if (p.overrides && p.overrides.custoTotal) {
       const soma = round2((Number(p.totalEmpreiteiroPix) || 0) + (Number(p.totalAdmPix) || 0) + (Number(p.gastoCartao) || 0) + (Number(p.parcelaEvolucaoCaixa) || 0));
       const dif = round2((Number(p.custoTotal) || 0) - soma);
-      if (dif) push({ data: d, tipo: 'saida', grupo: 'ajuste', natureza: nat, descricao: `${p.label || 'Quinzena'} · custo total digitado à mão (${dif > 0 ? 'acréscimo' : 'redução'})`, valor: dif, status: p.status, origem: 'Contas a Pagar › custo total sobrescrito' });
+      if (dif) push({ data: d, tipo: 'saida', grupo: 'ajuste', natureza: nat, descricao: `${p.label || 'Quinzena'} · custo total digitado à mão (${dif > 0 ? 'acréscimo' : 'redução'})`, valor: dif, status: p.status, origem: 'Contas a Pagar › custo total sobrescrito', quinzenaId: p.id });
     }
   }
 
@@ -5702,14 +5702,15 @@ function conciliacaoRecursoProprio(m) {
   const porQ = new Map();
   for (const x of saidas) {
     if (x.grupo === 'lote' || x.grupo === 'preliminares') continue;
-    const k = `${x.data || ''}|${String(x.descricao).split(' · ')[0]}`;
+    const k = x.quinzenaId || `${x.data || ''}|${String(x.descricao).split(' · ')[0]}`;
     if (!porQ.has(k)) porQ.set(k, { data: x.data, label: String(x.descricao).split(' · ')[0], pix: 0, adm: 0, cartao: 0, evolucao: 0, ajuste: 0, total: 0 });
     const q = porQ.get(k);
+    if (x.grupo !== 'cartao' && x.data && (!q.data || x.data < q.data || q.soData === 'cartao')) { q.data = x.data; q.soData = null; } else if (!q.data) { q.data = x.data; q.soData = x.grupo; }
     q[x.grupo] = round2((q[x.grupo] || 0) + x.valor);
     q.total = round2(q.total + x.valor);
   }
   for (const q of porQ.values()) {
-    const a = pega((x) => x.data && q.data && x.data === q.data) || pega((x) => q.label && x.descricao && x.descricao.toLowerCase().includes(q.label.toLowerCase().split(' ')[0]));
+    const a = pega((x) => x.data && q.data && x.data === q.data) || pega((x) => q.label && x.descricao && x.descricao.toLowerCase().startsWith(q.label.toLowerCase().split(' ')[0]));
     const partes = [];
     if (q.pix) partes.push(`PIX empreiteiro ${money(q.pix)}`);
     if (q.adm) partes.push(`ADM ${money(q.adm)}`);
