@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260909T230217">
+<meta name="app-version" content="20260909T231602">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -635,7 +635,7 @@
   .mov-conta-tot { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
   .mov-conta-tot strong { color: var(--ink); font-size: 14px; }
   .mov-h3 { font-size: 15px; margin: 0 0 6px; }
-  .mov-grupos { max-width: 720px; }
+  .mov-grupos { max-width: 900px; }
   .mov-prov { color: var(--warn); font-weight: 600; }
   .mov-modo-mes { margin-top: 6px; padding: 6px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: 12.5px; }
   .mov-fech { margin: 6px 0 12px; padding: 10px 12px; border: 1px dashed var(--border); border-radius: var(--radius); background: var(--surface-2); }
@@ -661,6 +661,7 @@
   .analise-tabela td:last-child { display: flex; flex-direction: column; gap: 4px; min-width: 150px; }
   .analise-tabela.analise-verif td { color: var(--muted); }
   .analise-fonte { font-size: 10.5px; margin-top: 3px; }
+  .analise-memorial td { white-space: normal; vertical-align: top; font-size: 12px; }
   @media print { #tab-analise .no-print { display: none !important; } }
   .mov-raiz .extrato-table tfoot td { position: static; }
   .mov-resumo { margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--border); }
@@ -1578,6 +1579,7 @@ function recompute(state) {
   // Entradas sem status (dados antigos) são tratadas como REALIZADO.
   const liberacoesCaixaRealizadas = liberacoesCaixa.filter((l) => l.status !== 'PLANEJADO');
   const caixaLiberadaAcumulada = round2(custoLoteExecutado + sum(liberacoesCaixaRealizadas.filter((l) => !ehEntradaFora(l)), (l) => l.valor));
+  const estornosLoteFluxo = round2(sum(liberacoesCaixaRealizadas.filter((l) => ehEntradaFora(l) && l.tipo === 'estorno'), (l) => l.valor));
 
   const parcelas = (state.parcelas || []).map(computeParcela).sort((a, b) => {
     const da = a.vencimento || a.vencPlanejado || '';
@@ -1651,21 +1653,50 @@ function recompute(state) {
     const q = monthKey === 'sem-data' ? null : (quinzena || 1);
     const key = monthKey === 'sem-data' ? 'sem-data' : `${monthKey}-Q${q}`;
     if (!monthsMap.has(key)) {
-      monthsMap.set(key, { mes: monthKey, quinzena: q, label: monthQuinzenaLabel(monthKey, q), entradaRecursoProprio: 0, entradaCaixaPCI: 0, entradaAjusteManual: 0, entradaRealizada: 0, entradaPlanejada: 0, saidaEmpreiteiroPix: 0, saidaAdmPix: 0, saidaCartao: 0, saidaAjusteManual: 0, saidaRealizada: 0, saidaPlanejada: 0 });
+      monthsMap.set(key, { mes: monthKey, quinzena: q, label: monthQuinzenaLabel(monthKey, q), entradaRecursoProprio: 0, entradaCaixaPCI: 0, entradaAjusteManual: 0, entradaRealizada: 0, entradaPlanejada: 0, saidaEmpreiteiroPix: 0, saidaAdmPix: 0, saidaCartao: 0, saidaEvolucao: 0, saidaOutras: 0, saidaAjusteManual: 0, saidaRealizada: 0, saidaPlanejada: 0 });
     }
     return monthsMap.get(key);
   }
   const startMonthKey = monthKeyFromDateStr(state.meta?.dataInicio) || monthKeyFromDateStr(parcelas[0]?.vencimento) || 'sem-data';
+  /* Memorial do fluxo por período (mesma base do extrato por conta e de Contas a Pagar):
+     ENTRADAS: aportes de recurso próprio registrados (Parâmetros, pela data; sem data = 1º período),
+       liberações CAIXA (crédito) + parte financiada do lote (na data do pagamento do lote),
+       devoluções/depósitos fora do crédito e ajustes lançados nesta aba.
+     SAÍDAS: quinzenas de Contas a Pagar pelo CUSTO TOTAL (PIX + ADM + cartão + evolução + diferença de
+       apuração), lote (parte financiada e entrada do proprietário), serviços preliminares pagos direto
+       (pela data do item; sem data = 1º período) e ajustes. Planejado × realizado pelo status. */
+  const bucketData = (d, semDataBucket) => { const mk = monthKeyFromDateStr(d); return mk ? bucket(mk, quinzenaFromDateStr(d) || 1) : semDataBucket; };
   const bInicial = bucket(startMonthKey, 1);
-  bInicial.entradaRecursoProprio += recursoProprioPlanejado;
-  bInicial.entradaRealizada += recursoProprioPlanejado;
+  for (const c of consumosRecursoProprio) {
+    const v = Number(c.valor) || 0; if (!v) continue;
+    const b = bucketData(c.data, bInicial);
+    b.entradaRecursoProprio += v; b.entradaRealizada += v;
+  }
+  const dataLoteCaixa = parametros.dataLoteCaixa || null;
+  if (custoLoteExecutado > 0) {
+    const b = bucketData(dataLoteCaixa, bInicial);
+    b.entradaCaixaPCI += custoLoteExecutado; b.entradaRealizada += custoLoteExecutado;
+    b.saidaOutras += custoLoteExecutado; b.saidaRealizada += custoLoteExecutado;
+  }
   for (const lib of liberacoesCaixa) {
     const mk = monthKeyFromDateStr(lib.data) || 'sem-data';
     const b = bucket(mk, quinzenaFromDateStr(lib.data) || 1);
     const valorLib = Number(lib.valor) || 0;
-    b.entradaCaixaPCI += valorLib;
+    if (ehEntradaFora(lib)) b.entradaAjusteManual += valorLib; else b.entradaCaixaPCI += valorLib;
     if (lib.status === 'PLANEJADO') b.entradaPlanejada += valorLib;
     else b.entradaRealizada += valorLib;
+  }
+  // Lote: entrada e multa pagas pelo proprietário (bruto, antes da devolução), sem data = 1º período
+  const entradaLoteProprietario = round2(Math.max(0, (Number(parametros.custoTerreno) || 0) + (Number(parametros.multaLote) || 0) + estornosLoteFluxo - custoLoteExecutado));
+  if (entradaLoteProprietario > 0) { bInicial.saidaOutras += entradaLoteProprietario; bInicial.saidaRealizada += entradaLoteProprietario; }
+  // Serviços preliminares pagos direto pelo proprietário
+  for (const cat of categoriasBase) {
+    if (!cat.pagoDiretoProprietario) continue;
+    for (const it of (cat.itens || [])) {
+      const v = Number(it.valorRealizado) || 0; if (v <= 0) continue;
+      const b = bucketData(it.dataPagamento ? String(it.dataPagamento).slice(0, 10) : null, bInicial);
+      b.saidaOutras += v; b.saidaRealizada += v;
+    }
   }
   for (const p of parcelas) {
     const dataOcorrencia = p.vencimento || p.vencPlanejado || null;
@@ -1674,11 +1705,16 @@ function recompute(state) {
     const empreiteiro = Number(p.totalEmpreiteiroPix) || 0;
     const adm = Number(p.totalAdmPix) || 0;
     const cartao = Number(p.gastoCartao) || 0;
+    const evolucao = Number(p.parcelaEvolucaoCaixa) || 0;
+    const custoTotal = Number(p.custoTotal) || 0;
+    const dif = round2(custoTotal - (empreiteiro + adm + cartao + evolucao));
     b.saidaEmpreiteiroPix += empreiteiro;
     b.saidaAdmPix += adm;
     b.saidaCartao += cartao;
-    if (p.status === 'REALIZADO') b.saidaRealizada += empreiteiro + adm + cartao;
-    else b.saidaPlanejada += empreiteiro + adm + cartao;
+    b.saidaEvolucao += evolucao;
+    b.saidaOutras += dif;
+    if (p.status === 'REALIZADO') b.saidaRealizada += custoTotal;
+    else b.saidaPlanejada += custoTotal;
   }
   for (const ajuste of state.fluxoCaixaAjustes || []) {
     const mk = monthKeyFromDateStr(ajuste.data) || 'sem-data';
@@ -1694,8 +1730,8 @@ function recompute(state) {
     return c !== 0 ? c : (a.quinzena || 0) - (b.quinzena || 0);
   }).map((b) => {
     const entradaTotal = round2(b.entradaRecursoProprio + b.entradaCaixaPCI + b.entradaAjusteManual);
-    const saidaTotal = round2(b.saidaEmpreiteiroPix + b.saidaAdmPix + b.saidaCartao + b.saidaAjusteManual);
-    return { ...b, entradaRecursoProprio: round2(b.entradaRecursoProprio), entradaCaixaPCI: round2(b.entradaCaixaPCI), entradaAjusteManual: round2(b.entradaAjusteManual), entradaRealizada: round2(b.entradaRealizada), entradaPlanejada: round2(b.entradaPlanejada), entradaTotal, saidaEmpreiteiroPix: round2(b.saidaEmpreiteiroPix), saidaAdmPix: round2(b.saidaAdmPix), saidaCartao: round2(b.saidaCartao), saidaAjusteManual: round2(b.saidaAjusteManual), saidaRealizada: round2(b.saidaRealizada), saidaPlanejada: round2(b.saidaPlanejada), saidaTotal };
+    const saidaTotal = round2(b.saidaEmpreiteiroPix + b.saidaAdmPix + b.saidaCartao + b.saidaEvolucao + b.saidaOutras + b.saidaAjusteManual);
+    return { ...b, saidaEvolucao: round2(b.saidaEvolucao), saidaOutras: round2(b.saidaOutras), entradaRecursoProprio: round2(b.entradaRecursoProprio), entradaCaixaPCI: round2(b.entradaCaixaPCI), entradaAjusteManual: round2(b.entradaAjusteManual), entradaRealizada: round2(b.entradaRealizada), entradaPlanejada: round2(b.entradaPlanejada), entradaTotal, saidaEmpreiteiroPix: round2(b.saidaEmpreiteiroPix), saidaAdmPix: round2(b.saidaAdmPix), saidaCartao: round2(b.saidaCartao), saidaAjusteManual: round2(b.saidaAjusteManual), saidaRealizada: round2(b.saidaRealizada), saidaPlanejada: round2(b.saidaPlanejada), saidaTotal };
   });
   let acumulado = 0;
   for (const m of fluxoCaixaMensal) { acumulado = round2(acumulado + m.entradaTotal - m.saidaTotal); m.saldoAcumuladoMes = acumulado; }
@@ -1980,7 +2016,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260909T230217';
+const APP_VERSAO = '20260909T231602';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -4406,6 +4442,7 @@ function addParcela(patch) {
 function updateParcela(id, patch) {
   const p = STATE.parcelas.find((x) => x.id === id); if (!p) return false;
   const fields = ['label', 'totalEmpreiteiroPix', 'totalAdmPix', 'gastoCartao', 'parcelaEvolucaoCaixa', 'dataGeracaoCusto', 'vencimento', 'vencPlanejado', 'status', 'obs'];
+  const admAntes = Number(p.totalAdmPix) || 0;
   for (const f of fields) if (patch[f] !== undefined) p[f] = patch[f];
   if (patch.totalATransferir !== undefined) { p.totalATransferir = Number(patch.totalATransferir); p.overrides.totalATransferir = true; }
   if (patch.custoTotal !== undefined) { p.custoTotal = Number(patch.custoTotal); p.overrides.custoTotal = true; }
@@ -4417,6 +4454,10 @@ function updateParcela(id, patch) {
   if (patch.totalEmpreiteiroPix !== undefined && /Avanço da quinzena/.test(p.obs || '')) { p.overrides.totalEmpreiteiroPix = true; }
   if (patch.totalEmpreiteiroPix !== undefined || patch.gastoCartao !== undefined || patch.parcelaEvolucaoCaixa !== undefined) {
     recalcularCustoParcela(p);
+  } else if (patch.totalAdmPix !== undefined) {
+    // ADM digitada: o custo total e o total a transferir acompanham a mudança
+    // (antes ficavam parados e a quinzena nascia com custo total ≠ soma das colunas).
+    recalcularCustoParcela(p, round2((Number(p.totalAdmPix) || 0) - admAntes));
   }
   let ajusteOcorreu = false;
   if (p.status === 'REALIZADO' && (patch.status !== undefined || patch.totalEmpreiteiroPix !== undefined)) {
@@ -5823,6 +5864,17 @@ function abrirMovimentoDinheiro() {
 
       // Uma seção por conta contábil
       const filtrando = filtroGrupo !== 'todos';
+      // Consolidado das duas contas (grupo × conta)
+      if (contaAberta === 'todas' && !filtrando && !modoMes) {
+        const g = document.createElement('div');
+        g.className = 'table-scroll';
+        g.style.margin = '4px 0 14px';
+        g.innerHTML = `<h3 class="mov-h3">Total da obra: gasto por grupo nas duas contas</h3><div class="muted" style="margin-bottom:6px">Este é o total. Abaixo, cada conta contábil mostra só a sua parte: o que foi pago antes da primeira liberação CAIXA saiu do recurso próprio e o restante da conta da obra.</div><table class="extrato-table rel-table"><thead><tr><th>Grupo de gasto</th><th class="num">CAIXA / banco</th><th class="num">Recurso próprio</th><th class="num">Total realizado</th>${incluirPlanejado ? '<th class="num">Planejado</th>' : ''}</tr></thead>
+          <tbody>${m.porGrupo.map((x) => `<tr><td>${esc(x.nome)}</td><td class="num">${money(x.caixa)}</td><td class="num">${money(x.proprio)}</td><td class="num"><strong>${money(x.total)}</strong></td>${incluirPlanejado ? `<td class="num muted">${money(x.planejado)}</td>` : ''}</tr>`).join('')}</tbody>
+          <tfoot>${m.estornos ? `<tr class="rel-sub"><td>Saídas brutas</td><td class="num">${money(m.saidasCaixa)}</td><td class="num">${money(m.saidasProprio)}</td><td class="num">${money(m.saidas)}</td>${incluirPlanejado ? '<td></td>' : ''}</tr><tr class="rel-sub"><td>(−) Estorno do terrenista devolvido à conta da obra</td><td class="num mov-entrada">−${money(m.estornos)}</td><td class="num"></td><td class="num mov-entrada">−${money(m.estornos)}</td>${incluirPlanejado ? '<td></td>' : ''}</tr>` : ''}<tr class="extrato-residuo"><td><strong>Custo total realizado</strong></td><td class="num"><strong>${money(round2(m.saidasCaixa - m.estornos))}</strong></td><td class="num"><strong>${money(m.saidasProprio)}</strong></td><td class="num"><strong>${money(m.custoTotal)}</strong></td>${incluirPlanejado ? `<td class="num muted">${money(round2(m.porGrupo.reduce((a, x) => a + x.planejado, 0)))}</td>` : ''}</tr></tfoot></table></div>`;
+        raiz.appendChild(g);
+      }
+
       const nomeFiltro = filtrando ? (opcoesFiltroGrupoMov().find(([v]) => v === filtroGrupo) || ['', filtroGrupo])[1].trim().replace(/^› /, '') : '';
       for (const c of m.contas) {
         if (contaAberta !== 'todas' && contaAberta !== c.id) continue;
@@ -5899,6 +5951,15 @@ function abrirMovimentoDinheiro() {
         }
         const ordem = (k) => { const base = k.split(':')[0]; const i = MOV_GRUPOS.findIndex(([id]) => id === base); return (i < 0 ? 99 : i) * 10 + (k.includes(':') ? MOV_SUBGRUPOS_PRELIM.findIndex(([id]) => id === k.split(':')[1]) + 1 : 0); };
         chaves.sort((a, b) => ordem(a) - ordem(b));
+        // Total da obra (as duas contas) por grupo, com os mesmos filtros de grupo e período
+        const totObra = new Map();
+        for (const x of m.linhas.filter((y) => y.tipo === 'saida' && linhaMovNoFiltro(y, filtroGrupo)).filter(noMes)) {
+          const k = x.grupo === 'preliminares' ? `preliminares:${x.subgrupo || 'outros'}` : x.grupo;
+          const e = totObra.get(k) || { realizado: 0, planejado: 0 };
+          if (x.status === 'REALIZADO') e.realizado = round2(e.realizado + x.valor); else e.planejado = round2(e.planejado + x.valor);
+          totObra.set(k, e);
+        }
+        for (const k of chaves) { const e = porChave.get(k); const t = totObra.get(k) || { realizado: 0, planejado: 0 }; e.obraRealizado = t.realizado; e.obraPlanejado = t.planejado; }
         const gruposC = chaves.map((k) => porChave.get(k)).filter((e) => e.realizado || e.planejado);
         const totalPrelim = round2(gruposC.filter((e) => e.sub).reduce((a, e) => a + e.realizado, 0));
         // Devoluções (estorno do terrenista): entram como linha negativa logo abaixo do lote, para o custo líquido ficar visível
@@ -5907,15 +5968,15 @@ function abrirMovimentoDinheiro() {
         const estPlanC = round2(estornosC.filter((x) => x.status !== 'REALIZADO').reduce((a, x) => a + x.valor, 0));
         if (estornosC.length) {
           const idx = gruposC.findIndex((e) => e.nome === 'Lote (terreno)');
-          const linhaEst = { nome: '(−) Devolução do terrenista (estorno, entrada na conta)', realizado: -estRealC, planejado: -estPlanC, sub: false, estorno: true };
+          const linhaEst = { nome: '(−) Devolução do terrenista (estorno, entrada na conta)', realizado: -estRealC, planejado: -estPlanC, sub: false, estorno: true, obraRealizado: -round2(m.linhas.filter((y) => y.tipo === 'entrada' && y.estorno && y.status === 'REALIZADO').filter(noMes).reduce((a, y) => a + y.valor, 0)) };
           gruposC.splice(idx >= 0 ? idx + 1 : gruposC.length, 0, linhaEst);
         }
         const g = document.createElement('div');
         g.className = 'table-scroll';
         const comPlan = incluirPlanejado || modoMes;
-        g.innerHTML = `<table class="extrato-table rel-table mov-grupos"><thead><tr><th>Grupo de gasto (saídas)</th><th class="num">Realizado</th>${comPlan ? `<th class="num">${modoMes ? 'Provisão' : 'Planejado'}</th>` : ''}<th class="num">${modoMes ? '% do mês' : '% da conta'}</th></tr></thead>
-          <tbody>${gruposC.map((x) => `<tr class="${x.estorno ? 'mov-linha-estorno' : ''}"><td class="${x.sub ? 'sub-item' : ''}">${esc(x.nome)}</td><td class="num ${x.estorno ? 'mov-entrada' : ''}"><strong>${money(x.realizado)}</strong></td>${comPlan ? `<td class="num ${modoMes ? 'mov-prov' : 'muted'}">${money(x.planejado)}</td>` : ''}<td class="num">${modoMes ? (fech && fech.totalMes ? pct((x.realizado + x.planejado) / fech.totalMes) : '') : (c.saidas ? pct(x.realizado / c.saidas) : '')}</td></tr>`).join('')}${totalPrelim && gruposC.filter((e) => e.sub).length > 1 ? `<tr><td><em>Serviços preliminares (soma dos subgrupos)</em></td><td class="num"><em>${money(totalPrelim)}</em></td>${comPlan ? '<td></td>' : ''}<td class="num"><em>${c.saidas ? pct(totalPrelim / c.saidas) : ''}</em></td></tr>` : ''}</tbody>
-          <tfoot><tr class="extrato-residuo"><td><strong>${filtrando || modoMes ? (modoMes ? `Saídas do período (${filtrando ? 'no filtro' : 'realizado'})` : 'Saídas no filtro') : 'Saídas da conta'}${estRealC ? ', líquidas da devolução' : ''}</strong></td><td class="num"><strong>${money(round2((filtrando || modoMes ? saiF : c.saidas) - estRealC))}</strong></td>${comPlan ? `<td class="num ${modoMes ? 'mov-prov' : 'muted'}">${money(filtrando || modoMes ? somaL((x) => x.tipo === 'saida' && x.status !== 'REALIZADO') : c.saidasPlanejadas)}</td>` : ''}<td class="num">${modoMes ? (fech && fech.totalMes ? pct((saiF + somaL((x) => x.tipo === 'saida' && x.status !== 'REALIZADO')) / fech.totalMes) : '') : (c.saidas ? pct((filtrando ? saiF : c.saidas) / c.saidas) : '')}</td></tr></tfoot></table></div>`;
+        g.innerHTML = `<table class="extrato-table rel-table mov-grupos"><thead><tr><th>Grupo de gasto (saídas)</th><th class="num">Nesta conta (realizado)</th>${comPlan ? `<th class="num">${modoMes ? 'Provisão' : 'Planejado'}</th>` : ''}<th class="num">${modoMes ? '% do mês' : '% da conta'}</th><th class="num">Total da obra (duas contas)</th></tr></thead>
+          <tbody>${gruposC.map((x) => `<tr class="${x.estorno ? 'mov-linha-estorno' : ''}"><td class="${x.sub ? 'sub-item' : ''}">${esc(x.nome)}</td><td class="num ${x.estorno ? 'mov-entrada' : ''}"><strong>${money(x.realizado)}</strong></td>${comPlan ? `<td class="num ${modoMes ? 'mov-prov' : 'muted'}">${money(x.planejado)}</td>` : ''}<td class="num">${modoMes ? (fech && fech.totalMes ? pct((x.realizado + x.planejado) / fech.totalMes) : '') : (c.saidas ? pct(x.realizado / c.saidas) : '')}</td><td class="num muted">${money(x.obraRealizado || 0)}${comPlan && x.obraPlanejado ? ` <span class="muted">(+${money(x.obraPlanejado)} plan.)</span>` : ''}</td></tr>`).join('')}${totalPrelim && gruposC.filter((e) => e.sub).length > 1 ? `<tr><td><em>Serviços preliminares (soma dos subgrupos)</em></td><td class="num"><em>${money(totalPrelim)}</em></td>${comPlan ? '<td></td>' : ''}<td class="num"><em>${c.saidas ? pct(totalPrelim / c.saidas) : ''}</em></td><td class="num muted"><em>${money(round2(gruposC.filter((e) => e.sub).reduce((a, e) => a + (e.obraRealizado || 0), 0)))}</em></td></tr>` : ''}</tbody>
+          <tfoot><tr class="extrato-residuo"><td><strong>${filtrando || modoMes ? (modoMes ? `Saídas do período (${filtrando ? 'no filtro' : 'realizado'})` : 'Saídas no filtro') : 'Saídas da conta'}${estRealC ? ', líquidas da devolução' : ''}</strong></td><td class="num"><strong>${money(round2((filtrando || modoMes ? saiF : c.saidas) - estRealC))}</strong></td>${comPlan ? `<td class="num ${modoMes ? 'mov-prov' : 'muted'}">${money(filtrando || modoMes ? somaL((x) => x.tipo === 'saida' && x.status !== 'REALIZADO') : c.saidasPlanejadas)}</td>` : ''}<td class="num">${modoMes ? (fech && fech.totalMes ? pct((saiF + somaL((x) => x.tipo === 'saida' && x.status !== 'REALIZADO')) / fech.totalMes) : '') : (c.saidas ? pct((filtrando ? saiF : c.saidas) / c.saidas) : '')}</td><td class="num"><strong>${money(round2(gruposC.reduce((a, e) => a + (e.obraRealizado || 0), 0)))}</strong></td></tr></tfoot></table></div>`;
         sec.appendChild(g);
         // movimentos da conta
         let acum = fech && !filtrando ? fech.saldoInicial : 0;
@@ -5944,16 +6005,6 @@ function abrirMovimentoDinheiro() {
         raiz.appendChild(sec);
       }
 
-      // Consolidado das duas contas (grupo × conta)
-      if (contaAberta === 'todas' && !filtrando && !modoMes) {
-        const g = document.createElement('div');
-        g.className = 'table-scroll';
-        g.style.marginTop = '14px';
-        g.innerHTML = `<h3 class="mov-h3">Consolidado: gasto por grupo nas duas contas</h3><table class="extrato-table rel-table"><thead><tr><th>Grupo de gasto</th><th class="num">CAIXA / banco</th><th class="num">Recurso próprio</th><th class="num">Total realizado</th>${incluirPlanejado ? '<th class="num">Planejado</th>' : ''}</tr></thead>
-          <tbody>${m.porGrupo.map((x) => `<tr><td>${esc(x.nome)}</td><td class="num">${money(x.caixa)}</td><td class="num">${money(x.proprio)}</td><td class="num"><strong>${money(x.total)}</strong></td>${incluirPlanejado ? `<td class="num muted">${money(x.planejado)}</td>` : ''}</tr>`).join('')}</tbody>
-          <tfoot>${m.estornos ? `<tr class="rel-sub"><td>Saídas brutas</td><td class="num">${money(m.saidasCaixa)}</td><td class="num">${money(m.saidasProprio)}</td><td class="num">${money(m.saidas)}</td>${incluirPlanejado ? '<td></td>' : ''}</tr><tr class="rel-sub"><td>(−) Estorno do terrenista devolvido à conta da obra</td><td class="num mov-entrada">−${money(m.estornos)}</td><td class="num"></td><td class="num mov-entrada">−${money(m.estornos)}</td>${incluirPlanejado ? '<td></td>' : ''}</tr>` : ''}<tr class="extrato-residuo"><td><strong>Custo total realizado</strong></td><td class="num"><strong>${money(round2(m.saidasCaixa - m.estornos))}</strong></td><td class="num"><strong>${money(m.saidasProprio)}</strong></td><td class="num"><strong>${money(m.custoTotal)}</strong></td>${incluirPlanejado ? `<td class="num muted">${money(round2(m.porGrupo.reduce((a, x) => a + x.planejado, 0)))}</td>` : ''}</tr></tfoot></table></div>`;
-        raiz.appendChild(g);
-      }
     };
     desenhar();
   }, { wide: true, fullscreen: true });
@@ -8755,16 +8806,16 @@ function renderFluxo() {
     <div class="panel-header">
       <div>
         <h2>Fluxo de caixa por mês e parcela</h2>
-        <div class="muted">Organizado como em Contas a Pagar — cada mês dividido em 1º e 2º Parcela, na ordem cronológica correta. Agregado a partir de todas as parcelas lançadas (planejadas e realizadas) mais ajustes manuais. A liberação de caixa (PCI) aparece no mês originalmente programado de cada etapa. As colunas "Entrada/Saída Realizada" e "Planejada" mostram, dentro do total de cada quinzena, quanto já foi confirmado (status Realizado nas parcelas/liberações) e quanto ainda é planejamento. Para o saldo já efetivamente realizado, veja os cards do Dashboard. Filtre por quinzena para ver só aquele período.</div>
+        <div class="muted">Mesma base do extrato por conta: entradas são os aportes registrados, o lote e as liberações CAIXA e as devoluções; saídas são as quinzenas de Contas a Pagar pelo custo total (PIX, ADM, cartão, evolução), o lote, os serviços preliminares e os ajustes. Cada mês dividido em 1º e 2º Parcela. Agregado a partir de todas as parcelas lançadas (planejadas e realizadas) mais ajustes manuais. A liberação de caixa (PCI) aparece no mês originalmente programado de cada etapa. As colunas "Entrada/Saída Realizada" e "Planejada" mostram, dentro do total de cada quinzena, quanto já foi confirmado (status Realizado nas parcelas/liberações) e quanto ainda é planejamento. Para o saldo já efetivamente realizado, veja os cards do Dashboard. Filtre por quinzena para ver só aquele período.</div>
       </div>
       <button class="btn primary" id="btnNovoAjuste">+ Ajuste manual</button>
     </div>
     <div class="quinzenaFilterSlot"></div>
     <div class="table-scroll"><table class="data"><thead><tr>
-      <th>Mês / Parcela</th><th class="num">Entrada recurso próprio</th><th class="num">Entrada caixa (PCI)</th><th class="num">Entrada ajuste</th><th class="num">Entrada total</th>
+      <th>Mês / Parcela</th><th class="num">Entrada recurso próprio (aportes)</th><th class="num">Entrada CAIXA (lote + liberações)</th><th class="num">Entrada devolução / ajuste</th><th class="num">Entrada total</th>
       <th class="num">Entrada Realizada</th><th class="num">Entrada Planejada</th>
       <th class="num">Saída empreiteiro (PIX)</th><th class="num">Saída ADM (PIX)</th>
-      <th class="num">Saída cartão</th><th class="num">Saída ajuste</th><th class="num">Saída total</th>
+      <th class="num">Saída cartão</th><th class="num">Saída evolução CAIXA</th><th class="num">Saída lote, preliminares e ajustes</th><th class="num">Saída total</th>
       <th class="num">Saída Realizada</th><th class="num">Saída Planejada</th><th class="num">Saldo acumulado</th>
     </tr></thead><tbody></tbody></table></div>
   `;
@@ -8792,7 +8843,8 @@ function renderFluxo() {
       <td class="num">${money(m.saidaEmpreiteiroPix)}</td>
       <td class="num">${money(m.saidaAdmPix)}</td>
       <td class="num">${money(m.saidaCartao)}</td>
-      <td class="num">${money(m.saidaAjusteManual)}</td>
+      <td class="num">${money(m.saidaEvolucao)}</td>
+      <td class="num">${money(round2(m.saidaOutras + m.saidaAjusteManual))}</td>
       <td class="num" style="font-weight:700">${money(m.saidaTotal)}</td>
       <td class="num" style="color:var(--good)">${money(m.saidaRealizada)}</td>
       <td class="num" style="color:var(--warn)">${money(m.saidaPlanejada)}</td>
@@ -8801,7 +8853,7 @@ function renderFluxo() {
     tbody.appendChild(tr);
   }
   if (!mesesFiltrados.length) {
-    tbody.innerHTML = `<tr><td colspan="14" class="muted">${FILTRO_QUINZENA_FLUXO ? 'Nenhum lançamento nessa quinzena.' : 'Nenhuma parcela lançada ainda.'}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="16" class="muted">${FILTRO_QUINZENA_FLUXO ? 'Nenhum lançamento nessa quinzena.' : 'Nenhuma parcela lançada ainda.'}</td></tr>`;
   }
 
   const ajustesPanel = document.createElement('div');
@@ -9886,7 +9938,7 @@ function relatoriosDisponiveis() {
     })),
     notas: () => [
       'Liberação CAIXA e aporte próprio são ENTRADAS DE CAIXA, nunca receita. Pagamento a fornecedor é saída e baixa de obrigação, não custo novo — o custo está na DRE.',
-      `Atenção à leitura: o recurso próprio entra aqui como <strong>dotação inicial</strong> no primeiro período (${money(r.recursoProprioPlanejado)} planejados), igual à aba Fluxo de Caixa. O que de fato já foi aportado é ${money(r.totalConsumoRecursoProprio)} — veja o relatório "Gastos com recursos próprios".`,
+      `Recurso próprio entra pelos aportes registrados em Parâmetros, na data de cada um (sem data = primeiro período); já aportado: ${money(r.totalConsumoRecursoProprio)} — veja o relatório "Gastos com recursos próprios".`,
       `Saldo em conta realizado, contado a partir de ${dateBR(r.marcoSaldoConta)}: ${money(r.saldoContaRealizado)}.`,
     ],
   });
@@ -12526,12 +12578,52 @@ function gerarApontamentos() {
   try { viab = auditoriaViabilidadeHtml(); } catch (e) { viab = null; }
   if (viab) for (const [i, a] of viab.alertas.entries()) if (!/ajustado manualmente|difere do teórico/.test(a)) add({ id: `viab-${i}`, grav: 'apurar', tela: 'dashboard', titulo: a.replace(/<[^>]+>/g, ''), onde: 'Demonstrativo Financeiro › Viabilidade', valores: '', fazer: 'Ver detalhe em "Conciliação da viabilidade" abaixo.', html: a });
 
+  // 8b. Memorial de cálculo: dois caminhos que deveriam dar o mesmo número
+  for (const l of memorialCalculo()) if (Math.abs(l.dif) > 0.05) add({ id: `mem-${l.nome.replace(/[^a-z0-9]+/gi, '-').slice(0, 40)}`, grav: 'ajustar', tela: l.tela, titulo: `Memorial: "${l.nome}" ${money(l.valor)} difere da checagem ${money(l.valorB)}`, onde: l.fonte, valores: `diferença ${money(l.dif)} · fórmula: ${l.formula} · checagem: ${l.checagem}`, fazer: 'Duas formas de chegar ao mesmo número deram resultados diferentes: conferir a tela de origem. Ver o quadro "Memorial de cálculo" abaixo.' });
+
   // 9. Externos (planilha do extrato)
   for (const e of ANALISE_EXTERNOS) add({ ...e, tela: e.onde.startsWith('Contas') ? 'dashboard' : (e.onde.startsWith('Detalhamento') ? 'detalhamento' : 'parametros') });
 
   return { itens: out, viab };
 }
 
+
+/* Memorial de cálculo: cada total das telas principais com a fórmula, a fonte
+   e uma checagem por caminho independente. Qualquer diferença vira apontamento. */
+function memorialCalculo() {
+  const r = VIEW.resumo || {};
+  const P = VIEW.parametros || {};
+  const m = movimentoDinheiro();
+  const real = (VIEW.parcelas || []).filter((p) => p.status === 'REALIZADO');
+  const S = (arr, f) => round2(arr.reduce((a, x) => a + (Number(f(x)) || 0), 0));
+  const linhas = [];
+  const add = (nome, valor, formula, fonte, checagem, valorB, tela) => linhas.push({ nome, valor: round2(valor), formula, fonte, checagem, valorB: round2(valorB), dif: round2(valor - valorB), tela });
+  const somaComp = S(real, (p) => (Number(p.totalEmpreiteiroPix) || 0) + (Number(p.totalAdmPix) || 0) + (Number(p.gastoCartao) || 0) + (Number(p.parcelaEvolucaoCaixa) || 0));
+  const difApur = S(real, (p) => (Number(p.custoTotal) || 0) - ((Number(p.totalEmpreiteiroPix) || 0) + (Number(p.totalAdmPix) || 0) + (Number(p.gastoCartao) || 0) + (Number(p.parcelaEvolucaoCaixa) || 0)));
+  const prelim = S((VIEW.categorias || []).filter((c) => c.pagoDiretoProprietario).flatMap((c) => c.itens || []), (it) => Math.max(0, Number(it.valorRealizado) || 0));
+  const custoLote = round2((Number(P.custoTerreno) || 0) + (Number(P.multaLote) || 0));
+  add('Custo total realizado (card do Dashboard)', m.custoTotal, 'quinzenas realizadas (custo total) + lote líquido (terreno + multa) + serviços preliminares pagos direto', 'Contas a Pagar, Parâmetros, Detalhamento FC', 'Σ custo total das quinzenas REALIZADAS + (terreno + multa) + Σ itens pagos direto', S(real, (p) => p.custoTotal) + custoLote + prelim, 'painel');
+  add('Custo das quinzenas realizadas', m.custoQuinzenas, 'Σ "Custo total" das quinzenas REALIZADAS', 'Contas a Pagar', 'Σ (PIX + ADM + cartão + evolução) + Σ diferenças de apuração', somaComp + difApur, 'dashboard');
+  add('Empreiteiro (PIX) realizado', S(real, (p) => p.totalEmpreiteiroPix), 'Σ coluna Empreiteiro (PIX) das quinzenas REALIZADAS', 'Contas a Pagar', 'resumo.totalEmpreiteiroPago (Dashboard / relatório do empreiteiro)', r.totalEmpreiteiroPago, 'dashboard');
+  add('Administração RS (PIX) realizada', S(real, (p) => p.totalAdmPix), 'Σ coluna ADM das quinzenas REALIZADAS (regra: taxa × base, salvo valor informado)', 'Contas a Pagar', 'resumo.totalAdmPago (relatório de administração)', r.totalAdmPago, 'dashboard');
+  const mesesReal = new Set(real.map((p) => monthKeyFromDateStr(p.vencimento || p.vencPlanejado || '')).filter(Boolean));
+  const fatReal = S(faturasCartao().filter((f) => mesesReal.has(f.mes)), (f) => f.total);
+  add('Cartão (materiais) realizado', S(real, (p) => p.gastoCartao), 'Σ coluna Cartão das quinzenas REALIZADAS', 'Contas a Pagar', 'Σ itens de cartão do Detalhamento FC nas faturas dos meses com quinzena realizada', fatReal, 'detalhamento');
+  add('Evolução CAIXA (juros, seguro) realizada', S(real, (p) => p.parcelaEvolucaoCaixa), 'Σ coluna Evolução CAIXA das quinzenas REALIZADAS', 'Contas a Pagar', 'resumo.totalEvolucaoCaixaPago', r.totalEvolucaoCaixaPago, 'dashboard');
+  add('Serviços preliminares pagos direto', m.preliminares, 'Σ valor realizado dos itens das categorias pagas direto pelo proprietário', 'Detalhamento FC', 'resumo.totalPagoDiretoProprietario', r.totalPagoDiretoProprietario, 'detalhamento');
+  add('Lote líquido (custo do terreno)', m.lote, 'pago bruto ao terrenista (CAIXA + proprietário) − devolução', 'Parâmetros, Liberação PCI', 'Parâmetros: custo do terreno + multa de lote', custoLote, 'parametros');
+  const libs = (VIEW.liberacoesCaixa || []).filter((l) => (l.status || 'REALIZADO') === 'REALIZADO');
+  add('Crédito CAIXA liberado', r.caixaLiberadaAcumulada, 'parte financiada do lote + Σ liberações REALIZADAS (sem devoluções/depósitos)', 'Liberação PCI, Parâmetros', 'custo do lote executado + Σ liberações tipo "Liberação CAIXA"', (Number(P.custoLoteExecutado) || 0) + S(libs.filter((l) => !ehEntradaFora(l)), (l) => l.valor), 'pci');
+  add('Entradas da conta da obra', m.entradasCaixa, 'crédito CAIXA liberado + devoluções e depósitos na conta', 'Liberação PCI', 'crédito liberado + Σ entradas fora do crédito', (Number(r.caixaLiberadaAcumulada) || 0) + S(libs.filter((l) => ehEntradaFora(l)), (l) => l.valor), 'pci');
+  add('Saldo em conta (Dashboard)', r.saldoContaRealizado, `liberações e devoluções desde ${dateBR(r.marcoSaldoConta)} − custo total das quinzenas REALIZADAS desde essa data`, 'Dashboard › Saldo em conta', 'saldo da conta da obra no extrato por conta (entradas − saídas)', m.contas[0].saldo, 'painel');
+  const fx = VIEW.fluxoCaixaMensal || [];
+  add('Fluxo de Caixa: saídas realizadas', S(fx, (x) => x.saidaRealizada), 'Σ saídas realizadas por período (quinzenas pelo custo total, lote, preliminares, ajustes)', 'Fluxo de Caixa', 'saídas brutas do extrato por conta', m.saidas, 'fluxo');
+  add('Fluxo de Caixa: entradas realizadas', S(fx, (x) => x.entradaRealizada), 'Σ entradas realizadas por período (aportes, lote, liberações, devoluções, ajustes)', 'Fluxo de Caixa', 'entradas do extrato por conta', m.entradas, 'fluxo');
+  add('Aportes de recurso próprio registrados', m.entradasProprio, 'Σ consumos de recurso próprio', 'Parâmetros', 'resumo.totalConsumoRecursoProprio', r.totalConsumoRecursoProprio, 'parametros');
+  const rubTerreno = (r.viabilidade && r.viabilidade.rubricas || []).find((x) => x.id === 'terreno');
+  if (rubTerreno) add('Viabilidade: terreno realizado', rubTerreno.realizado, 'parte financiada + entrada do proprietário − devolução', 'Demonstrativo Financeiro › Viabilidade', 'lote líquido do extrato por conta', m.lote, 'dashboard');
+  return linhas;
+}
 function renderAnalise() {
   const root = document.getElementById('tab-analise');
   if (!root) return;
@@ -12595,6 +12687,18 @@ function renderAnaliseEm(root, opts = {}) {
     d.innerHTML = `<summary>Verificados (${fechados.length})</summary>`;
     d.appendChild(tabela(fechados, 'Apontamentos verificados', true));
     root.appendChild(d);
+  }
+
+  // Memorial de cálculo dos totais
+  {
+    const mem = memorialCalculo();
+    const p = document.createElement('div');
+    p.className = 'panel';
+    p.innerHTML = `<h3 class="mov-h3">Memorial de cálculo dos totais</h3>
+      <div class="muted" style="margin-bottom:6px">Cada número das telas principais com a fórmula, a tela de origem e uma checagem por outro caminho. "Confere" = os dois caminhos dão o mesmo valor.</div>
+      <div class="table-scroll"><table class="extrato-table rel-table analise-memorial"><thead><tr><th>Número</th><th class="num">Valor</th><th>Fórmula</th><th>Fonte (tela)</th><th>Checagem por outro caminho</th><th class="num">Valor da checagem</th><th>Situação</th></tr></thead>
+      <tbody>${mem.map((l) => `<tr><td><strong>${esc(l.nome)}</strong></td><td class="num">${money(l.valor)}</td><td class="muted">${esc(l.formula)}</td><td class="muted">${esc(l.fonte)}</td><td class="muted">${esc(l.checagem)}</td><td class="num">${money(l.valorB)}</td><td>${Math.abs(l.dif) > 0.05 ? `<span class="badge red">difere ${money(l.dif)}</span>` : '<span class="badge green">confere</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+    root.appendChild(p);
   }
 
   // Conferência de recurso próprio × aportes (tabela completa)
