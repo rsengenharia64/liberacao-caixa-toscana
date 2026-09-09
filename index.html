@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260909T231602">
+<meta name="app-version" content="20260909T233420">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -632,6 +632,8 @@
   .mov-conta-proprio { border-left: 4px solid var(--accent, #b8860b); }
   .mov-conta-cab { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
   .mov-conta-cab h3 { display: inline; margin: 0 0 0 6px; font-size: 16px; }
+  details.mov-conta > summary.mov-conta-sum { cursor: pointer; padding: 4px 0; font-size: 13px; }
+  details.mov-conta:not([open]) > .mov-conta-cab, details.mov-conta:not([open]) > .muted { display: none; }
   .mov-conta-tot { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
   .mov-conta-tot strong { color: var(--ink); font-size: 14px; }
   .mov-h3 { font-size: 15px; margin: 0 0 6px; }
@@ -649,6 +651,22 @@
   .mov-fech-aviso { margin-top: 8px; padding: 7px 10px; border-radius: 8px; background: var(--danger-soft); color: var(--danger); font-size: 12.5px; }
   .mov-fech-ok { margin-top: 8px; padding: 7px 10px; border-radius: 8px; background: var(--good-soft); color: var(--good); font-size: 12.5px; }
   .mov-saldo-ini td { background: var(--surface-2); }
+  .comp-barra { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 4px 0 10px; }
+  .comp-barra label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+  .comp-barra input { min-width: 260px; border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 5px 8px; }
+  .comp-arvore { display: flex; flex-direction: column; gap: 6px; }
+  .comp-pasta { border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px 8px; background: var(--surface); }
+  .comp-pasta .comp-pasta { margin: 6px 0 0 14px; background: var(--surface-2); }
+  .comp-pasta > summary { cursor: pointer; padding: 5px 0; font-weight: 700; font-size: 13px; }
+  .comp-pasta-acoes { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 6px; }
+  .comp-tabela td { vertical-align: middle; }
+  .comp-prev { width: 64px; } .comp-prev img { width: 56px; height: 56px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
+  .comp-pdf { display: inline-block; width: 56px; height: 56px; line-height: 56px; text-align: center; border-radius: 6px; background: var(--danger-soft); color: var(--danger); font-weight: 800; text-decoration: none; }
+  .comp-sub { font-size: 11px; }
+  .comp-obs input { min-width: 240px; border: 1px solid var(--border); background: var(--surface); border-radius: 6px; }
+  .comp-acoes { display: flex; gap: 6px; }
+  .comp-oculto td { opacity: .5; }
+  .comp-vazia { font-size: 12px; padding: 4px 0; }
   .mov-linha-estorno td { color: var(--good); font-style: italic; }
   .mov-mes-sel { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
   .mov-mes-sel select { max-width: 190px; }
@@ -1087,6 +1105,7 @@
     <button class="tab-btn" data-tab="controle-caixa">Controle Mensal CAIXA</button>
     <button class="tab-btn" data-tab="relatorios">Relatórios</button>
     <button class="tab-btn" data-tab="mercado">Estudo de Mercado</button>
+    <button class="tab-btn" data-tab="comprovantes">Comprovantes</button>
     <button class="tab-btn" data-tab="analise">Análise</button>
     <button class="tab-btn" data-tab="rastreabilidade">Rastreabilidade</button>
     <button class="tab-btn" data-tab="parametros">Parâmetros</button>
@@ -1105,6 +1124,7 @@
   <section id="tab-controle-caixa" class="tab-panel" hidden=""></section>
   <section id="tab-relatorios" class="tab-panel" hidden=""></section>
   <section id="tab-mercado" class="tab-panel" hidden=""></section>
+  <section id="tab-comprovantes" class="tab-panel" hidden=""></section>
   <section id="tab-analise" class="tab-panel" hidden=""></section>
   <section id="tab-rastreabilidade" class="tab-panel" hidden=""></section>
   <section id="tab-parametros" class="tab-panel" hidden=""></section>
@@ -2016,7 +2036,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260909T231602';
+const APP_VERSAO = '20260909T233420';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -4965,6 +4985,7 @@ function renderAll() {
   renderControleCaixa();
   renderRelatorios();
   renderEstudoMercado();
+  renderComprovantes();
   renderAnalise();
   renderRastreabilidade();
   renderParametros();
@@ -5903,10 +5924,11 @@ function abrirMovimentoDinheiro() {
           fech.saldoFinal = round2(saldoInicial + fech.entradasReal + fech.entradasPrev - fech.saidasReal - fech.provisao);
           fech.saldoSemPrevisto = round2(saldoInicial + fech.entradasReal - fech.saidasReal - fech.provisao);
         }
-        const sec = document.createElement('section');
+        const sec = document.createElement(contaAberta === 'todas' && !modoMes && !filtrando ? 'details' : 'section');
         sec.className = `mov-conta mov-conta-${c.id}`;
+        if (sec.tagName === 'DETAILS') sec.open = false;
         const badge = c.id === 'proprio' ? 'accent' : 'green';
-        sec.innerHTML = `<div class="mov-conta-cab">
+        sec.innerHTML = `${sec.tagName === 'DETAILS' ? `<summary class="mov-conta-sum"><span class="badge ${badge}">${c.id === 'proprio' ? 'recurso próprio' : 'CAIXA / banco'}</span> <strong>${esc(c.nome)}</strong> <span class="muted">entradas ${money(c.entradas)} · saídas ${money(c.saidas)} · saldo ${money(c.saldo)} · clique para abrir o detalhe desta conta</span></summary>` : ''}<div class="mov-conta-cab">
             <div><span class="badge ${badge}">${c.id === 'proprio' ? 'recurso próprio' : 'CAIXA / banco'}</span> <h3>${esc(c.nome)}</h3>${filtrando ? ` <span class="badge gray">filtro: ${esc(nomeFiltro)}</span>` : ''}</div>
             <div class="mov-conta-tot">${fech
               ? `<span>Saldo inicial <strong>${money(fech.saldoInicial)}</strong></span><span>Realizado no mês <strong class="mov-saida">${money(fech.saidasReal)}</strong></span><span>Provisão <strong class="mov-prov">${money(fech.provisao)}</strong></span><span>Total do mês <strong>${money(fech.totalMes)}</strong></span><span>Saldo projetado <strong class="${fech.saldoFinal < -0.005 ? 'mov-saida' : 'mov-entrada'}">${money(fech.saldoFinal)}</strong></span>`
@@ -5939,6 +5961,13 @@ function abrirMovimentoDinheiro() {
             </div>`;
           sec.appendChild(fb);
         }
+        const aviso = document.createElement('div');
+        aviso.className = 'muted';
+        aviso.style.margin = '2px 0 6px';
+        aviso.textContent = c.id === 'proprio'
+          ? 'Só o que saiu do bolso do proprietário: lote (entrada), serviços preliminares e as quinzenas pagas antes da primeira liberação CAIXA. A coluna da direita mostra o total da obra (as duas contas).'
+          : 'Só o que passou pela conta da obra: lote financiado, quinzenas pagas com dinheiro da CAIXA e a devolução do terrenista. A coluna da direita mostra o total da obra (as duas contas).';
+        sec.appendChild(aviso);
         // resumo por grupo (e subgrupo dos preliminares) da conta
         const chaves = [];
         const porChave = new Map();
@@ -12465,6 +12494,212 @@ function painelNuvemHtml() {
 }
 
 
+
+/* ==========================================================================
+   COMPROVANTES DE PAGAMENTO (rastreabilidade das despesas)
+   --------------------------------------------------------------------------
+   Arquivos (PDF, imagens) ficam no Supabase Storage, bucket "comprovantes",
+   organizados em pastas (categoria › mês › parcela ou o que a equipe criar).
+   Leitura é pública (link direto); envio pelo app com sessão de lançamento.
+   Não há exclusão pelo app: um comprovante errado é marcado como "oculto"
+   (fica no histórico). Pastas vazias e observações ficam em STATE.comprovantes
+   e vão para a nuvem como qualquer outro dado.
+   ========================================================================== */
+const COMP_BUCKET = 'comprovantes';
+const COMP_PASTAS_INICIAIS = ["ARQUITETONICO", "ART DE EXECUCAO", "EMPREITEIRO", "EMPREITEIRO/AGOSTO", "EMPREITEIRO/AGOSTO/07", "EMPREITEIRO/AGOSTO/08", "EMPREITEIRO/JULHO", "EMPREITEIRO/JULHO/05", "EMPREITEIRO/JULHO/06", "EMPREITEIRO/JUNHO", "EMPREITEIRO/JUNHO/03", "EMPREITEIRO/JUNHO/04", "EMPREITEIRO/MAIO", "EMPREITEIRO/MAIO/01", "EMPREITEIRO/MAIO/02", "EMPREITEIRO/SETEMBRO", "EMPREITEIRO/SETEMBRO/09", "EMPREITEIRO/SETEMBRO/10", "ESTRUTURAL ELETRICO HIDRAULICO", "ITBI", "PLANIALTIMETRICO", "SONDAGEM", "TAXA DE APROVACAO PROJETO CONDOMINIO", "TAXA DE FINANCIAMENTO", "TAXAS DA PREFEITURA", "TAXAS DE CARTORIO"];
+const COMP = { cache: null, carregando: false, erro: null, pastaAtiva: '', filtro: '' };
+function compEstado() {
+  STATE.comprovantes = STATE.comprovantes || {};
+  STATE.comprovantes.pastas = STATE.comprovantes.pastas || COMP_PASTAS_INICIAIS.slice();
+  STATE.comprovantes.meta = STATE.comprovantes.meta || {};
+  return STATE.comprovantes;
+}
+function compUrlPublica(caminho) { return `${NUVEM_CFG.url}/storage/v1/object/public/${COMP_BUCKET}/${caminho.split('/').map(encodeURIComponent).join('/')}`; }
+function compHeaders(extra = {}) { return { apikey: NUVEM_CFG.chave, Authorization: `Bearer ${NUVEM_CFG.chave}`, ...extra }; }
+function compNomeSeguro(nome) {
+  return String(nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9 ._()\-]/g, '_').replace(/\s+/g, ' ').trim();
+}
+function compDisponivel() { return typeof nuvemHabilitada === 'function' && nuvemHabilitada(); }
+async function compListarPasta(prefixo) {
+  const r = await fetch(`${NUVEM_CFG.url}/storage/v1/object/list/${COMP_BUCKET}`, { method: 'POST', headers: compHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ prefix: prefixo, limit: 1000, offset: 0, sortBy: { column: 'name', order: 'asc' } }) });
+  if (!r.ok) throw new Error(`lista ${r.status}`);
+  return r.json();
+}
+// Varre todas as pastas (poucos arquivos: cabe fazer de uma vez) e guarda em cache.
+async function compCarregar(forcar = false) {
+  if (!compDisponivel()) { COMP.erro = 'sem-rede'; return null; }
+  if (COMP.cache && !forcar) return COMP.cache;
+  if (COMP.promessa) return COMP.promessa;
+  COMP.carregando = true; COMP.erro = null;
+  COMP.promessa = (async () => { try {
+    const arquivos = []; const pastas = new Set(compEstado().pastas);
+    let nivel = [''];
+    while (nivel.length) {
+      const resultados = await Promise.all(nivel.map((pre) => compListarPasta(pre).then((itens) => [pre, itens])));
+      const proximo = [];
+      for (const [pre, itens] of resultados) for (const it of itens) {
+        const caminho = pre ? `${pre}/${it.name}` : it.name;
+        if (!it.id) { pastas.add(caminho); proximo.push(caminho); continue; }
+        if (it.name === '.pasta') continue;
+        arquivos.push({ caminho, nome: it.name, pasta: pre, tamanho: Number(it.metadata && it.metadata.size) || 0, tipo: (it.metadata && it.metadata.mimetype) || '', em: it.created_at || it.updated_at || null });
+      }
+      nivel = proximo;
+    }
+    for (const p of [...pastas]) { const partes = p.split('/'); for (let i = 1; i < partes.length; i++) pastas.add(partes.slice(0, i).join('/')); }
+    COMP.cache = { arquivos, pastas: [...pastas].sort(), em: new Date().toISOString() };
+  } catch (e) { COMP.erro = e.message || String(e); }
+  COMP.carregando = false; COMP.promessa = null;
+  return COMP.cache; })();
+  return COMP.promessa;
+}
+async function compEnviar(pasta, files) {
+  const enviados = []; const erros = [];
+  for (const f of files) {
+    const nome = compNomeSeguro(f.name) || `arquivo-${Date.now()}`;
+    const caminho = pasta ? `${pasta}/${nome}` : nome;
+    try {
+      const r = await fetch(`${NUVEM_CFG.url}/storage/v1/object/${COMP_BUCKET}/${caminho.split('/').map(encodeURIComponent).join('/')}`, { method: 'POST', headers: compHeaders({ 'Content-Type': f.type || 'application/octet-stream', 'x-upsert': 'false' }), body: f });
+      if (r.status === 409 || r.status === 400) { const r2 = await fetch(`${NUVEM_CFG.url}/storage/v1/object/${COMP_BUCKET}/${caminho.split('/').map(encodeURIComponent).join('/')}`, { method: 'POST', headers: compHeaders({ 'Content-Type': f.type || 'application/octet-stream', 'x-upsert': 'true' }), body: f }); if (!r2.ok) throw new Error(`${r2.status}`); }
+      else if (!r.ok) throw new Error(`${r.status}`);
+      enviados.push(caminho);
+      compEstado().meta[caminho] = { ...(compEstado().meta[caminho] || {}), enviadoPor: (SESSAO && SESSAO.usuario) || '', enviadoEm: new Date().toISOString().slice(0, 16) };
+    } catch (e) { erros.push(`${nome}: ${e.message || e}`); }
+  }
+  if (enviados.length) { afterMutation(); await compCarregar(true); }
+  return { enviados, erros };
+}
+function compCriarPasta(caminho) {
+  const limpo = caminho.split('/').map((p) => compNomeSeguro(p)).filter(Boolean).join('/');
+  if (!limpo) return null;
+  const est = compEstado();
+  if (!est.pastas.includes(limpo)) { est.pastas.push(limpo); est.pastas.sort(); afterMutation(); }
+  if (COMP.cache && !COMP.cache.pastas.includes(limpo)) { COMP.cache.pastas.push(limpo); COMP.cache.pastas.sort(); }
+  return limpo;
+}
+function compMeta(caminho) { return compEstado().meta[caminho] || {}; }
+function compAtualizarMeta(caminho, patch) { const est = compEstado(); est.meta[caminho] = { ...(est.meta[caminho] || {}), ...patch }; afterMutation(); }
+function compTamanho(n) { return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : (n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`); }
+function compEhImagem(a) { return /^image\//.test(a.tipo) || /\.(jpe?g|png|webp|gif)$/i.test(a.nome); }
+
+function renderComprovantes() {
+  const root = document.getElementById('tab-comprovantes');
+  if (!root) return;
+  root.innerHTML = '';
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  panel.innerHTML = `
+    <div class="panel-header">
+      <div>
+        <h2>Comprovantes de pagamento</h2>
+        <div class="muted">Arquivo de comprovantes (PIX, boletos, notas, faturas) organizado em pastas por categoria, mês e parcela, para rastrear cada despesa lançada no app. Qualquer pessoa vê e abre; quem está com a sessão de lançamento envia novos arquivos e cria pastas. Os arquivos ficam na nuvem da obra, fora deste HTML.</div>
+      </div>
+      <div class="painel-acoes">
+        <button type="button" class="btn small filter-control" data-acao="atualizar">Atualizar lista</button>
+        <button type="button" class="btn small" data-acao="nova-pasta">+ Nova pasta</button>
+        <button type="button" class="btn small" data-acao="novo-mes">+ Mês / ano</button>
+      </div>
+    </div>
+    <div class="comp-corpo"></div>`;
+  root.appendChild(panel);
+  const corpo = panel.querySelector('.comp-corpo');
+  if (!compDisponivel()) {
+    corpo.innerHTML = '<div class="muted">Os comprovantes ficam na nuvem da obra e só aparecem no site publicado (endereço http/https). Nesta cópia não há acesso à rede.</div>';
+    return;
+  }
+  const desenhar = () => {
+    const cache = COMP.cache;
+    corpo.innerHTML = '';
+    if (!cache) { corpo.innerHTML = COMP.erro ? `<div class="muted">Não consegui ler a lista de comprovantes (${esc(COMP.erro)}). Tente "Atualizar lista".</div>` : '<div class="muted">Carregando lista de comprovantes…</div>'; return; }
+    const meta = compEstado().meta;
+    const filtro = COMP.filtro.trim().toLowerCase();
+    const barra = document.createElement('div');
+    barra.className = 'comp-barra';
+    barra.innerHTML = `<label>Buscar <input type="search" class="cell-input filter-control" placeholder="nome do arquivo, pasta ou observação" value="${esc(COMP.filtro)}"></label>
+      <span class="muted">${cache.arquivos.length} arquivo(s) em ${cache.pastas.length} pasta(s) · lista lida ${dateBR(cache.em.slice(0, 10))} ${cache.em.slice(11, 16)}</span>`;
+    barra.querySelector('input').addEventListener('input', (e) => { COMP.filtro = e.target.value; desenhar(); });
+    corpo.appendChild(barra);
+
+    const visiveis = cache.arquivos.filter((a) => !(meta[a.caminho] || {}).oculto || filtro === 'ocultos');
+    const bate = (a) => !filtro || filtro === 'ocultos' || a.caminho.toLowerCase().includes(filtro) || ((meta[a.caminho] || {}).obs || '').toLowerCase().includes(filtro);
+    const arvore = { filhos: new Map(), arquivos: [] };
+    const no = (caminho) => { let cur = arvore; if (!caminho) return cur; for (const p of caminho.split('/')) { if (!cur.filhos.has(p)) cur.filhos.set(p, { filhos: new Map(), arquivos: [], caminho: cur.caminho ? `${cur.caminho}/${p}` : p }); cur = cur.filhos.get(p); } return cur; };
+    for (const p of cache.pastas) no(p);
+    for (const a of visiveis) if (bate(a)) no(a.pasta).arquivos.push(a);
+    const conta = (n) => n.arquivos.length + [...n.filhos.values()].reduce((s, f) => s + conta(f), 0);
+
+    const linhaArquivo = (a) => {
+      const m = meta[a.caminho] || {};
+      const tr = document.createElement('tr');
+      tr.className = m.oculto ? 'comp-oculto' : '';
+      tr.innerHTML = `<td class="comp-prev">${compEhImagem(a) ? `<a href="${compUrlPublica(a.caminho)}" target="_blank" rel="noopener"><img loading="lazy" src="${compUrlPublica(a.caminho)}" alt=""></a>` : `<a class="comp-pdf" href="${compUrlPublica(a.caminho)}" target="_blank" rel="noopener">PDF</a>`}</td>
+        <td><a href="${compUrlPublica(a.caminho)}" target="_blank" rel="noopener">${esc(a.nome)}</a><div class="muted comp-sub">${a.em ? dateBR(a.em.slice(0, 10)) : ''} · ${compTamanho(a.tamanho)}${m.enviadoPor ? ` · enviado por ${esc(m.enviadoPor)}` : ''}${m.oculto ? ' · oculto' : ''}</div></td>
+        <td class="comp-obs"></td>
+        <td class="no-print comp-acoes"></td>`;
+      const obs = document.createElement('input'); obs.type = 'text'; obs.className = 'cell-input wide'; obs.placeholder = 'observação (ex.: PIX Fama, quinzena Junho/2ª, R$ 44.000)'; obs.value = m.obs || '';
+      obs.addEventListener('change', () => compAtualizarMeta(a.caminho, { obs: obs.value }));
+      tr.querySelector('.comp-obs').appendChild(obs);
+      const ac = tr.querySelector('.comp-acoes');
+      const bAbrir = document.createElement('a'); bAbrir.className = 'btn small filter-control'; bAbrir.textContent = 'Abrir'; bAbrir.href = compUrlPublica(a.caminho); bAbrir.target = '_blank'; bAbrir.rel = 'noopener'; ac.appendChild(bAbrir);
+      const bOc = document.createElement('button'); bOc.type = 'button'; bOc.className = 'btn small'; bOc.textContent = m.oculto ? 'Reexibir' : 'Ocultar'; bOc.title = 'Comprovante errado ou duplicado: some da lista, mas fica guardado (não há exclusão).';
+      bOc.onclick = () => compAtualizarMeta(a.caminho, { oculto: !m.oculto }); ac.appendChild(bOc);
+      return tr;
+    };
+    const desenharNo = (n, nivel) => {
+      const d = document.createElement('details');
+      d.className = 'comp-pasta';
+      d.open = nivel === 0 || !!filtro || COMP.pastaAtiva === n.caminho || COMP.pastaAtiva.startsWith(n.caminho + '/');
+      const total = conta(n);
+      d.innerHTML = `<summary><span class="comp-pasta-nome">${esc(n.caminho.split('/').pop())}</span> <span class="badge gray">${total} arquivo(s)</span></summary>`;
+      const acoes = document.createElement('div');
+      acoes.className = 'comp-pasta-acoes no-print';
+      const inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true; inp.accept = '.pdf,image/*'; inp.style.display = 'none';
+      const bEnv = document.createElement('button'); bEnv.type = 'button'; bEnv.className = 'btn small primary'; bEnv.textContent = 'Enviar comprovantes para esta pasta';
+      bEnv.onclick = () => inp.click();
+      inp.addEventListener('change', async () => {
+        if (!inp.files.length) return;
+        bEnv.disabled = true; bEnv.textContent = `Enviando ${inp.files.length} arquivo(s)…`;
+        const r = await compEnviar(n.caminho, [...inp.files]);
+        COMP.pastaAtiva = n.caminho;
+        toast(r.erros.length ? `Enviados ${r.enviados.length}; falhou: ${r.erros.join('; ')}` : `${r.enviados.length} comprovante(s) enviado(s) para ${n.caminho}.`, !!r.erros.length);
+        desenhar();
+      });
+      const bSub = document.createElement('button'); bSub.type = 'button'; bSub.className = 'btn small'; bSub.textContent = '+ Subpasta';
+      bSub.onclick = async () => { const nome = await promptDialog(`Nome da subpasta dentro de "${n.caminho}"`, ''); if (!nome) return; const c = compCriarPasta(`${n.caminho}/${nome}`); if (c) { COMP.pastaAtiva = c; desenhar(); } };
+      acoes.append(bEnv, inp, bSub);
+      d.appendChild(acoes);
+      if (n.arquivos.length) {
+        const t = document.createElement('table'); t.className = 'extrato-table comp-tabela';
+        t.innerHTML = '<tbody></tbody>';
+        for (const a of n.arquivos.sort((x, y) => (y.em || '').localeCompare(x.em || ''))) t.querySelector('tbody').appendChild(linhaArquivo(a));
+        d.appendChild(t);
+      }
+      const sub = [...n.filhos.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { numeric: true }));
+      for (const [, f] of sub) if (!filtro || conta(f) || COMP.pastaAtiva.startsWith(f.caminho)) d.appendChild(desenharNo(f, nivel + 1));
+      if (!n.arquivos.length && !sub.length) { const v = document.createElement('div'); v.className = 'muted comp-vazia'; v.textContent = 'Pasta vazia.'; d.appendChild(v); }
+      return d;
+    };
+    const raiz = document.createElement('div');
+    raiz.className = 'comp-arvore';
+    const topo = [...arvore.filhos.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { numeric: true }));
+    for (const [, f] of topo) if (!filtro || conta(f)) raiz.appendChild(desenharNo(f, 0));
+    if (arvore.arquivos.length) { const t = document.createElement('table'); t.className = 'extrato-table comp-tabela'; t.innerHTML = '<tbody></tbody>'; for (const a of arvore.arquivos) t.querySelector('tbody').appendChild(linhaArquivo(a)); raiz.appendChild(t); }
+    corpo.appendChild(raiz);
+    if (READONLY) travarSomenteLeitura(raiz);
+  };
+  panel.querySelector('button[data-acao="atualizar"]').onclick = async () => { COMP.cache = null; desenhar(); await compCarregar(true); renderComprovantes(); };
+  panel.querySelector('button[data-acao="nova-pasta"]').onclick = async () => { const nome = await promptDialog('Nome da nova pasta (use / para subpasta, ex.: EMPREITEIRO/OUTUBRO/11)', ''); if (!nome) return; const c = compCriarPasta(nome); if (c) { COMP.pastaAtiva = c; desenhar(); toast(`Pasta "${c}" criada.`); } };
+  panel.querySelector('button[data-acao="novo-mes"]').onclick = async () => {
+    const hoje = new Date();
+    const ano = await promptDialog('Ano', String(hoje.getFullYear())); if (!ano) return;
+    const mes = await promptDialog('Mês (nome, ex.: OUTUBRO)', MESES_TEXTO[hoje.getMonth()]); if (!mes) return;
+    const cat = await promptDialog('Dentro de qual pasta? (ex.: EMPREITEIRO; deixe vazio para criar na raiz)', 'EMPREITEIRO');
+    const c = compCriarPasta(`${cat ? cat + '/' : ''}${mes.toUpperCase()} ${ano}`);
+    if (c) { COMP.pastaAtiva = c; desenhar(); toast(`Pasta "${c}" criada.`); }
+  };
+  desenhar();
+  if (!COMP.cache) compCarregar().then(() => { if (document.getElementById('tab-comprovantes') === root) renderComprovantes(); });
+}
+
 /* ==========================================================================
    ANÁLISE: conferência e apontamentos
    --------------------------------------------------------------------------
@@ -12593,7 +12828,7 @@ function gerarApontamentos() {
 function memorialCalculo() {
   const r = VIEW.resumo || {};
   const P = VIEW.parametros || {};
-  const m = movimentoDinheiro();
+  const m = movimentoDinheiro({ incluirPlanejado: true });
   const real = (VIEW.parcelas || []).filter((p) => p.status === 'REALIZADO');
   const S = (arr, f) => round2(arr.reduce((a, x) => a + (Number(f(x)) || 0), 0));
   const linhas = [];
@@ -12618,6 +12853,11 @@ function memorialCalculo() {
   add('Saldo em conta (Dashboard)', r.saldoContaRealizado, `liberações e devoluções desde ${dateBR(r.marcoSaldoConta)} − custo total das quinzenas REALIZADAS desde essa data`, 'Dashboard › Saldo em conta', 'saldo da conta da obra no extrato por conta (entradas − saídas)', m.contas[0].saldo, 'painel');
   const fx = VIEW.fluxoCaixaMensal || [];
   add('Fluxo de Caixa: saídas realizadas', S(fx, (x) => x.saidaRealizada), 'Σ saídas realizadas por período (quinzenas pelo custo total, lote, preliminares, ajustes)', 'Fluxo de Caixa', 'saídas brutas do extrato por conta', m.saidas, 'fluxo');
+  const grupoMov = (id) => S(m.linhas.filter((x) => x.tipo === 'saida' && x.grupo === id), (x) => x.valor);
+  add('Fluxo de Caixa: coluna Empreiteiro (PIX), todas as quinzenas', S(fx, (x) => x.saidaEmpreiteiroPix), 'Σ coluna Saída empreiteiro (realizado + planejado)', 'Fluxo de Caixa', 'Σ grupo Empreiteiro (PIX) do extrato por conta, realizado + planejado', grupoMov('pix'), 'fluxo');
+  add('Fluxo de Caixa: coluna ADM, todas as quinzenas', S(fx, (x) => x.saidaAdmPix), 'Σ coluna Saída ADM (realizado + planejado)', 'Fluxo de Caixa', 'Σ grupo Administração do extrato por conta', grupoMov('adm'), 'fluxo');
+  add('Fluxo de Caixa: coluna Cartão, todas as quinzenas', S(fx, (x) => x.saidaCartao), 'Σ coluna Saída cartão (realizado + planejado)', 'Fluxo de Caixa', 'Σ grupo Cartão do extrato por conta', grupoMov('cartao'), 'fluxo');
+  add('Fluxo de Caixa: coluna Evolução CAIXA, todas as quinzenas', S(fx, (x) => x.saidaEvolucao), 'Σ coluna Saída evolução (realizado + planejado)', 'Fluxo de Caixa', 'Σ grupo Evolução CAIXA do extrato por conta', grupoMov('evolucao'), 'fluxo');
   add('Fluxo de Caixa: entradas realizadas', S(fx, (x) => x.entradaRealizada), 'Σ entradas realizadas por período (aportes, lote, liberações, devoluções, ajustes)', 'Fluxo de Caixa', 'entradas do extrato por conta', m.entradas, 'fluxo');
   add('Aportes de recurso próprio registrados', m.entradasProprio, 'Σ consumos de recurso próprio', 'Parâmetros', 'resumo.totalConsumoRecursoProprio', r.totalConsumoRecursoProprio, 'parametros');
   const rubTerreno = (r.viabilidade && r.viabilidade.rubricas || []).find((x) => x.id === 'terreno');
@@ -12698,6 +12938,28 @@ function renderAnaliseEm(root, opts = {}) {
       <div class="muted" style="margin-bottom:6px">Cada número das telas principais com a fórmula, a tela de origem e uma checagem por outro caminho. "Confere" = os dois caminhos dão o mesmo valor.</div>
       <div class="table-scroll"><table class="extrato-table rel-table analise-memorial"><thead><tr><th>Número</th><th class="num">Valor</th><th>Fórmula</th><th>Fonte (tela)</th><th>Checagem por outro caminho</th><th class="num">Valor da checagem</th><th>Situação</th></tr></thead>
       <tbody>${mem.map((l) => `<tr><td><strong>${esc(l.nome)}</strong></td><td class="num">${money(l.valor)}</td><td class="muted">${esc(l.formula)}</td><td class="muted">${esc(l.fonte)}</td><td class="muted">${esc(l.checagem)}</td><td class="num">${money(l.valorB)}</td><td>${Math.abs(l.dif) > 0.05 ? `<span class="badge red">difere ${money(l.dif)}</span>` : '<span class="badge green">confere</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+    root.appendChild(p);
+  }
+
+  // Fontes de dados por tela
+  {
+    const p = document.createElement('div');
+    p.className = 'panel';
+    const FONTES = [
+      ['Contas a Pagar (Dashboard Executivo)', 'Tela de lançamento das quinzenas: Empreiteiro (PIX), ADM, Cartão, Evolução CAIXA, custo total, vencimento, status.', 'É a origem de todo custo de construção. ADM = taxa × base (Parâmetros), salvo valor digitado; Cartão = soma dos itens da fatura do mês no Detalhamento FC quando a sincronização está ligada; PIX das quinzenas planejadas = avanços × verba − cartão.'],
+      ['Detalhamento FC', 'Itens por categoria: valor orçado, realizado, data, forma de pagamento (PIX, cartão), mês da fatura.', 'Alimenta a coluna Cartão das quinzenas (itens de cartão) e os serviços preliminares pagos direto (categorias marcadas "pago direto pelo proprietário").'],
+      ['Liberação PCI', 'Liberações reais da CAIXA (data, valor, status, tipo de entrada) e etapas do PCI.', 'Alimenta crédito liberado, saldo em conta, curva S, PLS a receber. Entradas do tipo estorno/depósito só entram no saldo em conta.'],
+      ['Parâmetros', 'Custo do terreno, multa, custo do lote executado (parte CAIXA), data do pagamento do lote, consumos de recurso próprio (aportes), taxa de ADM, VGV e premissas da viabilidade.', 'Alimenta lote, aportes, viabilidade e a base da ADM.'],
+      ['Lançar Avanços', 'Avanço físico por categoria e a conta da quinzena (medido → cartão → PIX líquido → ADM).', 'Gera as quinzenas planejadas e o PIX derivado dos avanços.'],
+      ['Extrato por conta (card Custo total realizado)', 'Lê Contas a Pagar, Detalhamento FC, Liberação PCI e Parâmetros; não tem dado próprio.', 'Custo total = quinzenas realizadas + lote líquido + preliminares. Conta contábil pela data: antes da 1ª liberação CAIXA = recurso próprio.'],
+      ['Fluxo de Caixa', 'Lê as mesmas fontes do extrato por conta, agrupadas por mês e parcela; ajustes lançados na própria aba.', 'Entradas = aportes + lote + liberações + devoluções; saídas = quinzenas pelo custo total + lote + preliminares.'],
+      ['Demonstrativo Financeiro › Viabilidade', 'Lê Parâmetros (orçado) e as fontes acima (realizado).', 'Cada rubrica = max(orçado, realizado + comprometido). Crédito CAIXA e recurso próprio são fontes, nunca custo.'],
+      ['Relatórios', 'Só leitura das fontes acima, com filtro de período.', 'Nenhum relatório tem dado próprio: se um número estiver errado, corrija na tela de origem.'],
+      ['Controle Mensal CAIXA', 'Área do cliente: fatura, evolução e recebido por mês, digitados.', 'Não alimenta os cálculos; serve para o cliente conferir com o banco.'],
+    ];
+    p.innerHTML = `<h3 class="mov-h3">Fontes de dados: de onde vem cada número</h3>
+      <div class="table-scroll"><table class="extrato-table rel-table analise-memorial"><thead><tr><th>Tela</th><th>O que é digitado nela</th><th>O que ela alimenta / regra</th></tr></thead>
+      <tbody>${FONTES.map(([t, a, b]) => `<tr><td><strong>${esc(t)}</strong></td><td>${esc(a)}</td><td class="muted">${esc(b)}</td></tr>`).join('')}</tbody></table></div>`;
     root.appendChild(p);
   }
 
@@ -13009,6 +13271,38 @@ function confirmDialog(message, { title = 'Confirmar', okLabel = 'Remover', dang
         backdrop.addEventListener('click', (e) => { if (e.target === backdrop) finish(false, close); });
       }
       okBtn.focus();
+    });
+  });
+}
+
+// Pergunta um texto curto (nome de pasta, ano, mês). Resolve null se cancelar.
+function promptDialog(message, valorInicial = '', { title = 'Informe', okLabel = 'OK' } = {}) {
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = (v, close) => { if (!done) { done = true; resolve(v); } close(); };
+    openModal(title, (body, close) => {
+      body.innerHTML = `<p style="margin:0 0 10px; white-space:pre-wrap;">${esc(message)}</p>`;
+      const input = document.createElement('input');
+      input.type = 'text'; input.className = 'cell-input wide'; input.value = valorInicial || '';
+      input.style.cssText = 'width:100%; border:1px solid var(--border); background:var(--surface); border-radius:7px; padding:8px 10px; margin-bottom:14px;';
+      body.appendChild(input);
+      const actions = document.createElement('div');
+      actions.style.cssText = 'display:flex; gap:8px; justify-content:flex-end;';
+      const cancelBtn = document.createElement('button');
+      cancelBtn.type = 'button'; cancelBtn.className = 'btn'; cancelBtn.textContent = 'Cancelar';
+      cancelBtn.onclick = () => finish(null, close);
+      const okBtn = document.createElement('button');
+      okBtn.type = 'button'; okBtn.className = 'btn primary'; okBtn.textContent = okLabel;
+      okBtn.onclick = () => finish(input.value.trim(), close);
+      input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); finish(input.value.trim(), close); } });
+      actions.appendChild(cancelBtn); actions.appendChild(okBtn);
+      body.appendChild(actions);
+      const backdrop = body.closest('.modal-backdrop');
+      if (backdrop) {
+        backdrop.querySelector('.modal-close').onclick = () => finish(null, close);
+        backdrop.addEventListener('click', (e) => { if (e.target === backdrop) finish(null, close); });
+      }
+      input.focus(); input.select();
     });
   });
 }
