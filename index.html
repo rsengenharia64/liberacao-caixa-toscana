@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260910T000255">
+<meta name="app-version" content="20260910T012716">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -667,6 +667,17 @@
   .comp-acoes { display: flex; gap: 6px; }
   .comp-oculto td { opacity: .5; }
   .comp-vazia { font-size: 12px; padding: 4px 0; }
+  .mov-resumo-linha { margin-top: 6px; font-size: 13px; line-height: 1.5; }
+  .comp-chips { display: flex; gap: 6px; flex-wrap: wrap; margin: 2px 0 10px; }
+  .comp-chip { white-space: nowrap; }
+  .comp-cards { margin-bottom: 10px; }
+  .comp-cross { margin-bottom: 12px; }
+  .comp-cross caption { text-align: left; font-size: 11px; padding: 0 0 6px; }
+  .comp-valor input { max-width: 130px; text-align: right; }
+  .comp-cross td.st-ok { color: var(--good); font-weight: 600; }
+  .comp-cross td.st-neg { color: var(--danger); font-weight: 600; }
+  .comp-cross td.st-aviso { color: var(--warn); }
+  .comp-cross tr.linha-destaque td { background: var(--surface-2); }
   .mov-linha-estorno td { color: var(--good); font-style: italic; }
   .mov-mes-sel { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
   .mov-mes-sel select { max-width: 190px; }
@@ -2039,7 +2050,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260910T000255';
+const APP_VERSAO = '20260910T012716';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -5826,20 +5837,10 @@ function abrirMovimentoDinheiro() {
       cab.innerHTML = `<div><div class="rel-obra">${esc(VIEW.meta?.obra || 'Obra')}</div>
         <div class="muted">Gasto total da obra separado por conta contábil: o que passou pela conta da obra (CAIXA / banco) e o que saiu do bolso do proprietário (recurso próprio), cada conta com suas entradas e saídas. Lê as mesmas telas que alimentam o app (Liberação PCI, Contas a Pagar, Detalhamento FC, Parâmetros) e recalcula a cada lançamento.</div>
         ${modoMes ? `<div class="mov-modo-mes">Conta do período: <strong>${esc(nomePeriodo())}</strong>. Mostra o que já aconteceu no período e a <strong>provisão</strong> (despesas planejadas: empreiteiro, administração, fatura do cartão, evolução CAIXA), para a conta fechar.</div>` : ''}
-        <div class="muted rel-periodo">Posição em ${dateBR(new Date().toISOString().slice(0, 10))}${m.dataPrimeiraLib ? ` · primeira liberação CAIXA em ${dateBR(m.dataPrimeiraLib)}: o que foi pago antes é recurso próprio, o que veio depois saiu da conta da obra` : ''}</div></div>`;
+        <div class="muted rel-periodo">Posição em ${dateBR(new Date().toISOString().slice(0, 10))}${m.dataPrimeiraLib ? ` · primeira liberação CAIXA em ${dateBR(m.dataPrimeiraLib)}: o que foi pago antes é recurso próprio, o que veio depois saiu da conta da obra` : ''}</div>
+        <div class="mov-resumo-linha">Custo total realizado <strong>${money(m.custoTotal)}</strong> = conta da obra (CAIXA / banco) ${money(round2(m.saidasCaixa - m.estornos))} + recurso próprio ${money(m.saidasProprio)} · entradas ${money(m.entradas)} (CAIXA ${money(m.entradasCaixa)} · aportes ${money(m.entradasProprio)}) · saldo em conta ${money(m.saldoConta)}</div></div>`;
       raiz.appendChild(cab);
 
-      // Consolidado
-      const cards = document.createElement('div');
-      cards.className = 'viab-destaques';
-      const card = (rot, val, nota, cls = '') => mkCard(esc(rot), money(val), nota, cls);
-      cards.innerHTML = [
-        card('Custo total realizado (gasto total)', m.custoTotal, `quinzenas ${money(m.custoQuinzenas)} + lote ${money(m.lote)}${m.estornos ? ` (bruto ${money(m.loteBruto)} − estorno ${money(m.estornos)})` : ''} + preliminares ${money(m.preliminares)}`, 'accent'),
-        card('Conta da obra (CAIXA / banco): saídas', m.saidasCaixa, `entradas ${money(m.entradasCaixa)} · saldo ${money(m.saldoConta)} (mesmo número do Dashboard)`),
-        card('Recurso próprio: saídas', m.saidasProprio, `aportes registrados ${money(m.entradasProprio)}${Math.abs(m.proprioNaoRegistrado) > 0.01 ? ` · conferência dos aportes na aba Análise` : ' · bate com os aportes'}`),
-        card('Entradas totais', m.entradas, `CAIXA ${money(m.entradasCaixa)} · recurso próprio ${money(m.entradasProprio)}`),
-      ].join('');
-      raiz.appendChild(cards);
 
       const acoes = document.createElement('div');
       acoes.className = 'rel-acoes no-print';
@@ -5886,21 +5887,61 @@ function abrirMovimentoDinheiro() {
       });
       raiz.appendChild(acoes);
 
-      // Uma seção por conta contábil
       const filtrando = filtroGrupo !== 'todos';
-      // Consolidado das duas contas (grupo × conta)
-      if (contaAberta === 'todas' && !filtrando && !modoMes) {
+      /* Visão consolidada (as duas contas, sem recorte de período): uma tabela
+         por grupo e uma lista cronológica única, cada linha com a tela de
+         origem. Antes essa mesma informação aparecia três vezes (cards, tabela
+         do total e uma seção por conta), o que só fazia o número parecer
+         diferente. O detalhe por conta continua a um clique, no filtro de conta. */
+      const consolidado = contaAberta === 'todas' && !modoMes;
+      if (consolidado) {
+        const linhasF = m.linhas.filter((x) => linhaMovNoFiltro(x, filtroGrupo)).filter(noMes);
+        const chavesC = []; const porChaveC = new Map();
+        for (const x of linhasF) {
+          if (x.tipo !== 'saida') continue;
+          const k = x.grupo === 'preliminares' ? `preliminares:${x.subgrupo || 'outros'}` : x.grupo;
+          if (!porChaveC.has(k)) { porChaveC.set(k, { nome: nomeGrupoMov(x), caixa: 0, proprio: 0, planejado: 0, sub: x.grupo === 'preliminares', origens: new Set() }); chavesC.push(k); }
+          const e = porChaveC.get(k);
+          e.origens.add(String(x.origem || '').split(' · ')[0].split(' › ').slice(0, 2).join(' › ').replace(/ \(.*$/, ''));
+          if (x.status !== 'REALIZADO') e.planejado = round2(e.planejado + x.valor);
+          else if (x.natureza === 'proprio') e.proprio = round2(e.proprio + x.valor);
+          else e.caixa = round2(e.caixa + x.valor);
+        }
+        const ordemC = (k) => { const base = k.split(':')[0]; const i = MOV_GRUPOS.findIndex(([id]) => id === base); return (i < 0 ? 99 : i) * 10 + (k.includes(':') ? MOV_SUBGRUPOS_PRELIM.findIndex(([id]) => id === k.split(':')[1]) + 1 : 0); };
+        chavesC.sort((a, b) => ordemC(a) - ordemC(b));
+        const gruposO = chavesC.map((k) => porChaveC.get(k)).filter((e) => e.caixa || e.proprio || e.planejado).map((e) => ({ ...e, total: round2(e.caixa + e.proprio) }));
+        const estRealO = round2(linhasF.filter((x) => x.tipo === 'entrada' && x.estorno && x.status === 'REALIZADO').reduce((a, x) => a + x.valor, 0));
+        const saiCaixaO = round2(gruposO.reduce((a, e) => a + e.caixa, 0));
+        const saiProprioO = round2(gruposO.reduce((a, e) => a + e.proprio, 0));
+        const planO = round2(gruposO.reduce((a, e) => a + e.planejado, 0));
+        const custoO = round2(saiCaixaO + saiProprioO - estRealO);
         const g = document.createElement('div');
         g.className = 'table-scroll';
         g.style.margin = '4px 0 14px';
-        g.innerHTML = `<h3 class="mov-h3">Total da obra: gasto por grupo nas duas contas</h3><div class="muted" style="margin-bottom:6px">Este é o total. Abaixo, cada conta contábil mostra só a sua parte: o que foi pago antes da primeira liberação CAIXA saiu do recurso próprio e o restante da conta da obra.</div><table class="extrato-table rel-table"><thead><tr><th>Grupo de gasto</th><th class="num">CAIXA / banco</th><th class="num">Recurso próprio</th><th class="num">Total realizado</th>${incluirPlanejado ? '<th class="num">Planejado</th>' : ''}</tr></thead>
-          <tbody>${m.porGrupo.map((x) => `<tr><td>${esc(x.nome)}</td><td class="num">${money(x.caixa)}</td><td class="num">${money(x.proprio)}</td><td class="num"><strong>${money(x.total)}</strong></td>${incluirPlanejado ? `<td class="num muted">${money(x.planejado)}</td>` : ''}</tr>`).join('')}</tbody>
-          <tfoot>${m.estornos ? `<tr class="rel-sub"><td>Saídas brutas</td><td class="num">${money(m.saidasCaixa)}</td><td class="num">${money(m.saidasProprio)}</td><td class="num">${money(m.saidas)}</td>${incluirPlanejado ? '<td></td>' : ''}</tr><tr class="rel-sub"><td>(−) Estorno do terrenista devolvido à conta da obra</td><td class="num mov-entrada">−${money(m.estornos)}</td><td class="num"></td><td class="num mov-entrada">−${money(m.estornos)}</td>${incluirPlanejado ? '<td></td>' : ''}</tr>` : ''}<tr class="extrato-residuo"><td><strong>Custo total realizado</strong></td><td class="num"><strong>${money(round2(m.saidasCaixa - m.estornos))}</strong></td><td class="num"><strong>${money(m.saidasProprio)}</strong></td><td class="num"><strong>${money(m.custoTotal)}</strong></td>${incluirPlanejado ? `<td class="num muted">${money(round2(m.porGrupo.reduce((a, x) => a + x.planejado, 0)))}</td>` : ''}</tr></tfoot></table></div>`;
+        g.innerHTML = `<h3 class="mov-h3">Gasto por grupo${filtrando ? ' (no filtro)' : ''}: como se chega ao custo total</h3>
+          <table class="extrato-table rel-table mov-grupos"><thead><tr><th>Grupo de gasto (saídas)</th><th class="num">Conta da obra (CAIXA / banco)</th><th class="num">Recurso próprio</th><th class="num">Total realizado</th>${incluirPlanejado ? '<th class="num">Planejado</th>' : ''}<th class="num">% do custo</th><th>Onde está lançado</th></tr></thead>
+          <tbody>${gruposO.map((x) => `<tr><td class="${x.sub ? 'sub-item' : ''}">${esc(x.nome)}</td><td class="num">${money(x.caixa)}</td><td class="num">${money(x.proprio)}</td><td class="num"><strong>${money(x.total)}</strong></td>${incluirPlanejado ? `<td class="num muted">${money(x.planejado)}</td>` : ''}<td class="num">${custoO ? pct(x.total / custoO) : ''}</td><td class="muted">${esc([...x.origens].slice(0, 2).join(' · '))}</td></tr>`).join('')}</tbody>
+          <tfoot>${estRealO ? `<tr class="rel-sub"><td>Saídas brutas</td><td class="num">${money(saiCaixaO)}</td><td class="num">${money(saiProprioO)}</td><td class="num">${money(round2(saiCaixaO + saiProprioO))}</td>${incluirPlanejado ? '<td></td>' : ''}<td></td><td></td></tr><tr class="rel-sub mov-linha-estorno"><td>(−) Devolução do terrenista (estorno, entrada na conta)</td><td class="num mov-entrada">−${money(estRealO)}</td><td class="num"></td><td class="num mov-entrada">−${money(estRealO)}</td>${incluirPlanejado ? '<td></td>' : ''}<td></td><td class="muted">Liberação PCI › entrada tipo estorno</td></tr>` : ''}
+          <tr class="extrato-residuo"><td><strong>${filtrando ? 'Custo no filtro' : 'Custo total realizado'}</strong></td><td class="num"><strong>${money(round2(saiCaixaO - estRealO))}</strong></td><td class="num"><strong>${money(saiProprioO)}</strong></td><td class="num"><strong>${money(custoO)}</strong></td>${incluirPlanejado ? `<td class="num muted">${money(planO)}</td>` : ''}<td class="num">${custoO ? '100%' : ''}</td><td></td></tr></tfoot></table>
+          <div class="muted" style="margin-top:6px">A conta contábil é dada pela data: o que foi pago antes da primeira liberação CAIXA saiu do recurso próprio, o restante da conta da obra. Para ver uma conta isolada, com entradas, saídas e saldo acumulado, escolha a conta no filtro acima.</div>`;
         raiz.appendChild(g);
+
+        // Lista cronológica única (as duas contas), cada linha com a origem
+        const ordenadas = linhasF.slice().sort((a, b) => String(a.data || '9999-12-31').localeCompare(String(b.data || '9999-12-31')));
+        const entO = round2(ordenadas.filter((x) => x.tipo === 'entrada' && x.status === 'REALIZADO').reduce((a, x) => a + x.valor, 0));
+        const saiO = round2(ordenadas.filter((x) => x.tipo === 'saida' && x.status === 'REALIZADO').reduce((a, x) => a + x.valor, 0));
+        const t = document.createElement('div');
+        t.className = 'table-scroll';
+        t.innerHTML = `<h3 class="mov-h3">Lançamento a lançamento${filtrando ? ` · ${esc((opcoesFiltroGrupoMov().find(([v]) => v === filtroGrupo) || ['', filtroGrupo])[1].trim().replace(/^› /, ''))}` : ''}</h3>
+          <table class="extrato-table rel-table"><thead><tr><th>Data</th><th>Lançamento</th><th>Conta</th><th>Grupo</th><th>Status</th><th class="num">Entrada</th><th class="num">Saída</th><th>Onde está lançado</th></tr></thead>
+          <tbody>${ordenadas.map((x) => { const real = x.status === 'REALIZADO'; return `<tr class="${real ? '' : 'mov-previsto'}"><td>${x.data ? dateBR(x.data) : `<span class="muted" title="${x.grupo === 'lote' ? 'Valor do contrato do lote, sem data de pagamento' : 'Sem data preenchida na tela de origem'}">sem data</span>`}</td><td>${esc(x.descricao)}</td><td><span class="badge ${x.natureza === 'proprio' ? 'accent' : 'green'}">${x.natureza === 'proprio' ? 'próprio' : 'CAIXA'}</span></td><td class="muted">${esc(nomeGrupoMov(x))}</td><td>${real ? 'Realizado' : '<span class="badge amber">Planejado</span>'}</td><td class="num ${x.tipo === 'entrada' ? 'mov-entrada' : ''}">${x.tipo === 'entrada' ? money(x.valor) : ''}</td><td class="num ${x.tipo === 'saida' ? 'mov-saida' : ''}">${x.tipo === 'saida' ? money(x.valor) : ''}</td><td class="muted">${esc(x.origem)}</td></tr>`; }).join('')}${ordenadas.length ? '' : '<tr><td colspan="8" class="muted">Nenhum lançamento com este filtro.</td></tr>'}</tbody>
+          <tfoot><tr class="extrato-residuo"><td colspan="5"><strong>Totais realizados${filtrando ? ' no filtro' : ''}</strong></td><td class="num"><strong>${money(entO)}</strong></td><td class="num"><strong>${money(saiO)}</strong></td><td class="muted">custo líquido do estorno: ${money(custoO)}</td></tr></tfoot></table>`;
+        raiz.appendChild(t);
       }
 
       const nomeFiltro = filtrando ? (opcoesFiltroGrupoMov().find(([v]) => v === filtroGrupo) || ['', filtroGrupo])[1].trim().replace(/^› /, '') : '';
       for (const c of m.contas) {
+        if (consolidado) break;
         if (contaAberta !== 'todas' && contaAberta !== c.id) continue;
         const linhas = c.linhas.filter((x) => linhaMovNoFiltro(x, filtroGrupo)).filter(noMes);
         const somaL = (f) => round2(linhas.filter(f).reduce((a, x) => a + x.valor, 0));
@@ -7465,7 +7506,7 @@ function renderPainel() {
       <div class="card-label">Custo total realizado (gasto total, com o lote)</div>
       ${cardValueDrill('custoRealizado', mov.custoTotal, 'ver extrato por conta')}
       <div class="card-sub">Quinzenas realizadas ${money(custoRealizado)} (${qtdRealizadas}) · lote ${money(mov.lote)}${mov.estornos ? ` (bruto ${money(mov.loteBruto)} − estorno ${money(mov.estornos)})` : ''} · preliminares ${money(mov.preliminares)} · planejado por vir: ${money(r.totalPlanejadoFuturo)}</div>
-      <div class="card-sub mov-resumo">Por conta: <strong>CAIXA / banco</strong> ${money(mov.saidasCaixa)} · <strong>recurso próprio</strong> ${money(mov.saidasProprio)} · entradas ${money(mov.entradas)}${mov.estornos ? ` (estorno ${money(mov.estornos)} já abatido do custo)` : ''}</div>
+      <div class="card-sub mov-resumo">Por conta: <strong>CAIXA / banco</strong> ${money(round2(mov.saidasCaixa - mov.estornos))}${mov.estornos ? ` (bruto ${money(mov.saidasCaixa)} − estorno ${money(mov.estornos)})` : ''} · <strong>recurso próprio</strong> ${money(mov.saidasProprio)} · as duas contas somam o custo total · entradas ${money(mov.entradas)}</div>
     </div>
     <div class="card ${r.saldoRecursoDisponivel < 0 ? 'warn' : 'good'}">
       <div class="card-label">Saldo de recurso próprio disponível</div>
@@ -12520,8 +12561,26 @@ function painelNuvemHtml() {
    e vão para a nuvem como qualquer outro dado.
    ========================================================================== */
 const COMP_BUCKET = 'comprovantes';
-const COMP_PASTAS_INICIAIS = ["ARQUITETONICO", "ART DE EXECUCAO", "EMPREITEIRO", "EMPREITEIRO/AGOSTO", "EMPREITEIRO/AGOSTO/07", "EMPREITEIRO/AGOSTO/08", "EMPREITEIRO/JULHO", "EMPREITEIRO/JULHO/05", "EMPREITEIRO/JULHO/06", "EMPREITEIRO/JUNHO", "EMPREITEIRO/JUNHO/03", "EMPREITEIRO/JUNHO/04", "EMPREITEIRO/MAIO", "EMPREITEIRO/MAIO/01", "EMPREITEIRO/MAIO/02", "EMPREITEIRO/SETEMBRO", "EMPREITEIRO/SETEMBRO/09", "EMPREITEIRO/SETEMBRO/10", "ESTRUTURAL ELETRICO HIDRAULICO", "ITBI", "PLANIALTIMETRICO", "SONDAGEM", "TAXA DE APROVACAO PROJETO CONDOMINIO", "TAXA DE FINANCIAMENTO", "TAXAS DA PREFEITURA", "TAXAS DE CARTORIO"];
-const COMP = { cache: null, carregando: false, erro: null, pastaAtiva: '', filtro: '' };
+const COMP_PASTAS_INICIAIS = ["ARQUITETONICO", "ART DE EXECUCAO", "CARTAO", "CARTAO/01-06-26", "CARTAO/01-06-26/CONCRETO BLOCOS E ESTACAS", "CARTAO/01-06-26/FERRAGENS DE VIGA BALDRAME", "CARTAO/01-06-26/FORMAS VIGA BALDRAME", "CARTAO/01-08-26", "CARTAO/01-09-26", "CARTAO/01-10-26", "CARTAO/01-11-26", "EMPREITEIRO", "EMPREITEIRO/AGOSTO", "EMPREITEIRO/AGOSTO/07", "EMPREITEIRO/AGOSTO/08", "EMPREITEIRO/JULHO", "EMPREITEIRO/JULHO/05", "EMPREITEIRO/JULHO/06", "EMPREITEIRO/JUNHO", "EMPREITEIRO/JUNHO/03", "EMPREITEIRO/JUNHO/04", "EMPREITEIRO/MAIO", "EMPREITEIRO/MAIO/01", "EMPREITEIRO/MAIO/02", "EMPREITEIRO/SETEMBRO", "EMPREITEIRO/SETEMBRO/09", "EMPREITEIRO/SETEMBRO/10", "ESTRUTURAL ELETRICO HIDRAULICO", "ITBI", "PLANIALTIMETRICO", "SONDAGEM", "TAXA DE APROVACAO PROJETO CONDOMINIO", "TAXA DE FINANCIAMENTO", "TAXAS DA PREFEITURA", "TAXAS DE CARTORIO"];
+/* Disciplinas / controles do arquivo de comprovantes.
+   -------------------------------------------------------------------------
+   Cada disciplina junta as pastas daquele assunto e aponta para o mesmo
+   grupo de lançamento usado no extrato (movimentoDinheiro), de modo que a
+   tela consegue cruzar "quanto está comprovado" com "quanto está lançado".
+   Pasta que não estiver em nenhuma lista cai em "Outras pastas". */
+const COMP_DISCIPLINAS = [
+  { id: 'empreiteiro', nome: 'Empreiteiro (PIX)', grupo: 'pix', pastas: ['EMPREITEIRO'] },
+  { id: 'cartao', nome: 'Cartão (materiais)', grupo: 'cartao', pastas: ['CARTAO', 'CARTOES', 'MATERIAIS'] },
+  { id: 'adm', nome: 'Administração RS Engenharia', grupo: 'adm', pastas: ['ADMINISTRACAO', 'ADM', 'RS ENGENHARIA'] },
+  { id: 'projetos', nome: 'Projetos e ART', grupo: 'preliminares:projetos', pastas: ['ARQUITETONICO', 'ART DE EXECUCAO', 'ESTRUTURAL ELETRICO HIDRAULICO', 'PLANIALTIMETRICO', 'SONDAGEM', 'PROJETOS'] },
+  { id: 'prefeitura', nome: 'Taxas da prefeitura e licenças', grupo: 'preliminares:prefeitura', pastas: ['TAXAS DA PREFEITURA', 'TAXA DE APROVACAO PROJETO CONDOMINIO'] },
+  { id: 'cartorio', nome: 'Cartório, registro e ITBI', grupo: 'preliminares:cartorio', pastas: ['TAXAS DE CARTORIO', 'ITBI', 'CARTORIO'] },
+  { id: 'taxas', nome: 'Taxas de banco e financiamento', grupo: 'preliminares:taxas', pastas: ['TAXA DE FINANCIAMENTO', 'TAXAS'] },
+  { id: 'lote', nome: 'Lote (terreno)', grupo: 'lote', pastas: ['LOTE', 'TERRENO'] },
+  { id: 'evolucao', nome: 'Evolução CAIXA (juros, seguro)', grupo: 'evolucao', pastas: ['EVOLUCAO CAIXA', 'EVOLUCAO'] },
+  { id: 'outras', nome: 'Outras pastas', grupo: '', pastas: [] },
+];
+const COMP = { cache: null, carregando: false, erro: null, pastaAtiva: '', filtro: '', disciplina: 'todas' };
 function compEstado() {
   STATE.comprovantes = STATE.comprovantes || {};
   STATE.comprovantes.pastas = STATE.comprovantes.pastas || COMP_PASTAS_INICIAIS.slice();
@@ -12531,7 +12590,38 @@ function compEstado() {
 function compUrlPublica(caminho) { return `${NUVEM_CFG.url}/storage/v1/object/public/${COMP_BUCKET}/${caminho.split('/').map(encodeURIComponent).join('/')}`; }
 function compHeaders(extra = {}) { return { apikey: NUVEM_CFG.chave, Authorization: `Bearer ${NUVEM_CFG.chave}`, ...extra }; }
 function compNomeSeguro(nome) {
-  return String(nome || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9 ._()\-]/g, '_').replace(/\s+/g, ' ').trim();
+  return String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9 ._()\-]/g, '_').replace(/\s+/g, ' ').trim();
+}
+function compChave(txt) { return String(txt || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim(); }
+function compDisciplinaDaPasta(caminho) {
+  const topo = compChave(String(caminho || '').split('/')[0]);
+  if (!topo) return 'outras';
+  const d = COMP_DISCIPLINAS.find((x) => x.pastas.some((p) => compChave(p) === topo));
+  return d ? d.id : 'outras';
+}
+function compNomeDisciplina(id) { const d = COMP_DISCIPLINAS.find((x) => x.id === id); return d ? d.nome : id; }
+// Quanto já está lançado (realizado) no grupo de despesa que corresponde à disciplina.
+function compLancadoDoGrupo(mov, grupo) {
+  if (!grupo) return 0;
+  return round2((mov.linhas || []).filter((l) => l.tipo === 'saida' && l.status === 'REALIZADO' && linhaMovNoFiltro(l, grupo)).reduce((a, l) => a + (Number(l.valor) || 0), 0));
+}
+// Resumo por disciplina: arquivos, valor informado nos comprovantes e valor lançado.
+function compResumoDisciplinas(cache) {
+  const meta = compEstado().meta;
+  const mov = movimentoDinheiro();
+  const base = COMP_DISCIPLINAS.map((d) => ({ id: d.id, nome: d.nome, grupo: d.grupo, arquivos: 0, valor: 0, semValor: 0, lancado: compLancadoDoGrupo(mov, d.grupo) }));
+  const idx = new Map(base.map((d) => [d.id, d]));
+  for (const a of ((cache && cache.arquivos) || [])) {
+    const m = meta[a.caminho] || {};
+    if (m.oculto) continue;
+    const d = idx.get(compDisciplinaDaPasta(a.pasta || a.caminho));
+    if (!d) continue;
+    d.arquivos += 1;
+    const v = Number(m.valor) || 0;
+    if (v > 0) d.valor = round2(d.valor + v); else d.semValor += 1;
+  }
+  for (const d of base) d.diferenca = round2(d.valor - d.lancado);
+  return base;
 }
 function compDisponivel() { return typeof nuvemHabilitada === 'function' && nuvemHabilitada(); }
 async function compListarPasta(prefixo) {
@@ -12605,7 +12695,7 @@ function renderComprovantes() {
     <div class="panel-header">
       <div>
         <h2>Comprovantes de pagamento</h2>
-        <div class="muted">Arquivo de comprovantes (PIX, boletos, notas, faturas) organizado em pastas por categoria, mês e parcela, para rastrear cada despesa lançada no app. Qualquer pessoa vê e abre; quem está com a sessão de lançamento envia novos arquivos e cria pastas. Os arquivos ficam na nuvem da obra, fora deste HTML.</div>
+        <div class="muted">Arquivo de comprovantes (PIX, boletos, notas, faturas) organizado em pastas por disciplina, mês e parcela. Informe o valor de cada comprovante para cruzar o que está comprovado com o que está lançado no app. Qualquer pessoa vê e abre; quem está com a sessão de lançamento envia arquivos, informa valores e cria pastas.</div>
       </div>
       <div class="painel-acoes">
         <button type="button" class="btn small filter-control" data-acao="atualizar">Atualizar lista</button>
@@ -12626,10 +12716,60 @@ function renderComprovantes() {
     if (!cache) { corpo.innerHTML = COMP.erro ? `<div class="muted">Não consegui ler a lista de comprovantes (${esc(COMP.erro)}). Tente "Atualizar lista".</div>` : '<div class="muted">Carregando lista de comprovantes…</div>'; return; }
     const meta = compEstado().meta;
     const filtro = COMP.filtro.trim().toLowerCase();
+
+    /* --- Resumo por disciplina e cruzamento com os lançamentos --- */
+    const resumo = compResumoDisciplinas(cache);
+    const comUso = resumo.filter((d) => d.arquivos > 0 || d.valor > 0);
+    if (COMP.disciplina !== 'todas' && !comUso.some((d) => d.id === COMP.disciplina)) COMP.disciplina = 'todas';
+    const sel = COMP.disciplina === 'todas' ? null : resumo.find((d) => d.id === COMP.disciplina);
+    const foco = sel ? [sel] : comUso;
+    const totArquivos = foco.reduce((a, d) => a + d.arquivos, 0);
+    const totValor = round2(foco.reduce((a, d) => a + d.valor, 0));
+    const totSemValor = foco.reduce((a, d) => a + d.semValor, 0);
+    const totLancado = round2(foco.reduce((a, d) => a + d.lancado, 0));
+    const totDif = round2(totValor - totLancado);
+
+    const chips = document.createElement('div');
+    chips.className = 'comp-chips no-print';
+    const addChip = (id, texto, ativo) => {
+      const b = document.createElement('button'); b.type = 'button';
+      b.className = `btn small comp-chip${ativo ? ' primary' : ''}`; b.textContent = texto;
+      b.onclick = () => { COMP.disciplina = id; COMP.pastaAtiva = ''; desenhar(); };
+      chips.appendChild(b);
+    };
+    addChip('todas', `Todas as disciplinas (${cache.arquivos.length})`, COMP.disciplina === 'todas');
+    for (const d of comUso) addChip(d.id, `${d.nome} (${d.arquivos})`, COMP.disciplina === d.id);
+    corpo.appendChild(chips);
+
+    const cards = document.createElement('div');
+    cards.className = 'cards-grid comp-cards';
+    const situacao = totValor === 0 ? 'informe os valores para cruzar' : (Math.abs(totDif) <= 0.01 ? 'comprovado igual ao lançado' : (totDif > 0 ? 'comprovantes acima do lançado: conferir' : `faltam comprovantes de ${money(Math.abs(totDif))}`));
+    cards.innerHTML = `
+      <div class="card"><div class="card-label">Total dos comprovantes${sel ? ` · ${esc(sel.nome)}` : ''}</div><div class="card-value">${money(totValor)}</div><div class="card-sub">${totArquivos - totSemValor} de ${totArquivos} arquivo(s) com valor informado</div></div>
+      <div class="card ${totSemValor ? 'accent' : 'good'}"><div class="card-label">Sem valor informado</div><div class="card-value">${totSemValor}</div><div class="card-sub">arquivo(s) aguardando o valor para entrar no total</div></div>
+      <div class="card"><div class="card-label">Lançado no app (realizado)</div><div class="card-value">${money(totLancado)}</div><div class="card-sub">${sel ? `grupo ${esc(sel.nome)} no extrato de custos` : 'soma dos grupos das disciplinas com comprovante'}</div></div>
+      <div class="card ${totValor === 0 ? '' : (Math.abs(totDif) <= 0.01 ? 'good' : (totDif > 0 ? 'warn' : 'accent'))}"><div class="card-label">Diferença (comprovado − lançado)</div><div class="card-value">${money(totDif)}</div><div class="card-sub">${situacao}</div></div>`;
+    corpo.appendChild(cards);
+    if (typeof ajustarCardsGrid === 'function') requestAnimationFrame(() => ajustarCardsGrid(cards));
+
+    const cruz = document.createElement('div');
+    cruz.className = 'table-scroll comp-cross';
+    cruz.innerHTML = `<table class="extrato-table">
+      <caption class="muted">Comprovantes × lançamentos, por disciplina. O valor lançado é a soma das saídas realizadas do grupo correspondente no extrato de custos (no lote, o valor bruto pago, antes do estorno devolvido); o valor comprovado é a soma dos valores informados em cada arquivo.</caption>
+      <thead><tr><th>Disciplina / controle</th><th class="num">Arquivos</th><th class="num">Sem valor</th><th class="num">Comprovantes</th><th class="num">Lançado no app</th><th class="num">Diferença</th><th>Situação</th><th class="no-print"></th></tr></thead>
+      <tbody>${resumo.filter((d) => d.arquivos || d.valor || d.lancado).map((d) => {
+        const st = d.valor === 0 ? (d.lancado ? 'sem valor informado' : 'sem lançamento e sem valor') : (Math.abs(d.diferenca) <= 0.01 ? 'confere' : (d.diferenca > 0 ? 'comprovado acima do lançado' : `faltam ${money(Math.abs(d.diferenca))} em comprovantes`));
+        const cls = d.valor === 0 ? 'muted' : (Math.abs(d.diferenca) <= 0.01 ? 'st-ok' : (d.diferenca > 0 ? 'st-neg' : 'st-aviso'));
+        return `<tr${COMP.disciplina === d.id ? ' class="linha-destaque"' : ''}><td>${esc(d.nome)}</td><td class="num">${d.arquivos}</td><td class="num">${d.semValor || ''}</td><td class="num">${money(d.valor)}</td><td class="num">${money(d.lancado)}</td><td class="num">${money(d.diferenca)}</td><td class="${cls}">${st}</td><td class="no-print"><button type="button" class="btn small" data-disc="${d.id}">ver</button></td></tr>`;
+      }).join('')}</tbody>
+      <tfoot><tr class="extrato-residuo"><td><strong>Total</strong></td><td class="num"><strong>${resumo.reduce((a, d) => a + d.arquivos, 0)}</strong></td><td class="num">${resumo.reduce((a, d) => a + d.semValor, 0)}</td><td class="num"><strong>${money(round2(resumo.reduce((a, d) => a + d.valor, 0)))}</strong></td><td class="num"><strong>${money(round2(resumo.reduce((a, d) => a + d.lancado, 0)))}</strong></td><td class="num"><strong>${money(round2(resumo.reduce((a, d) => a + d.valor - d.lancado, 0)))}</strong></td><td colspan="2"></td></tr></tfoot></table>`;
+    cruz.querySelectorAll('button[data-disc]').forEach((b) => { b.onclick = () => { COMP.disciplina = b.dataset.disc; COMP.pastaAtiva = ''; desenhar(); }; });
+    corpo.appendChild(cruz);
+
     const barra = document.createElement('div');
     barra.className = 'comp-barra';
     barra.innerHTML = `<label>Buscar <input type="search" class="cell-input filter-control" placeholder="nome do arquivo, pasta ou observação" value="${esc(COMP.filtro)}"></label>
-      <span class="muted">${cache.arquivos.length} arquivo(s) em ${cache.pastas.length} pasta(s) · lista lida ${dateBR(cache.em.slice(0, 10))} ${cache.em.slice(11, 16)}</span>`;
+      <span class="muted">${cache.arquivos.length} arquivo(s) em ${cache.pastas.length} pasta(s) · lista lida ${dateBR(cache.em.slice(0, 10))} ${cache.em.slice(11, 16)}${sel ? ` · mostrando ${esc(sel.nome)}` : ''}</span>`;
     barra.querySelector('input').addEventListener('input', (e) => { COMP.filtro = e.target.value; desenhar(); });
     corpo.appendChild(barra);
 
@@ -12640,6 +12780,7 @@ function renderComprovantes() {
     for (const p of cache.pastas) no(p);
     for (const a of visiveis) if (bate(a)) no(a.pasta).arquivos.push(a);
     const conta = (n) => n.arquivos.length + [...n.filhos.values()].reduce((s, f) => s + conta(f), 0);
+    const somaValor = (n) => round2(n.arquivos.reduce((s, a) => s + (Number((meta[a.caminho] || {}).valor) || 0), 0) + [...n.filhos.values()].reduce((s, f) => s + somaValor(f), 0));
 
     const linhaArquivo = (a) => {
       const m = meta[a.caminho] || {};
@@ -12647,9 +12788,12 @@ function renderComprovantes() {
       tr.className = m.oculto ? 'comp-oculto' : '';
       tr.innerHTML = `<td class="comp-prev">${compEhImagem(a) ? `<a href="${compUrlPublica(a.caminho)}" target="_blank" rel="noopener"><img loading="lazy" src="${compUrlPublica(a.caminho)}" alt=""></a>` : `<a class="comp-pdf" href="${compUrlPublica(a.caminho)}" target="_blank" rel="noopener">PDF</a>`}</td>
         <td><a href="${compUrlPublica(a.caminho)}" target="_blank" rel="noopener">${esc(a.nome)}</a><div class="muted comp-sub">${a.em ? dateBR(a.em.slice(0, 10)) : ''} · ${compTamanho(a.tamanho)}${m.enviadoPor ? ` · enviado por ${esc(m.enviadoPor)}` : ''}${m.oculto ? ' · oculto' : ''}</div></td>
+        <td class="comp-valor"></td>
         <td class="comp-obs"></td>
         <td class="no-print comp-acoes"></td>`;
-      const obs = document.createElement('input'); obs.type = 'text'; obs.className = 'cell-input wide'; obs.placeholder = 'observação (ex.: PIX Fama, quinzena Junho/2ª, R$ 44.000)'; obs.value = m.obs || '';
+      const val = moneyInput({ value: Number(m.valor) || 0, titulo: 'Valor deste comprovante (entra no total da disciplina e no cruzamento com os lançamentos)', onSave: (v) => { COMP.pastaAtiva = a.pasta || ''; compAtualizarMeta(a.caminho, { valor: v }); desenhar(); } });
+      tr.querySelector('.comp-valor').appendChild(val);
+      const obs = document.createElement('input'); obs.type = 'text'; obs.className = 'cell-input wide'; obs.placeholder = 'observação (ex.: PIX Fama, quinzena Junho/2ª)'; obs.value = m.obs || '';
       obs.addEventListener('change', () => compAtualizarMeta(a.caminho, { obs: obs.value }));
       tr.querySelector('.comp-obs').appendChild(obs);
       const ac = tr.querySelector('.comp-acoes');
@@ -12663,7 +12807,8 @@ function renderComprovantes() {
       d.className = 'comp-pasta';
       d.open = nivel === 0 || !!filtro || COMP.pastaAtiva === n.caminho || COMP.pastaAtiva.startsWith(n.caminho + '/');
       const total = conta(n);
-      d.innerHTML = `<summary><span class="comp-pasta-nome">${esc(n.caminho.split('/').pop())}</span> <span class="badge gray">${total} arquivo(s)</span></summary>`;
+      const soma = somaValor(n);
+      d.innerHTML = `<summary><span class="comp-pasta-nome">${esc(n.caminho.split('/').pop())}</span> <span class="badge gray">${total} arquivo(s)</span>${soma ? ` <span class="badge accent">${money(soma)}</span>` : ''}</summary>`;
       const acoes = document.createElement('div');
       acoes.className = 'comp-pasta-acoes no-print';
       const inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true; inp.accept = '.pdf,image/*'; inp.style.display = 'none';
@@ -12683,7 +12828,7 @@ function renderComprovantes() {
       d.appendChild(acoes);
       if (n.arquivos.length) {
         const t = document.createElement('table'); t.className = 'extrato-table comp-tabela';
-        t.innerHTML = '<tbody></tbody>';
+        t.innerHTML = '<thead><tr><th></th><th>Arquivo</th><th class="num">Valor do comprovante</th><th>Observação</th><th class="no-print"></th></tr></thead><tbody></tbody>';
         for (const a of n.arquivos.sort((x, y) => (y.em || '').localeCompare(x.em || ''))) t.querySelector('tbody').appendChild(linhaArquivo(a));
         d.appendChild(t);
       }
@@ -12695,20 +12840,24 @@ function renderComprovantes() {
     const raiz = document.createElement('div');
     raiz.className = 'comp-arvore';
     const topo = [...arvore.filhos.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR', { numeric: true }));
-    for (const [, f] of topo) if (!filtro || conta(f)) raiz.appendChild(desenharNo(f, 0));
-    if (arvore.arquivos.length) { const t = document.createElement('table'); t.className = 'extrato-table comp-tabela'; t.innerHTML = '<tbody></tbody>'; for (const a of arvore.arquivos) t.querySelector('tbody').appendChild(linhaArquivo(a)); raiz.appendChild(t); }
+    for (const [, f] of topo) {
+      if (COMP.disciplina !== 'todas' && compDisciplinaDaPasta(f.caminho) !== COMP.disciplina) continue;
+      if (!filtro || conta(f)) raiz.appendChild(desenharNo(f, 0));
+    }
+    if (arvore.arquivos.length && (COMP.disciplina === 'todas' || COMP.disciplina === 'outras')) { const t = document.createElement('table'); t.className = 'extrato-table comp-tabela'; t.innerHTML = '<tbody></tbody>'; for (const a of arvore.arquivos) t.querySelector('tbody').appendChild(linhaArquivo(a)); raiz.appendChild(t); }
+    if (!raiz.children.length) { const v = document.createElement('div'); v.className = 'muted'; v.textContent = 'Nenhuma pasta nesta disciplina com o filtro atual.'; raiz.appendChild(v); }
     corpo.appendChild(raiz);
     if (READONLY) travarSomenteLeitura(raiz);
   };
   panel.querySelector('button[data-acao="atualizar"]').onclick = async () => { COMP.cache = null; desenhar(); await compCarregar(true); renderComprovantes(); };
-  panel.querySelector('button[data-acao="nova-pasta"]').onclick = async () => { const nome = await promptDialog('Nome da nova pasta (use / para subpasta, ex.: EMPREITEIRO/OUTUBRO/11)', ''); if (!nome) return; const c = compCriarPasta(nome); if (c) { COMP.pastaAtiva = c; desenhar(); toast(`Pasta "${c}" criada.`); } };
+  panel.querySelector('button[data-acao="nova-pasta"]').onclick = async () => { const nome = await promptDialog('Nome da nova pasta (use / para subpasta, ex.: EMPREITEIRO/OUTUBRO/11)', ''); if (!nome) return; const c = compCriarPasta(nome); if (c) { COMP.pastaAtiva = c; COMP.disciplina = 'todas'; desenhar(); toast(`Pasta "${c}" criada.`); } };
   panel.querySelector('button[data-acao="novo-mes"]').onclick = async () => {
     const hoje = new Date();
     const ano = await promptDialog('Ano', String(hoje.getFullYear())); if (!ano) return;
     const mes = await promptDialog('Mês (nome, ex.: OUTUBRO)', MESES_TEXTO[hoje.getMonth()]); if (!mes) return;
     const cat = await promptDialog('Dentro de qual pasta? (ex.: EMPREITEIRO; deixe vazio para criar na raiz)', 'EMPREITEIRO');
     const c = compCriarPasta(`${cat ? cat + '/' : ''}${mes.toUpperCase()} ${ano}`);
-    if (c) { COMP.pastaAtiva = c; desenhar(); toast(`Pasta "${c}" criada.`); }
+    if (c) { COMP.pastaAtiva = c; COMP.disciplina = 'todas'; desenhar(); toast(`Pasta "${c}" criada.`); }
   };
   desenhar();
   if (!COMP.cache) compCarregar().then(() => { if (document.getElementById('tab-comprovantes') === root) renderComprovantes(); });
@@ -12810,6 +12959,27 @@ function gerarApontamentos() {
   // 6. Entradas na conta fora do crédito CAIXA (estorno / depósito)
   for (const l of (VIEW.liberacoesCaixa || []).filter((x) => ehEntradaFora(x))) {
     add({ id: `fora-${l.id}`, grav: 'info', tela: 'pci', titulo: `${TIPOS_ENTRADA_CONTA[l.tipo] || 'Entrada na conta'}: ${money(l.valor)}${l.data ? ` em ${dateBR(l.data)}` : ''}`, onde: 'Liberação PCI › liberações reais (tipo de entrada)', valores: l.obs || '', fazer: 'Entrada que soma no saldo em conta mas não no crédito CAIXA liberado. Manter o comprovante (extrato) junto ao lançamento.' });
+  }
+
+  // 6b. Comprovantes: valor comprovado acima do valor lançado na disciplina
+  if (STATE.comprovantes && STATE.comprovantes.meta) {
+    const porDisc = new Map();
+    for (const [caminho, mm] of Object.entries(STATE.comprovantes.meta)) {
+      const v = Number(mm && mm.valor) || 0;
+      if (!v || (mm && mm.oculto)) continue;
+      const id = compDisciplinaDaPasta(caminho);
+      porDisc.set(id, round2((porDisc.get(id) || 0) + v));
+    }
+    for (const [id, valor] of porDisc) {
+      const disc = COMP_DISCIPLINAS.find((x) => x.id === id);
+      if (!disc || !disc.grupo) continue;
+      const lancado = compLancadoDoGrupo(m, disc.grupo);
+      const dif = round2(valor - lancado);
+      if (dif <= 0.5) continue;
+      add({ id: `comp-${id}`, grav: 'apurar', tela: 'comprovantes', titulo: `${disc.nome}: comprovantes somam ${money(valor)} e o lançado é ${money(lancado)}`,
+        onde: 'Comprovantes › cruzamento por disciplina', valores: `diferença ${money(dif)}`,
+        fazer: 'Conferir se falta lançar a despesa no app, se o valor do comprovante foi digitado errado ou se o comprovante está na pasta de outra disciplina.' });
+    }
   }
 
   // 7. Lote: custo × pagamentos
@@ -12979,6 +13149,7 @@ function renderAnaliseEm(root, opts = {}) {
       ['Demonstrativo Financeiro › Viabilidade', 'Lê Parâmetros (orçado) e as fontes acima (realizado).', 'Cada rubrica = max(orçado, realizado + comprometido). Crédito CAIXA e recurso próprio são fontes, nunca custo.'],
       ['Relatórios', 'Só leitura das fontes acima, com filtro de período.', 'Nenhum relatório tem dado próprio: se um número estiver errado, corrija na tela de origem.'],
       ['Controle Mensal CAIXA', 'Área do cliente: fatura, evolução e recebido por mês, digitados.', 'Não alimenta os cálculos; serve para o cliente conferir com o banco.'],
+      ['Comprovantes', 'Arquivos enviados por pasta (disciplina › mês › parcela), com o valor e a observação de cada comprovante.', 'Não altera nenhum cálculo: serve de lastro. O total por disciplina é cruzado com o valor lançado no grupo correspondente do extrato; sobra de comprovante acima do lançado vira apontamento nesta aba.'],
     ];
     p.innerHTML = `<h3 class="mov-h3">Fontes de dados: de onde vem cada número</h3>
       <div class="table-scroll"><table class="extrato-table rel-table analise-memorial"><thead><tr><th>Tela</th><th>O que é digitado nela</th><th>O que ela alimenta / regra</th></tr></thead>
