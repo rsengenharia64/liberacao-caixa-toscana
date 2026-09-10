@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260910T141144">
+<meta name="app-version" content="20260910T142804">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2050,7 +2050,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260910T141144';
+const APP_VERSAO = '20260910T142804';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -6092,6 +6092,7 @@ const DRILLS = {
   custoRealizado: () => abrirMovimentoDinheiro(),
   recursoProprio: () => abrirExtratoRecursoProprio(),
   caixaLiberado: () => abrirExtratoCaixaLiberado(),
+  creditoDisponivel: () => abrirExtratoCreditoDisponivel(),
   verbaDisponivel: () => abrirExtratoVerbaDisponivel(),
   viabilidade: () => abrirExtratoViabilidade(),
   pagoDireto: () => abrirExtratoPagoDireto(),
@@ -6524,6 +6525,62 @@ function conciliacaoCreditoCaixa() {
     entrouNaConta: round2(liberado + somaFora),
     aLiberarComFora: round2(total - liberado - somaFora),
   };
+}
+
+/* Extrato do "Crédito CAIXA disponível".
+   -------------------------------------------------------------------------
+   Três números do crédito convivem e são medidos contra coisas diferentes:
+   - já liberado: o que o banco depositou (lote financiado + medições);
+   - PCI ainda a liberar: crédito contratado − já liberado (o que ainda vem);
+   - crédito disponível: crédito contratado − gasto PLS já feito (lote
+     financiado + custo total das quinzenas realizadas).
+   O disponível é sempre menor que o a liberar enquanto houver custo já
+   executado que o banco ainda não reembolsou por medição. */
+function abrirExtratoCreditoDisponivel() {
+  const r = VIEW.resumo || {};
+  const P = VIEW.parametros || {};
+  const cc = conciliacaoCreditoCaixa();
+  const real = (VIEW.parcelas || []).filter((p) => p.status === 'REALIZADO');
+  const custoQuinzenas = round2(real.reduce((a, p) => a + (Number(p.custoTotal) || 0), 0));
+  const loteFin = Number(P.custoLoteExecutado) || 0;
+  const gastoPLS = Number(r.gastoAcumuladoPLS) || 0;
+  const aindaNaoLiberado = round2(gastoPLS - cc.liberado);
+  const disponivel = Number(r.creditoCaixaDisponivelContabil) || 0;
+  openModal('Extrato — Crédito CAIXA disponível', (body) => {
+    const topo = document.createElement('div');
+    topo.className = 'extrato-total-line';
+    topo.innerHTML = `<span>Crédito CAIXA disponível</span><strong>${money(disponivel)}</strong>`;
+    body.appendChild(topo);
+    const nota = document.createElement('div');
+    nota.className = 'muted';
+    nota.style.margin = '6px 0 12px';
+    nota.textContent = 'Este número não é dinheiro em conta: é quanto ainda sobra do crédito contratado depois de descontar tudo que a obra já custou dentro do PLS, inclusive a parte que o banco ainda vai reembolsar nas próximas medições.';
+    body.appendChild(nota);
+    const tw = document.createElement('div');
+    tw.className = 'table-scroll';
+    tw.innerHTML = `<table class="extrato-table"><tbody>
+      <tr class="extrato-grupo"><td colspan="2">O que o banco ainda vai depositar</td></tr>
+      <tr><td>Crédito PCI contratado</td><td class="num">${money(cc.total)}</td></tr>
+      <tr><td class="sub-item">− já liberado (lote ${money(cc.lote)} + medições ${money(cc.somaMedicoes)})</td><td class="num">− ${money(cc.liberado)}</td></tr>
+      <tr class="extrato-residuo"><td><strong>= PCI ainda a liberar</strong></td><td class="num"><strong>${money(cc.aLiberar)}</strong></td></tr>
+      <tr class="extrato-grupo"><td colspan="2">O que a obra já gastou dentro do PLS</td></tr>
+      <tr><td>Lote financiado pelo CAIXA</td><td class="num">${money(loteFin)}</td></tr>
+      <tr><td>+ Custo total das quinzenas realizadas (${real.length})</td><td class="num">${money(custoQuinzenas)}</td></tr>
+      <tr><td><strong>= Gasto PLS acumulado</strong></td><td class="num"><strong>${money(gastoPLS)}</strong></td></tr>
+      <tr><td class="sub-item">− do qual o banco já liberou</td><td class="num">− ${money(cc.liberado)}</td></tr>
+      <tr><td><strong>= Custo já feito e ainda não liberado</strong></td><td class="num"><strong>${money(aindaNaoLiberado)}</strong></td></tr>
+      <tr class="extrato-grupo"><td colspan="2">Conta do card</td></tr>
+      <tr><td>PCI ainda a liberar</td><td class="num">${money(cc.aLiberar)}</td></tr>
+      <tr><td class="sub-item">− custo já feito e ainda não liberado</td><td class="num">− ${money(aindaNaoLiberado)}</td></tr>
+      <tr class="extrato-residuo"><td><strong>= Crédito CAIXA disponível</strong></td><td class="num"><strong>${money(disponivel)}</strong></td></tr>
+    </tbody></table>`;
+    body.appendChild(tw);
+    const fim = document.createElement('div');
+    fim.className = 'muted';
+    fim.style.marginTop = '10px';
+    fim.innerHTML = `Os ${money(aindaNaoLiberado)} já saíram do caixa da obra (parte com recurso próprio, parte com o saldo em conta) e voltam quando o banco medir o avanço correspondente. Dinheiro em conta hoje: <strong>${money(r.saldoContaRealizado)}</strong>. Quanto o banco ainda vai depositar: <strong>${money(cc.aLiberar)}</strong>${cc.somaFora ? ` (${money(cc.aLiberarComFora)} se a devolução do terrenista for contada como liberação — conferência na aba Liberação PCI)` : ''}.`;
+    body.appendChild(fim);
+  }, { wide: true });
 }
 
 // Extrato do "Valor caixa liberado": abre a composição do que o banco já
@@ -7842,8 +7899,8 @@ function renderDashboard() {
     </div>
     <div class="card">
       <div class="card-label">Crédito CAIXA disponível</div>
-      <div class="card-value">${money(r.creditoCaixaDisponivelContabil)}</div>
-      <div class="card-sub">Crédito CAIXA total − gasto PLS + provisão da quinzena</div>
+      ${cardValueDrill('creditoDisponivel', r.creditoCaixaDisponivelContabil, 'ver conta')}
+      <div class="card-sub">Crédito PCI (${money(r.creditoCaixaTotalPCI)}) − gasto PLS já feito (${money(r.gastoAcumuladoPLS)} = lote financiado + quinzenas realizadas). Não confundir com o PCI ainda a liberar (${money(round2(r.creditoCaixaTotalPCI - r.caixaLiberadaAcumulada))}), que só desconta o que o banco já depositou.</div>
     </div>
     <div class="card">
       <div class="card-label">Valor caixa liberado</div>
@@ -9814,7 +9871,7 @@ function glossarioItens() {
     {
       label: 'Crédito CAIXA disponível (contábil)',
       valor: money(r.creditoCaixaDisponivelContabil),
-      formula: 'Crédito CAIXA total (PCI), menos o Gasto PLS já executado (LOTE + parcelas realizadas).',
+      formula: 'Crédito CAIXA total (PCI), menos o Gasto PLS já executado (LOTE + parcelas realizadas). É menor que o "saldo a liberar" porque desconta também o custo já feito que o banco ainda não reembolsou por medição.',
       fonte: 'Liberação PCI + Contas a Pagar.',
     },
     {
@@ -13136,6 +13193,7 @@ function memorialCalculo() {
   add('Crédito CAIXA liberado', r.caixaLiberadaAcumulada, 'parte financiada do lote + Σ liberações REALIZADAS (sem devoluções/depósitos)', 'Liberação PCI, Parâmetros', 'custo do lote executado + Σ liberações tipo "Liberação CAIXA"', (Number(P.custoLoteExecutado) || 0) + S(libs.filter((l) => !ehEntradaFora(l)), (l) => l.valor), 'pci');
   add('Entradas da conta da obra', m.entradasCaixa, 'crédito CAIXA liberado + devoluções e depósitos na conta', 'Liberação PCI', 'crédito liberado + Σ entradas fora do crédito', (Number(r.caixaLiberadaAcumulada) || 0) + S(libs.filter((l) => ehEntradaFora(l)), (l) => l.valor), 'pci');
   const ccMem = conciliacaoCreditoCaixa();
+  add('Crédito CAIXA disponível (card do Demonstrativo)', r.creditoCaixaDisponivelContabil, 'crédito PCI contratado − gasto PLS acumulado (lote financiado + custo total das quinzenas realizadas)', 'Parâmetros › crédito CAIXA total do PCI · Contas a Pagar', 'PCI ainda a liberar − custo já feito e ainda não liberado pelo banco', round2(ccMem.aLiberar - (r.gastoAcumuladoPLS - ccMem.liberado)), 'dashboard');
   add('PCI ainda a liberar', ccMem.aLiberar, 'crédito PCI contratado − crédito CAIXA liberado (devolução de terceiro não consome crédito)', 'Parâmetros › crédito CAIXA total do PCI · Liberação PCI', 'crédito PCI − (entradas da conta da obra − devoluções e depósitos)', round2(ccMem.total - (m.entradasCaixa - ccMem.somaFora)), 'pci');
   add('Saldo em conta (Dashboard)', r.saldoContaRealizado, `liberações e devoluções desde ${dateBR(r.marcoSaldoConta)} − custo total das quinzenas REALIZADAS desde essa data`, 'Dashboard › Saldo em conta', 'saldo da conta da obra no extrato por conta (entradas − saídas)', m.contas[0].saldo, 'painel');
   const fx = VIEW.fluxoCaixaMensal || [];
