@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260910T012716">
+<meta name="app-version" content="20260910T141144">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2050,7 +2050,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260910T012716';
+const APP_VERSAO = '20260910T141144';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -6498,6 +6498,34 @@ function abrirExtratoViabilidade(secaoInicial = null) {
   }, { wide: true });
 }
 
+/* Conciliação do crédito CAIXA com o extrato da conta da obra.
+   -------------------------------------------------------------------------
+   Dois números convivem e não são o mesmo:
+   1) CRÉDITO LIBERADO = lote pago pelo banco ao vendedor + medições do PLS.
+      É o que consome o crédito PCI e define quanto ainda há para liberar.
+   2) TOTAL QUE ENTROU NA CONTA = crédito liberado + devoluções e depósitos
+      (ex.: o estorno do terrenista), que somam saldo mas não consomem PCI.
+   Controles feitos pelo extrato da conta somam tudo e chegam ao número (2);
+   por isso a tela mostra os dois lados e a diferença entre eles. */
+function conciliacaoCreditoCaixa() {
+  const r = VIEW.resumo || {};
+  const P = VIEW.parametros || {};
+  const reais = (VIEW.liberacoesCaixa || []).filter((l) => (l.status || 'REALIZADO') === 'REALIZADO');
+  const medicoes = reais.filter((l) => !ehEntradaFora(l)).sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
+  const fora = reais.filter((l) => ehEntradaFora(l)).sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
+  const lote = Number(P.custoLoteExecutado) || 0;
+  const somaMedicoes = round2(medicoes.reduce((a, l) => a + (Number(l.valor) || 0), 0));
+  const somaFora = round2(fora.reduce((a, l) => a + (Number(l.valor) || 0), 0));
+  const liberado = round2(lote + somaMedicoes);
+  const total = Number(r.creditoCaixaTotalPCI) || 0;
+  return {
+    lote, medicoes, somaMedicoes, fora, somaFora, liberado, total,
+    aLiberar: round2(total - liberado),
+    entrouNaConta: round2(liberado + somaFora),
+    aLiberarComFora: round2(total - liberado - somaFora),
+  };
+}
+
 // Extrato do "Valor caixa liberado": abre a composição do que o banco já
 // soltou — o pagamento do lote (etapa 1 do PCI, financiado junto com a
 // aquisição do terreno) e cada medição do PLS liberada depois, na data real
@@ -6551,6 +6579,27 @@ function abrirExtratoCaixaLiberado() {
         </tfoot>
       </table>`;
     body.appendChild(wrap);
+
+    // Conferência com o extrato da conta: o que entrou de fato na conta da obra
+    const cc = conciliacaoCreditoCaixa();
+    if (cc.somaFora) {
+      const conf = document.createElement('div');
+      conf.className = 'table-scroll';
+      conf.style.marginTop = '12px';
+      conf.innerHTML = `<h3 class="mov-h3">Conferência com o extrato da conta da obra</h3>
+        <table class="extrato-table"><tbody>
+          <tr><td>Crédito CAIXA liberado (lote + medições)</td><td class="num">${money(cc.liberado)}</td></tr>
+          ${cc.fora.map((l) => `<tr><td class="sub-item">+ ${esc(TIPOS_ENTRADA_CONTA[l.tipo] || 'Entrada na conta')}${l.data ? ` em ${dateBR(l.data)}` : ''}${l.obs ? ` · ${esc(String(l.obs).slice(0, 60))}` : ''}</td><td class="num mov-entrada">${money(l.valor)}</td></tr>`).join('')}
+          <tr class="extrato-residuo"><td><strong>= Total que entrou na conta da obra</strong></td><td class="num"><strong>${money(cc.entrouNaConta)}</strong></td></tr>
+          <tr class="extrato-grupo"><td colspan="2">Quanto ainda há para liberar</td></tr>
+          <tr><td>Crédito PCI contratado</td><td class="num">${money(cc.total)}</td></tr>
+          <tr><td><strong>− crédito já liberado</strong></td><td class="num">− ${money(cc.liberado)}</td></tr>
+          <tr class="extrato-residuo"><td><strong>= PCI ainda a liberar</strong></td><td class="num"><strong>${money(cc.aLiberar)}</strong></td></tr>
+          <tr><td class="muted">Se a devolução for tratada como liberação do banco (controle pelo extrato da conta), o a liberar passa a</td><td class="num muted">${money(cc.aLiberarComFora)}</td></tr>
+        </tbody></table>
+        <div class="muted" style="margin-top:6px">A devolução entra no saldo em conta, mas não consome crédito do PCI: o banco liberou ${money(cc.liberado)}. Um controle somado pelo extrato da conta chega a ${money(cc.entrouNaConta)}, porque inclui ${money(cc.somaFora)} que voltaram de terceiro. Conferir no extrato do CAIXA como esse valor foi lançado: se ele tiver entrado como liberação do banco, mudar o tipo do lançamento em Liberação PCI para "Liberação CAIXA".</div>`;
+      body.appendChild(conf);
+    }
 
     if (planejadas.length) {
       const prev = document.createElement('div');
@@ -9327,6 +9376,7 @@ function renderPCI() {
   </tr>`;
 
   root.appendChild(renderLiberacoesCaixaPanel());
+  root.appendChild(renderConciliacaoCreditoPanel());
   root.appendChild(renderLiberacaoPorCategoria());
 }
 
@@ -9335,6 +9385,38 @@ function renderPCI() {
 // do lote (taxas e projetos, financiado junto da aquisição do lote). É essa
 // soma — não o cronograma de etapas acima — que define
 // resumo.caixaLiberadaAcumulada e o card "Valor caixa liberado".
+/* Painel de conferência do crédito: liberado × entrado na conta × a liberar.
+   Serve para bater o app com o controle feito pelo extrato do banco. */
+function renderConciliacaoCreditoPanel() {
+  const cc = conciliacaoCreditoCaixa();
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  panel.innerHTML = `
+    <div class="panel-header">
+      <div>
+        <h2>Conferência do crédito CAIXA</h2>
+        <div class="muted">Bate o crédito liberado pelo banco com o que entrou na conta da obra e com o que ainda há para liberar. Use esta tabela para comparar com o controle do banco.</div>
+      </div>
+    </div>
+    <div class="table-scroll"><table class="extrato-table"><tbody>
+      <tr class="extrato-grupo"><td colspan="3">O que o banco liberou (consome o crédito PCI)</td></tr>
+      <tr><td>Lote pago pelo CAIXA ao vendedor</td><td>${VIEW.parametros && VIEW.parametros.dataLoteCaixa ? dateBR(VIEW.parametros.dataLoteCaixa) : ''}</td><td class="num">${money(cc.lote)}</td></tr>
+      ${cc.medicoes.map((l) => `<tr><td class="sub-item">${esc(l.obs || 'Medição')}</td><td>${l.data ? dateBR(l.data) : '<span class="muted">sem data</span>'}</td><td class="num">${money(l.valor)}</td></tr>`).join('')}
+      <tr><td><strong>Medições liberadas</strong></td><td></td><td class="num"><strong>${money(cc.somaMedicoes)}</strong></td></tr>
+      <tr class="extrato-residuo"><td><strong>= Crédito CAIXA liberado</strong></td><td></td><td class="num"><strong>${money(cc.liberado)}</strong></td></tr>
+      ${cc.somaFora ? `<tr class="extrato-grupo"><td colspan="3">Entradas na conta fora do crédito (somam saldo, não consomem PCI)</td></tr>
+      ${cc.fora.map((l) => `<tr><td class="sub-item">${esc(TIPOS_ENTRADA_CONTA[l.tipo] || 'Entrada na conta')}${l.obs ? ` · ${esc(String(l.obs).slice(0, 70))}` : ''}</td><td>${l.data ? dateBR(l.data) : '<span class="muted">sem data</span>'}</td><td class="num mov-entrada">${money(l.valor)}</td></tr>`).join('')}
+      <tr class="extrato-residuo"><td><strong>= Total que entrou na conta da obra</strong></td><td></td><td class="num"><strong>${money(cc.entrouNaConta)}</strong></td></tr>` : ''}
+      <tr class="extrato-grupo"><td colspan="3">Quanto ainda há para liberar</td></tr>
+      <tr><td>Crédito PCI contratado</td><td></td><td class="num">${money(cc.total)}</td></tr>
+      <tr><td>− crédito já liberado</td><td></td><td class="num">− ${money(cc.liberado)}</td></tr>
+      <tr class="extrato-residuo"><td><strong>= PCI ainda a liberar</strong></td><td></td><td class="num"><strong>${money(cc.aLiberar)}</strong></td></tr>
+      ${cc.somaFora ? `<tr><td class="muted">Se a devolução for contada como liberação do banco, o a liberar passa a</td><td></td><td class="num muted">${money(cc.aLiberarComFora)}</td></tr>` : ''}
+    </tbody></table></div>
+    ${cc.somaFora ? `<div class="muted" style="margin-top:8px">Controle somado pelo extrato da conta chega a ${money(cc.entrouNaConta)} porque inclui ${money(cc.somaFora)} que voltaram de terceiro. O app separa os dois porque só a liberação do banco consome o crédito PCI. Se o extrato do CAIXA mostrar esse valor como liberação, basta mudar o tipo do lançamento acima para "Liberação CAIXA" e os dois números passam a ser um só.</div>` : ''}`;
+  return panel;
+}
+
 function renderLiberacoesCaixaPanel() {
   const panel = document.createElement('div');
   panel.className = 'panel';
@@ -12982,6 +13064,16 @@ function gerarApontamentos() {
     }
   }
 
+  // 6c. Crédito CAIXA liberado × total que entrou na conta da obra
+  {
+    const cc = conciliacaoCreditoCaixa();
+    if (cc.somaFora > 0.01) add({ id: 'credito-liberado-conta', grav: 'apurar', tela: 'pci',
+      titulo: `Crédito CAIXA liberado ${money(cc.liberado)} × total que entrou na conta ${money(cc.entrouNaConta)}`,
+      onde: 'Liberação PCI › Conferência do crédito CAIXA',
+      valores: `diferença ${money(cc.somaFora)} em devoluções e depósitos · PCI a liberar ${money(cc.aLiberar)} pelo crédito liberado, ou ${money(cc.aLiberarComFora)} se a devolução for contada como liberação do banco`,
+      fazer: 'Conferir no extrato do CAIXA como o valor foi lançado: se entrou como liberação do banco, mudar o tipo do lançamento em Liberação PCI para "Liberação CAIXA" e os dois números passam a ser um só; se foi depósito de terceiro, o valor a liberar é o do app.' });
+  }
+
   // 7. Lote: custo × pagamentos
   if (m.loteBruto) {
     const custoLote = round2((Number(P.custoTerreno) || 0) + (Number(P.multaLote) || 0));
@@ -13043,6 +13135,8 @@ function memorialCalculo() {
   const libs = (VIEW.liberacoesCaixa || []).filter((l) => (l.status || 'REALIZADO') === 'REALIZADO');
   add('Crédito CAIXA liberado', r.caixaLiberadaAcumulada, 'parte financiada do lote + Σ liberações REALIZADAS (sem devoluções/depósitos)', 'Liberação PCI, Parâmetros', 'custo do lote executado + Σ liberações tipo "Liberação CAIXA"', (Number(P.custoLoteExecutado) || 0) + S(libs.filter((l) => !ehEntradaFora(l)), (l) => l.valor), 'pci');
   add('Entradas da conta da obra', m.entradasCaixa, 'crédito CAIXA liberado + devoluções e depósitos na conta', 'Liberação PCI', 'crédito liberado + Σ entradas fora do crédito', (Number(r.caixaLiberadaAcumulada) || 0) + S(libs.filter((l) => ehEntradaFora(l)), (l) => l.valor), 'pci');
+  const ccMem = conciliacaoCreditoCaixa();
+  add('PCI ainda a liberar', ccMem.aLiberar, 'crédito PCI contratado − crédito CAIXA liberado (devolução de terceiro não consome crédito)', 'Parâmetros › crédito CAIXA total do PCI · Liberação PCI', 'crédito PCI − (entradas da conta da obra − devoluções e depósitos)', round2(ccMem.total - (m.entradasCaixa - ccMem.somaFora)), 'pci');
   add('Saldo em conta (Dashboard)', r.saldoContaRealizado, `liberações e devoluções desde ${dateBR(r.marcoSaldoConta)} − custo total das quinzenas REALIZADAS desde essa data`, 'Dashboard › Saldo em conta', 'saldo da conta da obra no extrato por conta (entradas − saídas)', m.contas[0].saldo, 'painel');
   const fx = VIEW.fluxoCaixaMensal || [];
   add('Fluxo de Caixa: saídas realizadas', S(fx, (x) => x.saidaRealizada), 'Σ saídas realizadas por período (quinzenas pelo custo total, lote, preliminares, ajustes)', 'Fluxo de Caixa', 'saídas brutas do extrato por conta', m.saidas, 'fluxo');
