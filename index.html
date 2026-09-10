@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260909T233420">
+<meta name="app-version" content="20260910T000255">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1617,7 +1617,10 @@ function recompute(state) {
   // planilha original (célula C6 = 356168 + soma do "Custo Total" de cada
   // parcela já realizada, respeitando overrides já ajustados manualmente).
   const gastoAcumuladoPLS = round2(custoLoteExecutado + sum(parcelasRealizadas, (p) => p.custoTotal));
-  const totalGastoAcumulado = round2(gastoAcumuladoPLS + totalPagoDiretoProprietario);
+  // Gasto total da obra = mesma base do card "Custo total realizado": PLS (lote financiado + quinzenas)
+  // + serviços preliminares pagos direto + entrada do lote paga pelo proprietário − devolução do terrenista.
+  const entradaLoteAporte = round2(sum((state.consumosRecursoProprio || []).filter((c) => /lote/i.test(c.descricao || '') && !/servi/i.test(c.descricao || '')), (c) => c.valor));
+  const totalGastoAcumulado = round2(gastoAcumuladoPLS + totalPagoDiretoProprietario + entradaLoteAporte - estornosLoteFluxo);
   const parcelasPlanejadas = parcelas.filter((p) => p.status !== 'REALIZADO');
   const totalEmpreiteiroPlanejado = round2(sum(parcelasPlanejadas, (p) => p.totalEmpreiteiroPix));
   const totalPlanejadoFuturo = round2(sum(parcelasPlanejadas, (p) => p.custoTotal));
@@ -1860,7 +1863,7 @@ function recompute(state) {
       ? round2((gastoAcumuladoPLS / (creditoCaixaTotalPCI + recursoProprioPlanejado)) * 10000) / 10000
       : 0,
     totalEmpreiteiroPago, totalAdmPago, totalCartaoPago, totalEvolucaoCaixaPago, totalPagoDiretoProprietario,
-    gastoAcumuladoPLS, totalGastoAcumulado, totalEmpreiteiroPlanejado,
+    gastoAcumuladoPLS, totalGastoAcumulado, entradaLoteProprietario: entradaLoteAporte, estornosLote: estornosLoteFluxo, totalEmpreiteiroPlanejado,
     // "Crédito CAIXA disponível" (H6 da planilha) = crédito CAIXA total − gasto PLS.
     creditoCaixaDisponivelContabil: round2(creditoCaixaTotalPCI - gastoAcumuladoPLS),
     totalPlanejadoFuturo,
@@ -2036,7 +2039,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260909T233420';
+const APP_VERSAO = '20260910T000255';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -7688,7 +7691,7 @@ function buildContasPagarPanel(expandido = false) {
      realizado, planejado e total, e a linha "REALIZADO" é a que fecha com os
      cards. */
   const COLUNAS_TOTAL = ['totalEmpreiteiroPix', 'totalAdmPix', 'gastoCartao', 'totalATransferir', 'parcelaEvolucaoCaixa', 'custoTotal'];
-  const somaDe = (f, filtro) => round2(parcelasFiltradas.filter(filtro).reduce((a, p) => a + (Number(p[f]) || 0), 0));
+  const somaDe = (f, filtro) => round2(parcelasFiltradas.filter(filtro).reduce((a, p) => a + round2(Number(p[f]) || 0), 0));
   const ehReal = (p) => p.status === 'REALIZADO';
   const ehPlan = (p) => p.status !== 'REALIZADO';
   const temPlanejadas = parcelasFiltradas.some(ehPlan);
@@ -9832,7 +9835,7 @@ function relatoriosDisponiveis() {
     id: 'desembolso',
     nome: 'Global de desembolso',
     grupo: 'Caixa',
-    resumo: `Saídas realizadas ${money(r.gastoAcumuladoPLS + r.totalPagoDiretoProprietario)}`,
+    resumo: `Saídas realizadas ${money(r.totalGastoAcumulado)}`,
     descricao: 'Todo dinheiro que saiu, por quinzena e por natureza: empreiteiro, cartão, administração e evolução CAIXA — mais o que foi pago direto pelo proprietário.',
     colunas: [
       { k: 'quinzena', t: 'Quinzena' }, { k: 'data', t: 'Data', tipo: 'data' }, { k: 'status', t: 'Status' },
@@ -9850,12 +9853,23 @@ function relatoriosDisponiveis() {
         return { quinzena: p.label || '', data: dataDaParcela(p), status: p.status, pix: Number(p.totalEmpreiteiroPix) || 0, cartao: Number(p.gastoCartao) || 0, adm: Number(p.totalAdmPix) || 0, evolucao: Number(p.parcelaEvolucaoCaixa) || 0, custoTotal: Number(p.custoTotal) || 0, acumulado: acc };
       });
       const lote = Number((VIEW.parametros || {}).custoLoteExecutado) || 0;
-      if (lote && !RELATORIO_PERIODO.de) out.unshift({ quinzena: 'Lote (etapa 1 do PCI)', data: null, status: 'REALIZADO', pix: 0, cartao: 0, adm: 0, evolucao: 0, custoTotal: lote, acumulado: lote });
+      if (!RELATORIO_PERIODO.de) {
+        const iniciais = [];
+        if (lote) iniciais.push({ quinzena: 'Lote: parte financiada (etapa 1 do PCI)', data: (VIEW.parametros || {}).dataLoteCaixa || null, status: 'REALIZADO', custoTotal: lote });
+        if (r.entradaLoteProprietario) iniciais.push({ quinzena: 'Lote: entrada e multa pagas pelo proprietário', data: null, status: 'REALIZADO', custoTotal: r.entradaLoteProprietario });
+        if (r.estornosLote) iniciais.push({ quinzena: 'Devolução do terrenista (estorno)', data: null, status: 'REALIZADO', custoTotal: -r.estornosLote });
+        if (r.totalPagoDiretoProprietario) iniciais.push({ quinzena: 'Serviços preliminares pagos direto (Detalhamento FC)', data: null, status: 'REALIZADO', custoTotal: r.totalPagoDiretoProprietario });
+        let accIni = 0;
+        const linhasIni = iniciais.map((x) => { accIni = round2(accIni + x.custoTotal); return { ...x, pix: 0, cartao: 0, adm: 0, evolucao: 0, acumulado: accIni }; });
+        for (const o of out) o.acumulado = round2(o.acumulado + accIni);
+        out.unshift(...linhasIni);
+      }
       return out;
     },
     notas: () => [
-      `Gasto PLS acumulado (lote + quinzenas realizadas): ${money(r.gastoAcumuladoPLS)}.`,
-      `Pago direto pelo proprietário, fora das quinzenas: ${money(r.totalPagoDiretoProprietario)}.`,
+      `Gasto PLS acumulado (lote financiado + quinzenas realizadas): ${money(r.gastoAcumuladoPLS)}.`,
+      `Pago direto pelo proprietário, fora das quinzenas: ${money(r.totalPagoDiretoProprietario)}; entrada do lote ${money(r.entradaLoteProprietario)}; devolução do terrenista ${money(r.estornosLote)}.`,
+      `Total realizado do relatório = custo total realizado do Dashboard: ${money(r.totalGastoAcumulado)}.`,
     ],
   });
 
@@ -12813,6 +12827,14 @@ function gerarApontamentos() {
   try { viab = auditoriaViabilidadeHtml(); } catch (e) { viab = null; }
   if (viab) for (const [i, a] of viab.alertas.entries()) if (!/ajustado manualmente|difere do teórico/.test(a)) add({ id: `viab-${i}`, grav: 'apurar', tela: 'dashboard', titulo: a.replace(/<[^>]+>/g, ''), onde: 'Demonstrativo Financeiro › Viabilidade', valores: '', fazer: 'Ver detalhe em "Conciliação da viabilidade" abaixo.', html: a });
 
+  // 8a. Parâmetros × soma das categorias
+  const orcCat = round2((VIEW.categorias || []).reduce((a, c) => a + (Number(c.valorOrcado) || 0), 0));
+  const contrato = Number(P.contratoTotalEmpreiteiro) || 0;
+  if (contrato && Math.abs(orcCat - contrato) > 0.05) add({ id: 'orcado-x-contrato', grav: 'apurar', tela: 'detalhamento', titulo: `Σ orçado das categorias ${money(orcCat)} difere do contrato total do empreiteiro ${money(contrato)}`, onde: 'Detalhamento FC › valor orçado por categoria · Parâmetros › contrato total empreiteiro', valores: `diferença ${money(round2(contrato - orcCat))}`, fazer: 'Ajustar o orçado de alguma categoria ou o contrato em Parâmetros para os dois baterem; o cronograma e a curva S usam a soma das categorias.' });
+  const verbaCat = round2((VIEW.categorias || []).reduce((a, c) => a + (Number(c.verbaCaixa) || 0), 0));
+  const finObra = Number(P.financiamentoObraCaixa) || 0;
+  if (finObra && verbaCat && Math.abs(verbaCat - finObra) > 0.05) add({ id: 'verba-x-financiamento', grav: 'info', tela: 'pci', titulo: `Σ verba CAIXA das categorias ${money(verbaCat)} difere do financiamento de obra ${money(finObra)}`, onde: 'Liberação PCI › verba CAIXA por categoria · Parâmetros › financiamento obra', valores: `diferença ${money(round2(finObra - verbaCat))}`, fazer: 'Diferença de rateio; ajustar a verba de uma categoria se quiser fechar exato.' });
+
   // 8b. Memorial de cálculo: dois caminhos que deveriam dar o mesmo número
   for (const l of memorialCalculo()) if (Math.abs(l.dif) > 0.05) add({ id: `mem-${l.nome.replace(/[^a-z0-9]+/gi, '-').slice(0, 40)}`, grav: 'ajustar', tela: l.tela, titulo: `Memorial: "${l.nome}" ${money(l.valor)} difere da checagem ${money(l.valorB)}`, onde: l.fonte, valores: `diferença ${money(l.dif)} · fórmula: ${l.formula} · checagem: ${l.checagem}`, fazer: 'Duas formas de chegar ao mesmo número deram resultados diferentes: conferir a tela de origem. Ver o quadro "Memorial de cálculo" abaixo.' });
 
@@ -12838,6 +12860,7 @@ function memorialCalculo() {
   const prelim = S((VIEW.categorias || []).filter((c) => c.pagoDiretoProprietario).flatMap((c) => c.itens || []), (it) => Math.max(0, Number(it.valorRealizado) || 0));
   const custoLote = round2((Number(P.custoTerreno) || 0) + (Number(P.multaLote) || 0));
   add('Custo total realizado (card do Dashboard)', m.custoTotal, 'quinzenas realizadas (custo total) + lote líquido (terreno + multa) + serviços preliminares pagos direto', 'Contas a Pagar, Parâmetros, Detalhamento FC', 'Σ custo total das quinzenas REALIZADAS + (terreno + multa) + Σ itens pagos direto', S(real, (p) => p.custoTotal) + custoLote + prelim, 'painel');
+  add('Total gasto acumulado (Demonstrativo e relatório Global de desembolso)', r.totalGastoAcumulado, 'PLS (lote financiado + quinzenas realizadas) + preliminares + entrada do lote − devolução', 'Demonstrativo Financeiro, Relatórios', 'custo total realizado do card do Dashboard', m.custoTotal, 'dashboard');
   add('Custo das quinzenas realizadas', m.custoQuinzenas, 'Σ "Custo total" das quinzenas REALIZADAS', 'Contas a Pagar', 'Σ (PIX + ADM + cartão + evolução) + Σ diferenças de apuração', somaComp + difApur, 'dashboard');
   add('Empreiteiro (PIX) realizado', S(real, (p) => p.totalEmpreiteiroPix), 'Σ coluna Empreiteiro (PIX) das quinzenas REALIZADAS', 'Contas a Pagar', 'resumo.totalEmpreiteiroPago (Dashboard / relatório do empreiteiro)', r.totalEmpreiteiroPago, 'dashboard');
   add('Administração RS (PIX) realizada', S(real, (p) => p.totalAdmPix), 'Σ coluna ADM das quinzenas REALIZADAS (regra: taxa × base, salvo valor informado)', 'Contas a Pagar', 'resumo.totalAdmPago (relatório de administração)', r.totalAdmPago, 'dashboard');
