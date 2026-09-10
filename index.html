@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260910T192401">
+<meta name="app-version" content="20260910T193649">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2063,7 +2063,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260910T192401';
+const APP_VERSAO = '20260910T193649';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -6108,7 +6108,7 @@ const DRILLS = {
   custoRealizado: () => abrirMovimentoDinheiro(),
   recursoProprio: () => abrirExtratoRecursoProprio(),
   caixaLiberado: () => abrirExtratoCaixaLiberado(),
-  creditoDisponivel: () => abrirExtratoCreditoDisponivel(),
+  saldoProjetado: () => abrirProjecaoSaldoConta(),
   verbaDisponivel: () => abrirExtratoVerbaDisponivel(),
   viabilidade: () => abrirExtratoViabilidade(),
   pagoDireto: () => abrirExtratoPagoDireto(),
@@ -6541,6 +6541,91 @@ function conciliacaoCreditoCaixa() {
     entrouNaConta: round2(liberado + somaFora),
     aLiberarComFora: round2(total - liberado - somaFora),
   };
+}
+
+/* Projeção do saldo em conta com os lançamentos futuros.
+   -------------------------------------------------------------------------
+   Parte do saldo em conta de hoje (o mesmo do Dashboard) e aplica, mês a mês,
+   só o que já está lançado como PLANEJADO: liberações previstas em Liberação
+   PCI (entradas) e quinzenas previstas em Contas a Pagar (saídas). Cada linha
+   diz de onde veio, para o número não aparecer do nada. */
+function projecaoSaldoConta() {
+  const r = VIEW.resumo || {};
+  const hoje = new Date().toISOString().slice(0, 10);
+  const saldoHoje = Number(r.saldoContaRealizado) || 0;
+  const eventos = [];
+  for (const l of (VIEW.liberacoesCaixa || [])) {
+    if ((l.status || 'REALIZADO') === 'REALIZADO') continue;
+    eventos.push({ data: l.data || null, tipo: 'entrada', valor: Number(l.valor) || 0, descricao: l.obs || 'Medição CAIXA prevista', origem: 'Liberação PCI › liberações com status PLANEJADO', tela: 'pci' });
+  }
+  for (const p of (VIEW.parcelas || [])) {
+    if (p.status === 'REALIZADO') continue;
+    const d = p.vencimento || p.vencPlanejado || null;
+    const v = Number(p.custoTotal) || 0;
+    if (!v) continue;
+    eventos.push({ data: d, tipo: 'saida', valor: v, descricao: `${p.label || 'Quinzena'} (PIX ${money(p.totalEmpreiteiroPix)} + ADM ${money(p.totalAdmPix)} + cartão ${money(p.gastoCartao)} + evolução ${money(p.parcelaEvolucaoCaixa)})`, origem: 'Contas a Pagar › quinzenas com status PLANEJADO', tela: 'dashboard' });
+  }
+  eventos.sort((a, b) => String(a.data || '9999-12-31').localeCompare(String(b.data || '9999-12-31')));
+  const meses = [];
+  let saldo = saldoHoje;
+  for (const e of eventos) {
+    const mk = e.data ? e.data.slice(0, 7) : 'sem-data';
+    let m = meses.find((x) => x.mes === mk);
+    if (!m) { meses.push(m = { mes: mk, label: mk === 'sem-data' ? 'Sem data' : `${MESES_CONTROLE[Number(mk.slice(5, 7)) - 1]} de ${mk.slice(0, 4)}`, saldoInicio: saldo, entradas: [], saidas: [], entradaTotal: 0, saidaTotal: 0 }); }
+    if (e.tipo === 'entrada') { m.entradas.push(e); m.entradaTotal = round2(m.entradaTotal + e.valor); saldo = round2(saldo + e.valor); }
+    else { m.saidas.push(e); m.saidaTotal = round2(m.saidaTotal + e.valor); saldo = round2(saldo - e.valor); }
+    m.saldoFim = saldo;
+  }
+  const mesAtual = hoje.slice(0, 7);
+  const doMes = meses.find((m) => m.mes === mesAtual);
+  const pior = meses.length ? meses.reduce((a, m) => (m.saldoFim < a.saldoFim ? m : a)) : null;
+  return {
+    hoje, saldoHoje, meses,
+    saldoFimMesAtual: doMes ? doMes.saldoFim : saldoHoje,
+    mesAtualLabel: `${MESES_CONTROLE[Number(mesAtual.slice(5, 7)) - 1]} de ${mesAtual.slice(0, 4)}`,
+    saldoFinal: meses.length ? meses[meses.length - 1].saldoFim : saldoHoje,
+    entradasPrevistas: round2(meses.reduce((a, m) => a + m.entradaTotal, 0)),
+    saidasPlanejadas: round2(meses.reduce((a, m) => a + m.saidaTotal, 0)),
+    pior,
+  };
+}
+
+function abrirProjecaoSaldoConta() {
+  const pr = projecaoSaldoConta();
+  const r = VIEW.resumo || {};
+  openModal('Saldo em conta com os lançamentos futuros', (body) => {
+    const topo = document.createElement('div');
+    topo.className = `extrato-total-line${pr.saldoFimMesAtual < 0 ? ' negativo' : ''}`;
+    topo.innerHTML = `<span>Saldo projetado no fim de ${esc(pr.mesAtualLabel)}</span><strong>${money(pr.saldoFimMesAtual)}</strong>`;
+    body.appendChild(topo);
+    const nota = document.createElement('div');
+    nota.className = 'muted';
+    nota.style.margin = '6px 0 12px';
+    nota.innerHTML = `Parte do <strong>saldo em conta de hoje (${money(pr.saldoHoje)})</strong>, que é o card do Dashboard, e aplica só o que já está lançado como PLANEJADO: entradas previstas ${money(pr.entradasPrevistas)} (Liberação PCI) e saídas previstas ${money(pr.saidasPlanejadas)} (Contas a Pagar). Nenhum valor estimado entra aqui: o que ainda não virou lançamento não aparece.`;
+    body.appendChild(nota);
+    const tw = document.createElement('div');
+    tw.className = 'table-scroll';
+    tw.innerHTML = `<table class="extrato-table rel-table"><thead><tr><th>Mês</th><th>Lançamento</th><th>Onde está lançado</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo</th></tr></thead>
+      <tbody>
+        <tr class="mov-saldo-ini"><td colspan="5"><strong>Saldo em conta hoje (${dateBR(pr.hoje)})</strong> <span class="muted">Dashboard › saldo em conta, só realizado</span></td><td class="num"><strong>${money(pr.saldoHoje)}</strong></td></tr>
+        ${pr.meses.map((m) => {
+          let acc = m.saldoInicio;
+          const linhas = [...m.entradas, ...m.saidas].sort((a, b) => String(a.data || '9999-12-31').localeCompare(String(b.data || '9999-12-31')));
+          return linhas.map((e, i) => {
+            acc = round2(acc + (e.tipo === 'entrada' ? e.valor : -e.valor));
+            return `<tr>${i === 0 ? `<td rowspan="${linhas.length}"><strong>${esc(m.label)}</strong></td>` : ''}<td>${e.data ? `${dateBR(e.data)} · ` : ''}${esc(e.descricao)}</td><td class="muted">${esc(e.origem)}</td><td class="num ${e.tipo === 'entrada' ? 'mov-entrada' : ''}">${e.tipo === 'entrada' ? money(e.valor) : ''}</td><td class="num ${e.tipo === 'saida' ? 'mov-saida' : ''}">${e.tipo === 'saida' ? money(e.valor) : ''}</td><td class="num ${acc < 0 ? 'mov-saida' : ''}">${money(acc)}</td></tr>`;
+          }).join('') + `<tr class="extrato-residuo"><td></td><td colspan="2"><strong>Saldo projetado no fim de ${esc(m.label)}</strong></td><td class="num">${money(m.entradaTotal)}</td><td class="num">${money(m.saidaTotal)}</td><td class="num"><strong>${money(m.saldoFim)}</strong></td></tr>`;
+        }).join('')}
+      </tbody></table>`;
+    body.appendChild(tw);
+    const fim = document.createElement('div');
+    fim.className = pr.pior && pr.pior.saldoFim < 0 ? 'mov-fech-aviso' : 'mov-fech-ok';
+    fim.style.marginTop = '10px';
+    fim.innerHTML = pr.pior && pr.pior.saldoFim < 0
+      ? `Com o que está lançado hoje, a conta fica negativa em <strong>${money(pr.pior.saldoFim)}</strong> no fim de ${esc(pr.pior.label)}: nesse mês faltam <strong>${money(Math.abs(pr.pior.saldoFim))}</strong> de liberação do banco ou de aporte. Para cobrir, o crédito ainda a liberar é de ${money(Number(r.saldoCaixaDisponivel) || 0)}.`
+      : `Com o que está lançado hoje, a conta fecha positiva em todos os meses; o menor saldo é <strong>${money(pr.pior ? pr.pior.saldoFim : pr.saldoHoje)}</strong>${pr.pior ? ` no fim de ${esc(pr.pior.label)}` : ''}.`;
+    body.appendChild(fim);
+  }, { wide: true });
 }
 
 /* Extrato do "Crédito CAIXA disponível".
@@ -7920,11 +8005,11 @@ function renderDashboard() {
       <div class="progress-bar" style="margin-top:6px"><span style="width:${Math.min(100, r.percExecucaoFinanceira * 100)}%"></span></div>
       <div class="card-sub">Gasto total da obra (${money(r.totalGastoAcumulado)}: quinzenas realizadas + lote + serviços preliminares) sobre o financiamento total disponível: crédito CAIXA (${money(r.creditoCaixaTotalPCI)}) + recurso próprio planejado (${money(r.recursoProprioPlanejado)})</div>
     </div>
-    <div class="card">
-      <div class="card-label">Crédito CAIXA disponível</div>
-      ${cardValueDrill('creditoDisponivel', r.creditoCaixaDisponivelContabil, 'ver conta')}
-      <div class="card-sub">Crédito PCI (${money(r.creditoCaixaTotalPCI)}) − gasto PLS já feito (${money(r.gastoAcumuladoPLS)} = lote financiado + quinzenas realizadas). Não confundir com o PCI ainda a liberar (${money(round2(r.creditoCaixaTotalPCI - r.caixaLiberadaAcumulada))}), que só desconta o que o banco já depositou.</div>
-    </div>
+    ${(() => { const pr = projecaoSaldoConta(); return `<div class="card ${pr.pior && pr.pior.saldoFim < 0 ? 'warn' : ''}">
+      <div class="card-label">Saldo em conta projetado (fim de ${esc(pr.mesAtualLabel)})</div>
+      ${cardValueDrill('saldoProjetado', pr.saldoFimMesAtual, 'ver mês a mês')}
+      <div class="card-sub">Saldo de hoje ${money(pr.saldoHoje)} + entradas previstas ${money(pr.entradasPrevistas)} − quinzenas planejadas ${money(pr.saidasPlanejadas)}. Só lançamento com status PLANEJADO entra; clique para ver mês a mês, linha por linha.</div>
+    </div>`; })()}
     <div class="card">
       <div class="card-label">Valor caixa liberado</div>
       ${cardValueDrill('caixaLiberado', r.caixaLiberadaAcumulada)}
@@ -9897,7 +9982,7 @@ function glossarioItens() {
       fonte: 'Aba Liberação PCI.',
     },
     {
-      label: 'Crédito CAIXA disponível (contábil)',
+      label: 'Crédito CAIXA ainda não consumido pelo custo (leitura contábil, não é card de tela)',
       valor: money(r.creditoCaixaDisponivelContabil),
       formula: 'Crédito CAIXA total (PCI), menos o Gasto PLS já executado (LOTE + parcelas realizadas). É menor que o "saldo a liberar" porque desconta também o custo já feito que o banco ainda não reembolsou por medição.',
       fonte: 'Liberação PCI + Contas a Pagar.',
@@ -13579,6 +13664,16 @@ function coerenciaEntreTelas() {
     { tela: 'Parâmetros · aportes registrados', valor: Number(r.totalConsumoRecursoProprio) || 0 },
     { tela: 'Extrato por conta · saídas de recurso próprio', valor: m.saidasProprio },
   ], 'diferença indica aporte a registrar ou pagamento lançado na conta errada');
+  const prj = (typeof projecaoSaldoConta === 'function') ? projecaoSaldoConta() : null;
+  add('Planejado futuro (quinzenas com status PLANEJADO)', [
+    { tela: 'Contas a Pagar · rodapé PLANEJADO', valor: S((VIEW.parcelas || []).filter((p) => p.status !== 'REALIZADO'), (p) => p.custoTotal) },
+    { tela: 'Demonstrativo · card planejado futuro', valor: Number(r.totalPlanejadoFuturo) || 0 },
+    { tela: 'Saldo projetado · saídas previstas', valor: prj ? prj.saidasPlanejadas : null },
+  ], 'é custo que ainda vai acontecer, não se confunde com custo já pago');
+  add('Liberações previstas do banco', [
+    { tela: 'Liberação PCI · medições PLANEJADO', valor: round2((VIEW.liberacoesCaixa || []).filter((l) => (l.status || 'REALIZADO') !== 'REALIZADO' && !ehEntradaFora(l)).reduce((a, l) => a + (Number(l.valor) || 0), 0)) },
+    { tela: 'Saldo projetado · entradas previstas', valor: prj ? prj.entradasPrevistas : null },
+  ]);
   add('Lote: custo em Parâmetros × pago líquido', [
     { tela: 'Parâmetros · terreno + multa', valor: round2((Number(P.custoTerreno) || 0) + (Number(P.multaLote) || 0)) },
     { tela: 'Extrato por conta · lote líquido', valor: m.lote },
@@ -13616,7 +13711,10 @@ function memorialCalculo() {
   add('Crédito CAIXA liberado', r.caixaLiberadaAcumulada, 'parte financiada do lote + Σ liberações REALIZADAS (sem devoluções/depósitos)', 'Liberação PCI, Parâmetros', 'custo do lote executado + Σ liberações tipo "Liberação CAIXA"', (Number(P.custoLoteExecutado) || 0) + S(libs.filter((l) => !ehEntradaFora(l)), (l) => l.valor), 'pci');
   add('Entradas da conta da obra', m.entradasCaixa, 'crédito CAIXA liberado + devoluções e depósitos na conta', 'Liberação PCI', 'crédito liberado + Σ entradas fora do crédito', (Number(r.caixaLiberadaAcumulada) || 0) + S(libs.filter((l) => ehEntradaFora(l)), (l) => l.valor), 'pci');
   const ccMem = conciliacaoCreditoCaixa();
-  add('Crédito CAIXA disponível (card do Demonstrativo)', r.creditoCaixaDisponivelContabil, 'crédito PCI contratado − gasto PLS acumulado (lote financiado + custo total das quinzenas realizadas)', 'Parâmetros › crédito CAIXA total do PCI · Contas a Pagar', 'PCI ainda a liberar − custo já feito e ainda não liberado pelo banco', round2(ccMem.aLiberar - (r.gastoAcumuladoPLS - ccMem.liberado)), 'dashboard');
+  {
+    const pr = projecaoSaldoConta();
+    add('Saldo em conta projetado (card do Demonstrativo)', pr.saldoFinal, 'saldo em conta de hoje + liberações previstas − quinzenas planejadas (só status PLANEJADO)', 'Dashboard › saldo em conta · Liberação PCI · Contas a Pagar', 'saldo de hoje + entradas previstas − saídas planejadas, somadas à parte', round2(pr.saldoHoje + pr.entradasPrevistas - pr.saidasPlanejadas), 'dashboard');
+  }
   add('PCI ainda a liberar', ccMem.aLiberar, 'crédito PCI contratado − crédito CAIXA liberado (devolução de terceiro não consome crédito)', 'Parâmetros › crédito CAIXA total do PCI · Liberação PCI', 'crédito PCI − (entradas da conta da obra − devoluções e depósitos)', round2(ccMem.total - (m.entradasCaixa - ccMem.somaFora)), 'pci');
   add('Saldo em conta (Dashboard)', r.saldoContaRealizado, `liberações e devoluções desde ${dateBR(r.marcoSaldoConta)} − custo total das quinzenas REALIZADAS desde essa data`, 'Dashboard › Saldo em conta', 'saldo da conta da obra no extrato por conta (entradas − saídas)', m.contas[0].saldo, 'painel');
   const fx = VIEW.fluxoCaixaMensal || [];
