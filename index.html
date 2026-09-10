@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260910T142804">
+<meta name="app-version" content="20260910T192401">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1117,6 +1117,7 @@
     <button class="tab-btn" data-tab="relatorios">Relatórios</button>
     <button class="tab-btn" data-tab="mercado">Estudo de Mercado</button>
     <button class="tab-btn" data-tab="comprovantes">Comprovantes</button>
+    <button class="tab-btn" data-tab="rdo">RDO</button>
     <button class="tab-btn" data-tab="analise">Análise</button>
     <button class="tab-btn" data-tab="rastreabilidade">Rastreabilidade</button>
     <button class="tab-btn" data-tab="parametros">Parâmetros</button>
@@ -1136,6 +1137,7 @@
   <section id="tab-relatorios" class="tab-panel" hidden=""></section>
   <section id="tab-mercado" class="tab-panel" hidden=""></section>
   <section id="tab-comprovantes" class="tab-panel" hidden=""></section>
+  <section id="tab-rdo" class="tab-panel" hidden=""></section>
   <section id="tab-analise" class="tab-panel" hidden=""></section>
   <section id="tab-rastreabilidade" class="tab-panel" hidden=""></section>
   <section id="tab-parametros" class="tab-panel" hidden=""></section>
@@ -1720,9 +1722,15 @@ function recompute(state) {
     if (lib.status === 'PLANEJADO') b.entradaPlanejada += valorLib;
     else b.entradaRealizada += valorLib;
   }
-  // Lote: entrada e multa pagas pelo proprietário (bruto, antes da devolução), sem data = 1º período
+  // Lote: entrada e multa pagas pelo proprietário (bruto, antes da devolução).
+  // A data é a do aporte "Entrada do lote" em Parâmetros (o dinheiro saiu do
+  // bolso naquele dia); sem ela, a data em que o CAIXA pagou o vendedor. Antes
+  // caía sempre no 1º período e criava saldo positivo fantasma nos meses
+  // anteriores, porque a entrada tinha data e a saída não.
   const entradaLoteProprietario = round2(Math.max(0, (Number(parametros.custoTerreno) || 0) + (Number(parametros.multaLote) || 0) + estornosLoteFluxo - custoLoteExecutado));
-  if (entradaLoteProprietario > 0) { bInicial.saidaOutras += entradaLoteProprietario; bInicial.saidaRealizada += entradaLoteProprietario; }
+  const aporteLote = (state.consumosRecursoProprio || []).find((c) => /lote|terren/i.test(String(c.descricao || '')) && !/servi/i.test(String(c.descricao || '')) && c.data);
+  const dataEntradaLote = (aporteLote && aporteLote.data) || dataLoteCaixa || null;
+  if (entradaLoteProprietario > 0) { const b = bucketData(dataEntradaLote, bInicial); b.saidaOutras += entradaLoteProprietario; b.saidaRealizada += entradaLoteProprietario; }
   // Serviços preliminares pagos direto pelo proprietário
   for (const cat of categoriasBase) {
     if (!cat.pagoDiretoProprietario) continue;
@@ -1870,8 +1878,13 @@ function recompute(state) {
     // % Execução financeira: mesma fórmula da aba "Contas a pagar"!I6 da planilha
     // original (=C6/(1500000+A6)) — usa GASTO PLS + Provisão da Quizena (C6) sobre
     // o total de financiamento disponível (crédito CAIXA total + recurso próprio).
+    // Execução financeira: gasto TOTAL da obra (com preliminares e entrada do
+    // lote) sobre o financiamento total disponível (crédito + recurso próprio
+    // planejado). Antes o numerador era só o gasto PLS, que não inclui
+    // preliminares nem a entrada do lote, e o denominador somava o recurso
+    // próprio planejado, que existe justamente para pagar esses dois.
     percExecucaoFinanceira: (creditoCaixaTotalPCI + recursoProprioPlanejado) > 0
-      ? round2((gastoAcumuladoPLS / (creditoCaixaTotalPCI + recursoProprioPlanejado)) * 10000) / 10000
+      ? round2((totalGastoAcumulado / (creditoCaixaTotalPCI + recursoProprioPlanejado)) * 10000) / 10000
       : 0,
     totalEmpreiteiroPago, totalAdmPago, totalCartaoPago, totalEvolucaoCaixaPago, totalPagoDiretoProprietario,
     gastoAcumuladoPLS, totalGastoAcumulado, entradaLoteProprietario: entradaLoteAporte, estornosLote: estornosLoteFluxo, totalEmpreiteiroPlanejado,
@@ -2050,7 +2063,7 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260910T142804';
+const APP_VERSAO = '20260910T192401';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -5000,6 +5013,7 @@ function renderAll() {
   renderRelatorios();
   renderEstudoMercado();
   renderComprovantes();
+  renderRDO();
   renderAnalise();
   renderRastreabilidade();
   renderParametros();
@@ -5704,7 +5718,9 @@ function movimentoDinheiro({ incluirPlanejado = false } = {}) {
   const custoLote = round2((Number(P.custoTerreno) || 0) + (Number(P.multaLote) || 0));
   const entradaLote = round2(Math.max(0, custoLote + estornosLote - lote));
   if (lote) push({ data: dataLote, tipo: 'saida', grupo: 'lote', natureza: 'caixa', descricao: 'Lote · parte financiada (CAIXA → vendedor)', valor: lote, status: 'REALIZADO', origem: `Parâmetros › custo do lote executado${dataLote ? ' · data do pagamento do lote' : ''}` });
-  if (entradaLote) push({ data: null, tipo: 'saida', grupo: 'lote', natureza: 'proprio', descricao: `Lote · entrada e multa pagas pelo proprietário${estornosLote ? ' (bruto, antes do estorno)' : ''}`, valor: entradaLote, status: 'REALIZADO', origem: `Parâmetros › custo do terreno + multa${estornosLote ? ' + estorno devolvido' : ''} − parte financiada` });
+  const aporteLoteMov = (VIEW.consumosRecursoProprio || []).find((c) => /lote|terren/i.test(String(c.descricao || '')) && !/servi/i.test(String(c.descricao || '')) && c.data);
+  const dataEntradaLoteMov = (aporteLoteMov && aporteLoteMov.data) || dataLote || null;
+  if (entradaLote) push({ data: dataEntradaLoteMov, tipo: 'saida', grupo: 'lote', natureza: 'proprio', descricao: `Lote · entrada e multa pagas pelo proprietário${estornosLote ? ' (bruto, antes do estorno)' : ''}`, valor: entradaLote, status: 'REALIZADO', origem: `Parâmetros › custo do terreno + multa${estornosLote ? ' + estorno devolvido' : ''} − parte financiada · data do aporte "Entrada do lote"` });
   for (const cat of (VIEW.categorias || [])) {
     if (!cat.pagoDiretoProprietario) continue;
     for (const it of (cat.itens || [])) {
@@ -6544,6 +6560,8 @@ function abrirExtratoCreditoDisponivel() {
   const custoQuinzenas = round2(real.reduce((a, p) => a + (Number(p.custoTotal) || 0), 0));
   const loteFin = Number(P.custoLoteExecutado) || 0;
   const gastoPLS = Number(r.gastoAcumuladoPLS) || 0;
+  const datasQ = real.map((q) => q.vencimento || q.vencPlanejado).filter(Boolean).sort();
+  const periodoQuinzenas = datasQ.length ? `de ${dateBR(datasQ[0])} a ${dateBR(datasQ[datasQ.length - 1])}` : '';
   const aindaNaoLiberado = round2(gastoPLS - cc.liberado);
   const disponivel = Number(r.creditoCaixaDisponivelContabil) || 0;
   openModal('Extrato — Crédito CAIXA disponível', (body) => {
@@ -6563,9 +6581,10 @@ function abrirExtratoCreditoDisponivel() {
       <tr><td>Crédito PCI contratado</td><td class="num">${money(cc.total)}</td></tr>
       <tr><td class="sub-item">− já liberado (lote ${money(cc.lote)} + medições ${money(cc.somaMedicoes)})</td><td class="num">− ${money(cc.liberado)}</td></tr>
       <tr class="extrato-residuo"><td><strong>= PCI ainda a liberar</strong></td><td class="num"><strong>${money(cc.aLiberar)}</strong></td></tr>
-      <tr class="extrato-grupo"><td colspan="2">O que a obra já gastou dentro do PLS</td></tr>
-      <tr><td>Lote financiado pelo CAIXA</td><td class="num">${money(loteFin)}</td></tr>
-      <tr><td>+ Custo total das quinzenas realizadas (${real.length})</td><td class="num">${money(custoQuinzenas)}</td></tr>
+      <tr class="extrato-grupo"><td colspan="2">O que a obra já gastou dentro do PLS (só REALIZADO, nada planejado)</td></tr>
+      <tr><td>Lote financiado pelo CAIXA${P.dataLoteCaixa ? ` · ${dateBR(P.dataLoteCaixa)}` : ''}<div class="muted">Parâmetros › custo do lote executado</div></td><td class="num">${money(loteFin)}</td></tr>
+      ${real.map((q) => `<tr><td class="sub-item">${esc(q.label || q.mesReferenciaLabel || 'Quinzena')}${(q.vencimento || q.vencPlanejado) ? ` · ${dateBR(q.vencimento || q.vencPlanejado)}` : ''} <span class="muted">(PIX ${money(q.totalEmpreiteiroPix)} + ADM ${money(q.totalAdmPix)} + cartão ${money(q.gastoCartao)} + evolução ${money(q.parcelaEvolucaoCaixa)})</span></td><td class="num">${money(q.custoTotal)}</td></tr>`).join('')}
+      <tr><td>+ Custo total das ${real.length} quinzenas realizadas <span class="muted">Contas a Pagar › coluna "Custo total", linhas com status REALIZADO${periodoQuinzenas ? ` · ${periodoQuinzenas}` : ''}</span></td><td class="num">${money(custoQuinzenas)}</td></tr>
       <tr><td><strong>= Gasto PLS acumulado</strong></td><td class="num"><strong>${money(gastoPLS)}</strong></td></tr>
       <tr><td class="sub-item">− do qual o banco já liberou</td><td class="num">− ${money(cc.liberado)}</td></tr>
       <tr><td><strong>= Custo já feito e ainda não liberado</strong></td><td class="num"><strong>${money(aindaNaoLiberado)}</strong></td></tr>
@@ -6578,7 +6597,7 @@ function abrirExtratoCreditoDisponivel() {
     const fim = document.createElement('div');
     fim.className = 'muted';
     fim.style.marginTop = '10px';
-    fim.innerHTML = `Os ${money(aindaNaoLiberado)} já saíram do caixa da obra (parte com recurso próprio, parte com o saldo em conta) e voltam quando o banco medir o avanço correspondente. Dinheiro em conta hoje: <strong>${money(r.saldoContaRealizado)}</strong>. Quanto o banco ainda vai depositar: <strong>${money(cc.aLiberar)}</strong>${cc.somaFora ? ` (${money(cc.aLiberarComFora)} se a devolução do terrenista for contada como liberação — conferência na aba Liberação PCI)` : ''}.`;
+    fim.innerHTML = `Nenhum lançamento planejado entra nesta conta: as ${(VIEW.parcelas || []).filter((p) => p.status !== 'REALIZADO').length} quinzenas planejadas (${money(r.totalPlanejadoFuturo)}) ficam de fora, assim como a Medição 04 ainda não liberada. Os ${money(aindaNaoLiberado)} já saíram do caixa da obra (parte com recurso próprio, parte com o saldo em conta) e voltam quando o banco medir o avanço correspondente. Dinheiro em conta hoje: <strong>${money(r.saldoContaRealizado)}</strong>. Quanto o banco ainda vai depositar: <strong>${money(cc.aLiberar)}</strong>${cc.somaFora ? ` (${money(cc.aLiberarComFora)} se a devolução do terrenista for contada como liberação — conferência na aba Liberação PCI)` : ''}.`;
     body.appendChild(fim);
   }, { wide: true });
 }
@@ -6978,9 +6997,9 @@ function renderVerbaFuturaBlock() {
   cards.className = 'cards-grid';
   cards.innerHTML = `
     <div class="card">
-      <div class="card-label">Planejado futuro (a lançar)</div>
+      <div class="card-label">Planejado futuro (quinzenas já lançadas)</div>
       <div class="card-value">${money(r.totalPlanejadoFuturo)}</div>
-      <div class="card-sub">Soma das parcelas ainda não realizadas</div>
+      <div class="card-sub">Soma das ${(VIEW.parcelas || []).filter((p) => p.status !== 'REALIZADO').length} quinzenas com status PLANEJADO em Contas a Pagar. Não é todo o custo que falta da obra: o que ainda não virou quinzena está na viabilidade.</div>
     </div>
     <div class="card">
       <div class="card-label">Verba total disponível</div>
@@ -6988,9 +7007,9 @@ function renderVerbaFuturaBlock() {
       <div class="card-sub">Crédito CAIXA ainda a liberar (${money(r.saldoCaixaDisponivel)}) + Saldo de recurso próprio disponível (${money(r.saldoRecursoDisponivel)})</div>
     </div>
     <div class="card ${estourou ? 'warn' : 'good'}">
-      <div class="card-label">Margem para itens futuros</div>
+      <div class="card-label">Margem sobre as quinzenas já lançadas</div>
       <div class="card-value">${money(r.saldoParaFuturos)}</div>
-      <div class="card-sub">${estourou ? 'Estourou a verba disponível' : 'Dentro da verba disponível'}</div>
+      <div class="card-sub">Verba disponível menos as quinzenas já lançadas como planejadas. ${(() => { const falta = round2(((r.viabilidade || {}).custoEconomicoProjetado || 0) - (r.totalGastoAcumulado || 0) - (r.totalPlanejadoFuturo || 0)); return falta > 0 ? `Ainda falta lançar cerca de ${money(falta)} de custo previsto na viabilidade, que já consome esta margem.` : 'Não há custo previsto na viabilidade além do que já está lançado.'; })()}</div>
     </div>
   `;
   ligarDrills(cards);
@@ -7082,10 +7101,14 @@ function buildCurvaCaixa(checkpoints, dataInicio) {
   // pelo proprietário, na data real de cada uma. Esse total precisa bater com
   // "Valor caixa liberado" do resumo (resumo.caixaLiberadaAcumulada).
   const custoLoteExecutado = Number((VIEW.parametros || {}).custoLoteExecutado) || 0;
-  const liberacoes = [...(VIEW.liberacoesCaixa || [])].filter((l) => !ehEntradaFora(l)).sort((a, b) => (a.data || '').localeCompare(b.data || ''));
+  // Só liberação REALIZADA entra na curva executada (a planejada tem série
+  // própria); e o lote entra na data em que o CAIXA pagou o vendedor, não na
+  // data de início da obra — senão o gráfico antecipa 25% do crédito.
+  const liberacoes = [...(VIEW.liberacoesCaixa || [])].filter((l) => !ehEntradaFora(l) && (l.status || 'REALIZADO') === 'REALIZADO').sort((a, b) => (a.data || '').localeCompare(b.data || ''));
+  const dataLotePago = ((VIEW.parametros || {}).dataLoteCaixa || dataInicio);
   let accLib = custoLoteExecutado;
   const executedRaw = custoLoteExecutado > 0
-    ? [{ data: dataInicio, valor: Math.round(accLib * 100) / 100 }]
+    ? [{ data: dataLotePago, valor: Math.round(accLib * 100) / 100 }]
     : [];
   liberacoes.forEach((l) => { accLib += Number(l.valor) || 0; executedRaw.push({ data: l.data, valor: Math.round(accLib * 100) / 100 }); });
   const executed = checkpoints.map((cp) => {
@@ -7895,7 +7918,7 @@ function renderDashboard() {
       <div class="card-label">% Execução financeira</div>
       <div class="card-value">${pct(r.percExecucaoFinanceira)}</div>
       <div class="progress-bar" style="margin-top:6px"><span style="width:${Math.min(100, r.percExecucaoFinanceira * 100)}%"></span></div>
-      <div class="card-sub">Gasto PLS + provisão da quinzena (${money(r.gastoAcumuladoPLS)}) sobre o financiamento total disponível: crédito CAIXA (${money(r.creditoCaixaTotalPCI)}) + recurso próprio planejado (${money(r.recursoProprioPlanejado)})</div>
+      <div class="card-sub">Gasto total da obra (${money(r.totalGastoAcumulado)}: quinzenas realizadas + lote + serviços preliminares) sobre o financiamento total disponível: crédito CAIXA (${money(r.creditoCaixaTotalPCI)}) + recurso próprio planejado (${money(r.recursoProprioPlanejado)})</div>
     </div>
     <div class="card">
       <div class="card-label">Crédito CAIXA disponível</div>
@@ -8238,8 +8261,13 @@ function renderCronograma() {
   const diasDecorridos = Math.round((hojeDate.getTime() - projInicio.getTime()) / 86400000);
   const diasTotais = Math.round(projTotalMs / 86400000);
 
-  const etapaAtual = (VIEW.liberacaoPCI || []).find((e) => r.percObraGeral < e.percLimiteAcumulado)
-    || VIEW.liberacaoPCI[VIEW.liberacaoPCI.length - 1];
+  // Etapa corrente é a última cujo limite de avanço já foi atingido; a que vem
+  // depois é a próxima liberação (antes o código mostrava a próxima como se
+  // fosse a corrente).
+  const etapasPCI = (VIEW.liberacaoPCI || []);
+  const atingidas = etapasPCI.filter((e) => r.percObraGeral >= (Number(e.percLimiteAcumulado) || 0));
+  const etapaAtual = atingidas[atingidas.length - 1] || etapasPCI[0];
+  const etapaProxima = etapasPCI.find((e) => r.percObraGeral < (Number(e.percLimiteAcumulado) || 0));
 
   const cards = document.createElement('div');
   cards.className = 'cards-grid';
@@ -8264,7 +8292,7 @@ function renderCronograma() {
     <div class="card">
       <div class="card-label">Etapa PCI corrente</div>
       <div class="card-value">${etapaAtual ? `${etapaAtual.etapa} — ${esc(etapaAtual.descricao)}` : '—'}</div>
-      <div class="card-sub">${etapaAtual ? `Libera a ${pct(etapaAtual.percLimiteAcumulado)} de obra executada · ${money(etapaAtual.valor)}` : ''}</div>
+      <div class="card-sub">${etapaAtual ? `Etapa já atingida (libera a ${pct(etapaAtual.percLimiteAcumulado)} de obra executada · ${money(etapaAtual.valor)})` : ''}${etapaProxima ? ` · próxima: ${etapaProxima.etapa} ${esc(etapaProxima.descricao)}, a ${pct(etapaProxima.percLimiteAcumulado)} (${money(etapaProxima.valor)})` : ' · última etapa do PCI'}</div>
     </div>
   `;
   root.appendChild(cards);
@@ -9903,6 +9931,40 @@ function glossarioItens() {
 // Filtro de período comum a todos os relatórios (vazio = tudo).
 const RELATORIO_PERIODO = { de: null, ate: null };
 
+// Datas das linhas iniciais dos relatórios (lote e devolução): sem elas, essas
+// linhas entravam inteiras em qualquer recorte de período.
+function dataEntradaLoteProprietario() {
+  const ap = (VIEW.consumosRecursoProprio || []).find((c) => /lote|terren/i.test(String(c.descricao || '')) && !/servi/i.test(String(c.descricao || '')) && c.data);
+  return (ap && ap.data) || ((VIEW.parametros || {}).dataLoteCaixa || null);
+}
+function dataEstornoLote() {
+  const l = (VIEW.liberacoesCaixa || []).find((x) => ehEntradaFora(x) && (x.tipo === 'estorno' || /lote|terren|estorno/i.test(String(x.obs || ''))) && x.data);
+  return (l && l.data) || null;
+}
+// Quanto do crédito CAIXA já havia sido liberado antes do início do período
+// escolhido (para o acumulado do relatório não recomeçar do zero).
+function liberadoAntesDoPeriodo() {
+  if (!RELATORIO_PERIODO.de) return 0;
+  const lote = Number((VIEW.parametros || {}).custoLoteExecutado) || 0;
+  const dLote = (VIEW.parametros || {}).dataLoteCaixa || null;
+  let acc = (dLote && dLote < RELATORIO_PERIODO.de) ? lote : 0;
+  for (const l of (VIEW.liberacoesCaixa || [])) {
+    if (ehEntradaFora(l) || !l.data || l.data >= RELATORIO_PERIODO.de) continue;
+    acc = round2(acc + (Number(l.valor) || 0));
+  }
+  return acc;
+}
+function consumidoAntesDoPeriodo() {
+  if (!RELATORIO_PERIODO.de) return 0;
+  let acc = 0;
+  for (const p of (VIEW.parcelas || [])) {
+    const d = p.vencimento || p.vencPlanejado || null;
+    if (!d || d >= RELATORIO_PERIODO.de) continue;
+    acc = round2(acc + (Number(p.totalEmpreiteiroPix) || 0) + (Number(p.gastoCartao) || 0));
+  }
+  return acc;
+}
+
 function dentroDoPeriodo(data) {
   if (!data) return !RELATORIO_PERIODO.de && !RELATORIO_PERIODO.ate;
   const d = String(data).slice(0, 10);
@@ -9942,7 +10004,9 @@ function relatoriosDisponiveis() {
       { k: 'percContrato', t: '% do contrato', tipo: 'pct' },
     ],
     linhas: () => {
-      let acc = 0;
+      // Acumulado e % do contrato partem do que já havia sido pago antes do
+      // período escolhido.
+      let acc = consumidoAntesDoPeriodo();
       return parcelas.map((p) => {
         const pix = Number(p.totalEmpreiteiroPix) || 0;
         const cartao = Number(p.gastoCartao) || 0;
@@ -10033,12 +10097,17 @@ function relatoriosDisponiveis() {
         return { quinzena: p.label || '', data: dataDaParcela(p), status: p.status, pix: Number(p.totalEmpreiteiroPix) || 0, cartao: Number(p.gastoCartao) || 0, adm: Number(p.totalAdmPix) || 0, evolucao: Number(p.parcelaEvolucaoCaixa) || 0, custoTotal: Number(p.custoTotal) || 0, acumulado: acc };
       });
       const lote = Number((VIEW.parametros || {}).custoLoteExecutado) || 0;
-      if (!RELATORIO_PERIODO.de) {
+      {
+        // Cada linha inicial tem data própria e obedece ao recorte de período.
         const iniciais = [];
-        if (lote) iniciais.push({ quinzena: 'Lote: parte financiada (etapa 1 do PCI)', data: (VIEW.parametros || {}).dataLoteCaixa || null, status: 'REALIZADO', custoTotal: lote });
-        if (r.entradaLoteProprietario) iniciais.push({ quinzena: 'Lote: entrada e multa pagas pelo proprietário', data: null, status: 'REALIZADO', custoTotal: r.entradaLoteProprietario });
-        if (r.estornosLote) iniciais.push({ quinzena: 'Devolução do terrenista (estorno)', data: null, status: 'REALIZADO', custoTotal: -r.estornosLote });
-        if (r.totalPagoDiretoProprietario) iniciais.push({ quinzena: 'Serviços preliminares pagos direto (Detalhamento FC)', data: null, status: 'REALIZADO', custoTotal: r.totalPagoDiretoProprietario });
+        const dLote = (VIEW.parametros || {}).dataLoteCaixa || null;
+        const dEnt = dataEntradaLoteProprietario();
+        const dEst = dataEstornoLote();
+        if (lote && dentroDoPeriodo(dLote)) iniciais.push({ quinzena: 'Lote: parte financiada (etapa 1 do PCI)', data: dLote, status: 'REALIZADO', custoTotal: lote });
+        if (r.entradaLoteProprietario && dentroDoPeriodo(dEnt)) iniciais.push({ quinzena: 'Lote: entrada e multa pagas pelo proprietário', data: dEnt, status: 'REALIZADO', custoTotal: r.entradaLoteProprietario });
+        if (r.estornosLote && dentroDoPeriodo(dEst)) iniciais.push({ quinzena: 'Devolução do terrenista (estorno)', data: dEst, status: 'REALIZADO', custoTotal: -r.estornosLote });
+        const prelimNoPeriodo = round2(sum((VIEW.categorias || []).filter((c) => c.pagoDiretoProprietario).flatMap((c) => c.itens || []).filter((it) => (Number(it.valorRealizado) || 0) > 0 && dentroDoPeriodo(it.dataPagamento ? String(it.dataPagamento).slice(0, 10) : null)), (it) => Number(it.valorRealizado) || 0));
+        if (prelimNoPeriodo) iniciais.push({ quinzena: 'Serviços preliminares pagos direto (Detalhamento FC)', data: null, status: 'REALIZADO', custoTotal: prelimNoPeriodo });
         let accIni = 0;
         const linhasIni = iniciais.map((x) => { accIni = round2(accIni + x.custoTotal); return { ...x, pix: 0, cartao: 0, adm: 0, evolucao: 0, acumulado: accIni }; });
         for (const o of out) o.acumulado = round2(o.acumulado + accIni);
@@ -10096,9 +10165,12 @@ function relatoriosDisponiveis() {
     linhas: () => {
       const total = Number(r.creditoCaixaTotalPCI) || 0;
       const lote = Number((VIEW.parametros || {}).custoLoteExecutado) || 0;
-      let acc = 0;
+      const dLote = (VIEW.parametros || {}).dataLoteCaixa || null;
+      // Acumulado começa no que já havia sido liberado antes do período, senão
+      // o "saldo a liberar" do recorte ignora tudo que veio antes.
+      let acc = liberadoAntesDoPeriodo();
       const out = [];
-      if (lote && !RELATORIO_PERIODO.de) { acc = lote; out.push({ medicao: 'Lote — etapa 1 do PCI', data: null, status: 'REALIZADO', valor: lote, acumulado: acc, aLiberar: round2(total - acc) }); }
+      if (lote && dentroDoPeriodo(dLote)) { acc = round2(acc + lote); out.push({ medicao: 'Lote — etapa 1 do PCI', data: dLote, status: 'REALIZADO', valor: lote, acumulado: acc, aLiberar: round2(total - acc) }); }
       for (const l of (VIEW.liberacoesCaixa || [])) {
         if (!dentroDoPeriodo(l.data) || ehEntradaFora(l)) continue;
         acc = round2(acc + (Number(l.valor) || 0));
@@ -10150,15 +10222,19 @@ function relatoriosDisponiveis() {
       { k: 'periodo', t: 'Período' },
       { k: 'entradaCaixa', t: 'Entrada — CAIXA/PLS', tipo: 'money', total: true },
       { k: 'entradaPropria', t: 'Entrada — recurso próprio', tipo: 'money', total: true },
+      { k: 'entradaDevolucao', t: 'Entrada — devolução / ajuste', tipo: 'money', total: true },
       { k: 'entradaTotal', t: 'Total de entradas', tipo: 'money', total: true },
       { k: 'saidaTotal', t: 'Total de saídas', tipo: 'money', total: true },
       { k: 'resultado', t: 'Entradas − saídas', tipo: 'money', total: true },
       { k: 'acumulado', t: 'Saldo acumulado', tipo: 'money' },
     ],
-    linhas: () => (VIEW.fluxoCaixaMensal || []).map((m) => ({
-      periodo: m.label, entradaCaixa: m.entradaCaixaPCI, entradaPropria: round2(m.entradaRecursoProprio + m.entradaAjusteManual),
-      entradaTotal: m.entradaTotal, saidaTotal: m.saidaTotal, resultado: round2(m.entradaTotal - m.saidaTotal), acumulado: m.saldoAcumuladoMes,
-    })),
+    linhas: () => (VIEW.fluxoCaixaMensal || [])
+      .filter((m) => !m.mes || m.mes === 'sem-data' ? (!RELATORIO_PERIODO.de && !RELATORIO_PERIODO.ate) : (
+        (!RELATORIO_PERIODO.de || `${m.mes}-31` >= RELATORIO_PERIODO.de) && (!RELATORIO_PERIODO.ate || `${m.mes}-01` <= RELATORIO_PERIODO.ate)))
+      .map((m) => ({
+        periodo: m.label, entradaCaixa: m.entradaCaixaPCI, entradaPropria: m.entradaRecursoProprio, entradaDevolucao: m.entradaAjusteManual,
+        entradaTotal: m.entradaTotal, saidaTotal: m.saidaTotal, resultado: round2(m.entradaTotal - m.saidaTotal), acumulado: m.saldoAcumuladoMes,
+      })),
     notas: () => [
       'Liberação CAIXA e aporte próprio são ENTRADAS DE CAIXA, nunca receita. Pagamento a fornecedor é saída e baixa de obrigação, não custo novo — o custo está na DRE.',
       `Recurso próprio entra pelos aportes registrados em Parâmetros, na data de cada um (sem data = primeiro período); já aportado: ${money(r.totalConsumoRecursoProprio)} — veja o relatório "Gastos com recursos próprios".`,
@@ -10223,7 +10299,18 @@ function relatoriosDisponiveis() {
     linhas: () => {
       const out = [];
       const lote = Number((VIEW.parametros || {}).custoLoteExecutado) || 0;
-      if (lote) out.push({ tipo: 'Financiamento', referencia: 'Lote — etapa 1 do PCI', data: null, status: 'REALIZADO', natureza: 'Entrada de caixa', entrada: lote, saida: 0, origem: 'Parâmetros › custo do lote executado' });
+      const dLote = (VIEW.parametros || {}).dataLoteCaixa || null;
+      // O lote entra e sai: o banco credita e o vendedor recebe no mesmo dia.
+      // A saída faltava, e a base "completa para conferência" ficava sem
+      // 528.000 de desembolso.
+      if (lote && dentroDoPeriodo(dLote)) {
+        out.push({ tipo: 'Financiamento', referencia: 'Lote — etapa 1 do PCI', data: dLote, status: 'REALIZADO', natureza: 'Entrada de caixa', entrada: lote, saida: 0, origem: 'Parâmetros › custo do lote executado' });
+        out.push({ tipo: 'Lote', referencia: 'Lote — parte financiada paga ao vendedor', data: dLote, status: 'REALIZADO', natureza: 'Saída — aquisição do terreno', entrada: 0, saida: lote, origem: 'Parâmetros › custo do lote executado' });
+      }
+      {
+        const dEnt = dataEntradaLoteProprietario();
+        if (VIEW.resumo.entradaLoteProprietario && dentroDoPeriodo(dEnt)) out.push({ tipo: 'Lote', referencia: 'Lote — entrada e multa pagas pelo proprietário', data: dEnt, status: 'REALIZADO', natureza: 'Saída — recurso próprio', entrada: 0, saida: VIEW.resumo.entradaLoteProprietario, origem: 'Parâmetros › custo do terreno + multa − parte financiada' });
+      }
       for (const l of (VIEW.liberacoesCaixa || [])) {
         if (!dentroDoPeriodo(l.data)) continue;
         out.push({ tipo: ehEntradaFora(l) ? (TIPOS_ENTRADA_CONTA[l.tipo] || 'Entrada na conta') : 'Liberação CAIXA', referencia: l.obs || (ehEntradaFora(l) ? 'Entrada na conta da obra' : 'Medição'), data: l.data, status: l.status || 'REALIZADO', natureza: ehEntradaFora(l) ? 'Entrada de caixa (devolução, não é crédito CAIXA)' : 'Entrada de caixa (principal, não é receita)', entrada: Number(l.valor) || 0, saida: 0, origem: 'Aba Liberação PCI › liberações reais' });
@@ -10250,6 +10337,7 @@ function relatoriosDisponiveis() {
         if (!cat.pagoDiretoProprietario) continue;
         for (const it of (cat.itens || [])) {
           if (!(Number(it.valorRealizado) > 0)) continue;
+          if (!dentroDoPeriodo(it.dataPagamento ? String(it.dataPagamento).slice(0, 10) : null)) continue;
           out.push({ tipo: 'Pago direto', referencia: `${cat.nome} · ${it.descricao || ''}`, data: it.dataPagamento ? String(it.dataPagamento).slice(0, 10) : null, status: 'REALIZADO', natureza: 'Saída — projetos, registros e ITBI', entrada: 0, saida: Number(it.valorRealizado) || 0, origem: 'Detalhamento FC › categoria paga direto pelo proprietário' });
         }
       }
@@ -10301,7 +10389,7 @@ function tabelaRelatorioHtml(rel, linhas, totais) {
           return `<td class="num"><strong>${money(round2(sum(ls.filter((l) => !l._subtotal), (l) => l[c.k])))}</strong></td>`;
         }).join('')}</tr>`;
         const cheio = `<tr class="rel-total">${cols.map((c, i) => {
-          if (i === 0) return '<td><strong>TOTAL</strong></td>';
+          if (i === 0) return `<td><strong>TOTAL${temStatus ? ' (realizado + planejado)' : ''}</strong></td>`;
           if (!c.total) return '<td></td>';
           return `<td class="num"><strong>${money(totais[c.k])}</strong></td>`;
         }).join('')}</tr>`;
@@ -11710,10 +11798,13 @@ function documentosAPagar() {
 
 function abrirValidacaoPagamentos() {
   const docs = documentosAPagar();
-  const pagos = docs.filter((d) => d.situacao.estado === 'pago' || d.situacao.estado === 'confirmado');
-  const comBaixa = docs.filter((d) => d.situacao.estado === 'pago');
-  const vencidos = docs.filter((d) => d.situacao.estado === 'vencido');
-  const abertos = docs.filter((d) => d.situacao.estado === 'aberto');
+  // Recebimento (liberação do banco) não é pagamento: somar os dois no mesmo
+  // card fazia o "pagamento confirmado" aparecer maior do que o desembolso.
+  const pagos = docs.filter((d) => !d.recebimento && (d.situacao.estado === 'pago' || d.situacao.estado === 'confirmado'));
+  const recebidos = docs.filter((d) => d.recebimento && (d.situacao.estado === 'pago' || d.situacao.estado === 'confirmado'));
+  const comBaixa = docs.filter((d) => !d.recebimento && d.situacao.estado === 'pago');
+  const vencidos = docs.filter((d) => !d.recebimento && d.situacao.estado === 'vencido');
+  const abertos = docs.filter((d) => !d.recebimento && d.situacao.estado === 'aberto');
   const soma = (ls) => round2(sum(ls, (d) => d.valor));
 
   openModal('Validação de pagamentos — baixas', (body) => {
@@ -11723,6 +11814,7 @@ function abrirValidacaoPagamentos() {
     resumo.className = 'cf-resumo';
     resumo.innerHTML = `
       <div class="ok"><span class="muted">Pagamento confirmado</span><strong>${money(soma(pagos))}</strong><span class="muted">${pagos.length} documento(s) · ${comBaixa.length} com data de baixa registrada</span></div>
+      <div><span class="muted">Recebimento confirmado (CAIXA)</span><strong>${money(soma(recebidos))}</strong><span class="muted">${recebidos.length} liberação(ões) creditada(s), fora do total pago</span></div>
       <div class="${vencidos.length ? 'atraso' : ''}"><span class="muted">Vencidos sem baixa</span><strong>${money(soma(vencidos))}</strong><span class="muted">${vencidos.length} documento(s)</span></div>
       <div><span class="muted">A vencer</span><strong>${money(soma(abertos))}</strong><span class="muted">${abertos.length} documento(s)</span></div>`;
     body.appendChild(resumo);
@@ -12752,7 +12844,7 @@ function compResumoDisciplinas(cache) {
   const idx = new Map(base.map((d) => [d.id, d]));
   for (const a of ((cache && cache.arquivos) || [])) {
     const m = meta[a.caminho] || {};
-    if (m.oculto) continue;
+    if (m.oculto || ehCaminhoRDO(a.caminho)) continue;
     const d = idx.get(compDisciplinaDaPasta(a.pasta || a.caminho));
     if (!d) continue;
     d.arquivos += 1;
@@ -12876,7 +12968,7 @@ function renderComprovantes() {
       b.onclick = () => { COMP.disciplina = id; COMP.pastaAtiva = ''; desenhar(); };
       chips.appendChild(b);
     };
-    addChip('todas', `Todas as disciplinas (${cache.arquivos.length})`, COMP.disciplina === 'todas');
+    addChip('todas', `Todas as disciplinas (${cache.arquivos.filter((a) => !ehCaminhoRDO(a.caminho)).length})`, COMP.disciplina === 'todas');
     for (const d of comUso) addChip(d.id, `${d.nome} (${d.arquivos})`, COMP.disciplina === d.id);
     corpo.appendChild(chips);
 
@@ -12908,15 +13000,16 @@ function renderComprovantes() {
     const barra = document.createElement('div');
     barra.className = 'comp-barra';
     barra.innerHTML = `<label>Buscar <input type="search" class="cell-input filter-control" placeholder="nome do arquivo, pasta ou observação" value="${esc(COMP.filtro)}"></label>
-      <span class="muted">${cache.arquivos.length} arquivo(s) em ${cache.pastas.length} pasta(s) · lista lida ${dateBR(cache.em.slice(0, 10))} ${cache.em.slice(11, 16)}${sel ? ` · mostrando ${esc(sel.nome)}` : ''}</span>`;
+      <span class="muted">${cache.arquivos.filter((a) => !ehCaminhoRDO(a.caminho)).length} arquivo(s) em ${cache.pastas.filter((x) => !ehCaminhoRDO(x)).length} pasta(s) · lista lida ${dateBR(cache.em.slice(0, 10))} ${cache.em.slice(11, 16)}${sel ? ` · mostrando ${esc(sel.nome)}` : ''}</span>`;
     barra.querySelector('input').addEventListener('input', (e) => { COMP.filtro = e.target.value; desenhar(); });
     corpo.appendChild(barra);
 
-    const visiveis = cache.arquivos.filter((a) => !(meta[a.caminho] || {}).oculto || filtro === 'ocultos');
+    // Os RDO têm aba própria: não entram na árvore de comprovantes.
+    const visiveis = cache.arquivos.filter((a) => !ehCaminhoRDO(a.caminho)).filter((a) => !(meta[a.caminho] || {}).oculto || filtro === 'ocultos');
     const bate = (a) => !filtro || filtro === 'ocultos' || a.caminho.toLowerCase().includes(filtro) || ((meta[a.caminho] || {}).obs || '').toLowerCase().includes(filtro);
     const arvore = { filhos: new Map(), arquivos: [] };
     const no = (caminho) => { let cur = arvore; if (!caminho) return cur; for (const p of caminho.split('/')) { if (!cur.filhos.has(p)) cur.filhos.set(p, { filhos: new Map(), arquivos: [], caminho: cur.caminho ? `${cur.caminho}/${p}` : p }); cur = cur.filhos.get(p); } return cur; };
-    for (const p of cache.pastas) no(p);
+    for (const p of cache.pastas) if (!ehCaminhoRDO(p)) no(p);
     for (const a of visiveis) if (bate(a)) no(a.pasta).arquivos.push(a);
     const conta = (n) => n.arquivos.length + [...n.filhos.values()].reduce((s, f) => s + conta(f), 0);
     const somaValor = (n) => round2(n.arquivos.reduce((s, a) => s + (Number((meta[a.caminho] || {}).valor) || 0), 0) + [...n.filhos.values()].reduce((s, f) => s + somaValor(f), 0));
@@ -13000,6 +13093,179 @@ function renderComprovantes() {
   };
   desenhar();
   if (!COMP.cache) compCarregar().then(() => { if (document.getElementById('tab-comprovantes') === root) renderComprovantes(); });
+}
+
+/* ==========================================================================
+   RDO — RELATÓRIO DIÁRIO DE OBRA
+   --------------------------------------------------------------------------
+   Mesmo bucket dos comprovantes (mesma leitura pública e mesmo envio com a
+   sessão de lançamento), só que sob o prefixo "RDO/<ano>/<mês>". A aba já
+   nasce com os 24 meses de janeiro de 2025 a dezembro de 2026; meses
+   vazios aparecem para o envio ser um clique. Como a lista do bucket é a
+   mesma (COMP.cache), a aba Comprovantes ignora tudo que estiver sob RDO/.
+   ========================================================================== */
+const RDO_PREFIXO = 'RDO';
+const RDO_ANOS = [2025, 2026];
+const RDO_MESES = ['JANEIRO', 'FEVEREIRO', 'MARCO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
+const RDO = { ano: 0, filtro: '' };
+function ehCaminhoRDO(caminho) { return String(caminho || '').split('/')[0] === RDO_PREFIXO; }
+function rdoPasta(ano, mes) { return `${RDO_PREFIXO}/${ano}/${String(mes + 1).padStart(2, '0')} - ${RDO_MESES[mes]}`; }
+// Anos que existem: os fixos mais qualquer outro que apareça no bucket.
+function rdoAnosDisponiveis() {
+  const anos = new Set(RDO_ANOS.map(String));
+  for (const a of ((COMP.cache && COMP.cache.arquivos) || [])) {
+    if (!ehCaminhoRDO(a.caminho)) continue;
+    const y = a.caminho.split('/')[1];
+    if (/^\d{4}$/.test(y)) anos.add(y);
+  }
+  return [...anos].sort();
+}
+function rdoArquivosDoMes(ano, mes) {
+  const pasta = rdoPasta(ano, mes);
+  const meta = compEstado().meta;
+  return ((COMP.cache && COMP.cache.arquivos) || [])
+    .filter((a) => a.caminho === `${pasta}/${a.nome}` || a.caminho.startsWith(`${pasta}/`))
+    .filter((a) => !(meta[a.caminho] || {}).oculto || RDO.filtro.trim().toLowerCase() === 'ocultos')
+    .sort((x, y) => String(x.nome).localeCompare(String(y.nome), 'pt-BR', { numeric: true }));
+}
+
+function renderRDO() {
+  const root = document.getElementById('tab-rdo');
+  if (!root) return;
+  root.innerHTML = '';
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  panel.innerHTML = `
+    <div class="panel-header">
+      <div>
+        <h2>RDO — Relatório Diário de Obra</h2>
+        <div class="muted">Arquivo dos relatórios diários por mês e ano. Qualquer pessoa vê e abre; quem está com a sessão de lançamento envia novos RDO. Os arquivos ficam na nuvem da obra, no mesmo acervo dos comprovantes, na pasta RDO.</div>
+      </div>
+      <div class="painel-acoes">
+        <button type="button" class="btn small filter-control" data-acao="atualizar">Atualizar lista</button>
+        <button type="button" class="btn small" data-acao="novo-ano">+ Ano</button>
+      </div>
+    </div>
+    <div class="rdo-corpo"></div>`;
+  root.appendChild(panel);
+  const corpo = panel.querySelector('.rdo-corpo');
+  if (!compDisponivel()) {
+    corpo.innerHTML = '<div class="muted">Os RDO ficam na nuvem da obra e só aparecem no site publicado (endereço http/https). Nesta cópia não há acesso à rede.</div>';
+    return;
+  }
+  const desenhar = () => {
+    corpo.innerHTML = '';
+    if (!COMP.cache) { corpo.innerHTML = COMP.erro ? `<div class="muted">Não consegui ler a lista (${esc(COMP.erro)}). Tente "Atualizar lista".</div>` : '<div class="muted">Carregando lista de RDO…</div>'; return; }
+    const meta = compEstado().meta;
+    const filtro = RDO.filtro.trim().toLowerCase();
+    const anos = rdoAnosDisponiveis();
+    if (!RDO.ano || !anos.includes(String(RDO.ano))) {
+      const hoje = String(new Date().getFullYear());
+      RDO.ano = Number(anos.includes(hoje) ? hoje : anos[anos.length - 1]);
+    }
+    const todosRDO = (COMP.cache.arquivos || []).filter((a) => ehCaminhoRDO(a.caminho) && !(meta[a.caminho] || {}).oculto);
+    const doAno = todosRDO.filter((a) => a.caminho.split('/')[1] === String(RDO.ano));
+
+    const chips = document.createElement('div');
+    chips.className = 'comp-chips no-print';
+    for (const y of anos) {
+      const b = document.createElement('button'); b.type = 'button';
+      const qtd = todosRDO.filter((a) => a.caminho.split('/')[1] === y).length;
+      b.className = `btn small comp-chip${String(RDO.ano) === y ? ' primary' : ''}`;
+      b.textContent = `${y} (${qtd})`;
+      b.onclick = () => { RDO.ano = Number(y); desenhar(); };
+      chips.appendChild(b);
+    }
+    corpo.appendChild(chips);
+
+    const mesesComRDO = new Set(doAno.map((a) => a.caminho.split('/')[2]));
+    const ultimo = todosRDO.slice().sort((x, y) => String(y.em || '').localeCompare(String(x.em || '')))[0];
+    const cards = document.createElement('div');
+    cards.className = 'cards-grid';
+    cards.style.marginBottom = '10px';
+    cards.innerHTML = `
+      <div class="card"><div class="card-label">RDO de ${RDO.ano}</div><div class="card-value">${doAno.length}</div><div class="card-sub">arquivo(s) enviados neste ano</div></div>
+      <div class="card"><div class="card-label">Meses com RDO em ${RDO.ano}</div><div class="card-value">${mesesComRDO.size} de 12</div><div class="card-sub">meses que já têm pelo menos um relatório</div></div>
+      <div class="card"><div class="card-label">Total no acervo</div><div class="card-value">${todosRDO.length}</div><div class="card-sub">todos os anos</div></div>
+      <div class="card"><div class="card-label">Último enviado</div><div class="card-value">${ultimo && ultimo.em ? dateBR(ultimo.em.slice(0, 10)) : '—'}</div><div class="card-sub">${ultimo ? esc(ultimo.nome.slice(0, 40)) : 'nenhum RDO enviado ainda'}</div></div>`;
+    corpo.appendChild(cards);
+    if (typeof ajustarCardsGrid === 'function') requestAnimationFrame(() => ajustarCardsGrid(cards));
+
+    const barra = document.createElement('div');
+    barra.className = 'comp-barra';
+    barra.innerHTML = `<label>Buscar <input type="search" class="cell-input filter-control" placeholder="nome do arquivo ou observação" value="${esc(RDO.filtro)}"></label>
+      <span class="muted">Ano ${RDO.ano} · ${doAno.length} arquivo(s)</span>`;
+    barra.querySelector('input').addEventListener('input', (e) => { RDO.filtro = e.target.value; desenhar(); });
+    corpo.appendChild(barra);
+
+    const linhaArquivo = (a) => {
+      const m = meta[a.caminho] || {};
+      const tr = document.createElement('tr');
+      tr.className = m.oculto ? 'comp-oculto' : '';
+      tr.innerHTML = `<td class="comp-prev">${compEhImagem(a) ? `<a href="${compUrlPublica(a.caminho)}" target="_blank" rel="noopener"><img loading="lazy" src="${compUrlPublica(a.caminho)}" alt=""></a>` : `<a class="comp-pdf" href="${compUrlPublica(a.caminho)}" target="_blank" rel="noopener">PDF</a>`}</td>
+        <td><a href="${compUrlPublica(a.caminho)}" target="_blank" rel="noopener">${esc(a.nome)}</a><div class="muted comp-sub">${a.em ? dateBR(a.em.slice(0, 10)) : ''} · ${compTamanho(a.tamanho)}${m.enviadoPor ? ` · enviado por ${esc(m.enviadoPor)}` : ''}${m.oculto ? ' · oculto' : ''}</div></td>
+        <td class="comp-obs"></td>
+        <td class="no-print comp-acoes"></td>`;
+      const obs = document.createElement('input'); obs.type = 'text'; obs.className = 'cell-input wide'; obs.placeholder = 'observação (ex.: RDO 007, efetivo 8, chuva à tarde)'; obs.value = m.obs || '';
+      obs.addEventListener('change', () => compAtualizarMeta(a.caminho, { obs: obs.value }));
+      tr.querySelector('.comp-obs').appendChild(obs);
+      const ac = tr.querySelector('.comp-acoes');
+      const bAbrir = document.createElement('a'); bAbrir.className = 'btn small filter-control'; bAbrir.textContent = 'Abrir'; bAbrir.href = compUrlPublica(a.caminho); bAbrir.target = '_blank'; bAbrir.rel = 'noopener'; ac.appendChild(bAbrir);
+      const bOc = document.createElement('button'); bOc.type = 'button'; bOc.className = 'btn small'; bOc.textContent = m.oculto ? 'Reexibir' : 'Ocultar'; bOc.title = 'RDO errado ou duplicado: some da lista, mas fica guardado (não há exclusão).';
+      bOc.onclick = () => { compAtualizarMeta(a.caminho, { oculto: !m.oculto }); desenhar(); }; ac.appendChild(bOc);
+      return tr;
+    };
+
+    const lista = document.createElement('div');
+    lista.className = 'comp-arvore';
+    const mesAtual = new Date().getMonth();
+    for (let mes = 0; mes < 12; mes += 1) {
+      const pasta = rdoPasta(RDO.ano, mes);
+      const arquivos = rdoArquivosDoMes(RDO.ano, mes).filter((a) => !filtro || filtro === 'ocultos' || a.nome.toLowerCase().includes(filtro) || ((meta[a.caminho] || {}).obs || '').toLowerCase().includes(filtro));
+      if (filtro && filtro !== 'ocultos' && !arquivos.length) continue;
+      const d = document.createElement('details');
+      d.className = 'comp-pasta';
+      d.open = !!filtro || (Number(RDO.ano) === new Date().getFullYear() && mes === mesAtual) || arquivos.length > 0;
+      d.innerHTML = `<summary><span class="comp-pasta-nome">${String(mes + 1).padStart(2, '0')} · ${RDO_MESES[mes]} ${RDO.ano}</span> <span class="badge ${arquivos.length ? 'green' : 'gray'}">${arquivos.length} RDO</span></summary>`;
+      const acoes = document.createElement('div');
+      acoes.className = 'comp-pasta-acoes no-print';
+      const inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true; inp.accept = '.pdf,image/*'; inp.style.display = 'none';
+      const bEnv = document.createElement('button'); bEnv.type = 'button'; bEnv.className = 'btn small primary'; bEnv.textContent = `Enviar RDO de ${RDO_MESES[mes]}`;
+      bEnv.onclick = () => inp.click();
+      inp.addEventListener('change', async () => {
+        if (!inp.files.length) return;
+        bEnv.disabled = true; bEnv.textContent = `Enviando ${inp.files.length} arquivo(s)…`;
+        const r = await compEnviar(pasta, [...inp.files]);
+        toast(r.erros.length ? `Enviados ${r.enviados.length}; falhou: ${r.erros.join('; ')}` : `${r.enviados.length} RDO enviado(s) para ${RDO_MESES[mes]} de ${RDO.ano}.`, !!r.erros.length);
+        desenhar();
+      });
+      acoes.append(bEnv, inp);
+      d.appendChild(acoes);
+      if (arquivos.length) {
+        const t = document.createElement('table'); t.className = 'extrato-table comp-tabela';
+        t.innerHTML = '<thead><tr><th></th><th>Arquivo</th><th>Observação</th><th class="no-print"></th></tr></thead><tbody></tbody>';
+        for (const a of arquivos) t.querySelector('tbody').appendChild(linhaArquivo(a));
+        d.appendChild(t);
+      } else {
+        const v = document.createElement('div'); v.className = 'muted comp-vazia'; v.textContent = 'Nenhum RDO enviado neste mês.'; d.appendChild(v);
+      }
+      lista.appendChild(d);
+    }
+    if (!lista.children.length) { const v = document.createElement('div'); v.className = 'muted'; v.textContent = 'Nenhum RDO encontrado com esse filtro.'; lista.appendChild(v); }
+    corpo.appendChild(lista);
+    if (READONLY) travarSomenteLeitura(lista);
+  };
+  panel.querySelector('button[data-acao="atualizar"]').onclick = async () => { COMP.cache = null; desenhar(); await compCarregar(true); renderRDO(); };
+  panel.querySelector('button[data-acao="novo-ano"]').onclick = async () => {
+    const ano = await promptDialog('Ano do RDO (ex.: 2027)', String(new Date().getFullYear() + 1));
+    if (!ano || !/^\d{4}$/.test(ano.trim())) return;
+    for (let mes = 0; mes < 12; mes += 1) compCriarPasta(rdoPasta(ano.trim(), mes));
+    RDO.ano = Number(ano.trim());
+    desenhar();
+    toast(`Meses de ${ano.trim()} criados.`);
+  };
+  desenhar();
+  if (!COMP.cache) compCarregar().then(() => { if (document.getElementById('tab-rdo') === root) renderRDO(); });
 }
 
 /* ==========================================================================
@@ -13131,6 +13397,82 @@ function gerarApontamentos() {
       fazer: 'Conferir no extrato do CAIXA como o valor foi lançado: se entrou como liberação do banco, mudar o tipo do lançamento em Liberação PCI para "Liberação CAIXA" e os dois números passam a ser um só; se foi depósito de terceiro, o valor a liberar é o do app.' });
   }
 
+  // 6d. Pago ao empreiteiro acima do que já foi medido
+  {
+    const consumido = Number(r.totalConsumidoContrato) || 0;
+    const medido = Number(r.totalMedido) || 0;
+    const dif = round2(consumido - medido);
+    if (dif > 0.5) add({ id: 'pago-acima-medido', grav: 'apurar', tela: 'avancos',
+      titulo: `Empreiteiro recebeu ${money(dif)} a mais do que já foi medido`,
+      onde: 'Demonstrativo Financeiro › Conciliação do empreiteiro · Lançar Avanços',
+      valores: `consumido do contrato ${money(consumido)} (PIX ${money(r.totalEmpreiteiroPago)} + cartão ${money(r.totalCartaoPago)}) × medido ${money(medido)}`,
+      fazer: 'Conferir se falta lançar avanço físico das etapas já executadas ou se houve adiantamento a compensar nas próximas quinzenas.' });
+  }
+
+  // 6e. Liberação do banco acima do teto do PCI para o avanço atual
+  {
+    const etapas = (VIEW.liberacaoPCI || []);
+    const atingidas = etapas.filter((e) => (Number(r.percObraGeral) || 0) >= (Number(e.percLimiteAcumulado) || 0));
+    const teto = round2(atingidas.reduce((a, e) => a + (Number(e.valor) || 0), 0));
+    const dif = round2((Number(r.caixaLiberadaAcumulada) || 0) - teto);
+    if (teto > 0 && dif > 0.5) add({ id: 'pci-acima-teto', grav: 'info', tela: 'pci',
+      titulo: `Crédito liberado ${money(dif)} acima do teto das etapas já atingidas`,
+      onde: 'Liberação PCI › cronograma macro e liberações reais',
+      valores: `liberado ${money(r.caixaLiberadaAcumulada)} × teto das etapas até ${pct(r.percObraGeral)} de obra ${money(teto)} (${atingidas.length} etapa(s))`,
+      fazer: 'Liberação adiantada em relação ao PCI (PLS). Não é erro de lançamento: é antecipação do banco a conferir na próxima medição.' });
+  }
+
+  // 6f. Aporte de recurso próprio dos preliminares × itens pagos direto
+  {
+    const itens = round2(sum((VIEW.categorias || []).filter((c) => c.pagoDiretoProprietario).flatMap((c) => c.itens || []), (it) => Math.max(0, Number(it.valorRealizado) || 0)));
+    const aporte = round2(sum((VIEW.consumosRecursoProprio || []).filter((c) => /prelimin/i.test(String(c.descricao || ''))), (c) => Number(c.valor) || 0));
+    const dif = round2(itens - aporte);
+    if (aporte > 0 && Math.abs(dif) > 0.01) add({ id: 'aporte-prelim', grav: 'ajustar', tela: 'parametros',
+      titulo: `Serviços preliminares: itens somam ${money(itens)} e o aporte registrado é ${money(aporte)}`,
+      onde: 'Parâmetros › consumos de recurso próprio · Detalhamento FC › categoria paga direto',
+      valores: `diferença ${money(dif)}`,
+      fazer: 'Acertar o aporte para o valor dos itens. Enquanto não bater, o saldo de recurso próprio e o saldo acumulado do Fluxo de Caixa ficam com essa mesma diferença.' });
+  }
+
+  // 6g. ADM digitada fora da regra (taxa × base)
+  {
+    const fora = [];
+    for (const p of (VIEW.parcelas || [])) {
+      if (!(p.overrides && p.overrides.totalAdmPix)) continue;
+      const teorico = round2(admDerivadaParcela(p));
+      const real2 = round2(Number(p.totalAdmPix) || 0);
+      const d = round2(real2 - teorico);
+      if (Math.abs(d) > 0.01) fora.push({ label: p.label || 'Quinzena', d, real2, teorico });
+    }
+    if (fora.length) add({ id: 'adm-fora-regra', grav: 'apurar', tela: 'dashboard',
+      titulo: `${fora.length} quinzena(s) com administração digitada fora da regra (taxa × base)`,
+      onde: 'Contas a Pagar › coluna ADM',
+      valores: fora.map((x) => `${x.label}: ${money(x.real2)} × regra ${money(x.teorico)} (${x.d > 0 ? '+' : ''}${money(x.d)})`).join(' · ') + ` · efeito total ${money(round2(fora.reduce((a, x) => a + x.d, 0)))}`,
+      fazer: 'Conferir cada valor com o contrato de administração e o comprovante; se estiver certo, o valor digitado prevalece e esta linha serve de registro.' });
+  }
+
+  // 6h. Liberação por categoria (teórica) × medições reais do banco
+  {
+    const porCategoria = round2(Number(r.totalCaixaLiberadoCategorias) || 0);
+    const medicoes = round2((Number(r.caixaLiberadaAcumulada) || 0) - (Number((VIEW.parametros || {}).custoLoteExecutado) || 0));
+    const dif = round2(medicoes - porCategoria);
+    if (porCategoria > 0 && Math.abs(dif) > 0.01) add({ id: 'liberado-categorias', grav: 'info', tela: 'pci',
+      titulo: `Liberação por categoria ${money(porCategoria)} × medições reais do banco ${money(medicoes)}`,
+      onde: 'Liberação PCI › liberação por categoria (verba CAIXA) · liberações reais',
+      valores: `diferença ${money(dif)}`,
+      fazer: 'A coluna por categoria é uma estimativa (verba × avanço) e não substitui a medição do banco. Use as medições reais para saldo de crédito.' });
+  }
+
+  // 6i. Coerência entre telas: mesmo conceito com número diferente
+  for (const c of coerenciaEntreTelas()) {
+    if (c.ok) continue;
+    add({ id: `coer-${c.conceito.slice(0, 28).replace(/[^a-zA-Z0-9]+/g, '-')}`, grav: 'ajustar', tela: 'analise',
+      titulo: `"${c.conceito}" aparece com valores diferentes em telas diferentes`,
+      onde: c.leituras.map((l) => l.tela).join(' · '),
+      valores: c.leituras.map((l) => `${l.tela}: ${money(l.valor)}`).join(' · ') + ` · diferença ${money(c.dif)}`,
+      fazer: c.nota ? `Conferir: ${c.nota}.` : 'Conferir qual das telas está com o lançamento incompleto; o número tem de ser o mesmo nas duas.' });
+  }
+
   // 7. Lote: custo × pagamentos
   if (m.loteBruto) {
     const custoLote = round2((Number(P.custoTerreno) || 0) + (Number(P.multaLote) || 0));
@@ -13144,7 +13486,7 @@ function gerarApontamentos() {
   if (r.origemSaldoRecurso === 'manual') add({ id: 'saldo-rp-manual', grav: 'info', tela: 'parametros', titulo: 'Saldo de recurso próprio disponível informado em Parâmetros › Avançado', onde: 'Parâmetros › Avançado', valores: money(r.saldoRecursoDisponivel), fazer: 'Enquanto informado, o saldo não acompanha os lançamentos. Limpar o campo para voltar ao cálculo automático.' });
   let viab = null;
   try { viab = auditoriaViabilidadeHtml(); } catch (e) { viab = null; }
-  if (viab) for (const [i, a] of viab.alertas.entries()) if (!/ajustado manualmente|difere do teórico/.test(a)) add({ id: `viab-${i}`, grav: 'apurar', tela: 'dashboard', titulo: a.replace(/<[^>]+>/g, ''), onde: 'Demonstrativo Financeiro › Viabilidade', valores: '', fazer: 'Ver detalhe em "Conciliação da viabilidade" abaixo.', html: a });
+  if (viab) for (const [i, a] of viab.alertas.entries()) if (!/difere do teórico/.test(a)) add({ id: `viab-${i}`, grav: 'apurar', tela: 'dashboard', titulo: a.replace(/<[^>]+>/g, ''), onde: 'Demonstrativo Financeiro › Viabilidade', valores: '', fazer: 'Ver detalhe em "Conciliação da viabilidade" abaixo.', html: a });
 
   // 8a. Parâmetros × soma das categorias
   const orcCat = round2((VIEW.categorias || []).reduce((a, c) => a + (Number(c.valorOrcado) || 0), 0));
@@ -13164,6 +13506,86 @@ function gerarApontamentos() {
 }
 
 
+/* Coerência entre telas.
+   -------------------------------------------------------------------------
+   Cada linha é UM conceito lido em telas diferentes, por caminhos de cálculo
+   diferentes. Se duas telas mostram o mesmo nome com números diferentes, a
+   linha acusa e vira apontamento. É a resposta direta ao "os números das abas
+   não se conversam": aqui dá para ver, número a número, se conversam. */
+function coerenciaEntreTelas() {
+  const r = VIEW.resumo || {};
+  const P = VIEW.parametros || {};
+  const m = movimentoDinheiro();
+  const cc = conciliacaoCreditoCaixa();
+  const real = (VIEW.parcelas || []).filter((p) => p.status === 'REALIZADO');
+  const S = (arr, f) => round2(arr.reduce((a, x) => a + (Number(f(x)) || 0), 0));
+  const gMov = (id) => round2((m.linhas || []).filter((x) => x.tipo === 'saida' && x.status === 'REALIZADO' && x.grupo === id).reduce((a, x) => a + x.valor, 0));
+  const fluxo = VIEW.fluxoCaixaMensal || [];
+  const ultimoReal = [...fluxo].reverse().find((x) => (x.saidaRealizada || 0) > 0 || (x.entradaRealizada || 0) > 0);
+  const curva = (typeof buildCurvaCaixa === 'function' && typeof buildMonthlyCheckpoints === 'function' && VIEW.meta && VIEW.meta.dataInicio) ? (() => { try { const cps = buildMonthlyCheckpoints(VIEW.meta.dataInicio, VIEW.meta.previsaoTermino); const c = buildCurvaCaixa(cps, VIEW.meta.dataInicio); return c.executed[c.executed.length - 1]; } catch (e) { return null; } })() : null;
+  const linhas = [];
+  const add = (conceito, leituras, nota) => {
+    const vals = leituras.filter((l) => l.valor !== null && l.valor !== undefined);
+    const max = Math.max(...vals.map((l) => l.valor));
+    const min = Math.min(...vals.map((l) => l.valor));
+    linhas.push({ conceito, leituras: vals, dif: round2(max - min), ok: round2(max - min) <= 0.01, nota: nota || '' });
+  };
+  add('Custo total realizado (gasto total da obra)', [
+    { tela: 'Dashboard Executivo · card', valor: m.custoTotal },
+    { tela: 'Demonstrativo · total gasto acumulado', valor: Number(r.totalGastoAcumulado) || 0 },
+    { tela: 'Extrato por conta · custo total', valor: round2(m.saidas - m.estornos) },
+  ], 'quinzenas realizadas + lote líquido + serviços preliminares');
+  add('Crédito CAIXA liberado', [
+    { tela: 'Demonstrativo · Valor caixa liberado', valor: Number(r.caixaLiberadaAcumulada) || 0 },
+    { tela: 'Liberação PCI · conferência do crédito', valor: cc.liberado },
+    { tela: 'Dashboard · curva S do caixa (executado)', valor: curva },
+  ], 'lote pago pelo banco + medições com status REALIZADO');
+  add('PCI ainda a liberar', [
+    { tela: 'Demonstrativo · extrato da verba', valor: Number(r.saldoCaixaDisponivel) || 0 },
+    { tela: 'Liberação PCI · conferência do crédito', valor: cc.aLiberar },
+  ], 'crédito contratado − crédito já liberado');
+  add('Entradas na conta da obra', [
+    { tela: 'Extrato por conta · conta da obra', valor: m.entradasCaixa },
+    { tela: 'Liberação PCI · conferência do crédito', valor: cc.entrouNaConta },
+  ], 'crédito liberado + devoluções e depósitos');
+  add('Saldo em conta', [
+    { tela: 'Dashboard Executivo · saldo em conta', valor: Number(r.saldoContaRealizado) || 0 },
+    { tela: 'Extrato por conta · saldo da conta da obra', valor: (m.contas[0] || {}).saldo },
+  ], 'entradas − saídas da conta da obra desde a primeira liberação');
+  add('Fluxo de caixa: acumulado realizado × saldo em conta', [
+    { tela: 'Fluxo de Caixa · acumulado no último período realizado', valor: ultimoReal ? ultimoReal.saldoAcumuladoMes : null },
+    { tela: 'Dashboard Executivo · saldo em conta', valor: Number(r.saldoContaRealizado) || 0 },
+  ], 'o fluxo soma as duas contas; diferença aqui é aporte de recurso próprio não registrado');
+  add('Empreiteiro (PIX) realizado', [
+    { tela: 'Contas a Pagar · coluna PIX', valor: S(real, (p) => p.totalEmpreiteiroPix) },
+    { tela: 'Extrato por conta · grupo empreiteiro', valor: gMov('pix') },
+    { tela: 'Demonstrativo · total pago ao empreiteiro', valor: Number(r.totalEmpreiteiroPago) || 0 },
+  ]);
+  add('Administração RS realizada', [
+    { tela: 'Contas a Pagar · coluna ADM', valor: S(real, (p) => p.totalAdmPix) },
+    { tela: 'Extrato por conta · grupo administração', valor: gMov('adm') },
+    { tela: 'Demonstrativo · card administração', valor: Number(r.totalAdmPago) || 0 },
+  ]);
+  add('Cartão (materiais) realizado', [
+    { tela: 'Contas a Pagar · coluna cartão', valor: S(real, (p) => p.gastoCartao) },
+    { tela: 'Extrato por conta · grupo cartão', valor: gMov('cartao') },
+    { tela: 'Demonstrativo · card gasto no cartão', valor: Number(r.totalCartaoPago) || 0 },
+  ]);
+  add('Serviços preliminares (pago direto)', [
+    { tela: 'Detalhamento FC · categorias pagas direto', valor: Number(r.totalPagoDiretoProprietario) || 0 },
+    { tela: 'Extrato por conta · grupo preliminares', valor: m.preliminares },
+  ]);
+  add('Recurso próprio: aportes × pagamentos', [
+    { tela: 'Parâmetros · aportes registrados', valor: Number(r.totalConsumoRecursoProprio) || 0 },
+    { tela: 'Extrato por conta · saídas de recurso próprio', valor: m.saidasProprio },
+  ], 'diferença indica aporte a registrar ou pagamento lançado na conta errada');
+  add('Lote: custo em Parâmetros × pago líquido', [
+    { tela: 'Parâmetros · terreno + multa', valor: round2((Number(P.custoTerreno) || 0) + (Number(P.multaLote) || 0)) },
+    { tela: 'Extrato por conta · lote líquido', valor: m.lote },
+  ]);
+  return linhas;
+}
+
 /* Memorial de cálculo: cada total das telas principais com a fórmula, a fonte
    e uma checagem por caminho independente. Qualquer diferença vira apontamento. */
 function memorialCalculo() {
@@ -13180,13 +13602,14 @@ function memorialCalculo() {
   const custoLote = round2((Number(P.custoTerreno) || 0) + (Number(P.multaLote) || 0));
   add('Custo total realizado (card do Dashboard)', m.custoTotal, 'quinzenas realizadas (custo total) + lote líquido (terreno + multa) + serviços preliminares pagos direto', 'Contas a Pagar, Parâmetros, Detalhamento FC', 'Σ custo total das quinzenas REALIZADAS + (terreno + multa) + Σ itens pagos direto', S(real, (p) => p.custoTotal) + custoLote + prelim, 'painel');
   add('Total gasto acumulado (Demonstrativo e relatório Global de desembolso)', r.totalGastoAcumulado, 'PLS (lote financiado + quinzenas realizadas) + preliminares + entrada do lote − devolução', 'Demonstrativo Financeiro, Relatórios', 'custo total realizado do card do Dashboard', m.custoTotal, 'dashboard');
-  add('Custo das quinzenas realizadas', m.custoQuinzenas, 'Σ "Custo total" das quinzenas REALIZADAS', 'Contas a Pagar', 'Σ (PIX + ADM + cartão + evolução) + Σ diferenças de apuração', somaComp + difApur, 'dashboard');
-  add('Empreiteiro (PIX) realizado', S(real, (p) => p.totalEmpreiteiroPix), 'Σ coluna Empreiteiro (PIX) das quinzenas REALIZADAS', 'Contas a Pagar', 'resumo.totalEmpreiteiroPago (Dashboard / relatório do empreiteiro)', r.totalEmpreiteiroPago, 'dashboard');
-  add('Administração RS (PIX) realizada', S(real, (p) => p.totalAdmPix), 'Σ coluna ADM das quinzenas REALIZADAS (regra: taxa × base, salvo valor informado)', 'Contas a Pagar', 'resumo.totalAdmPago (relatório de administração)', r.totalAdmPago, 'dashboard');
+  const gMov = (id) => round2((m.linhas || []).filter((x) => x.tipo === 'saida' && x.status === 'REALIZADO' && x.grupo === id).reduce((a, x) => a + x.valor, 0));
+  add('Custo das quinzenas realizadas',  m.custoQuinzenas, 'Σ "Custo total" das quinzenas REALIZADAS', 'Contas a Pagar', 'Σ (PIX + ADM + cartão + evolução) das mesmas quinzenas, sem somar de volta a diferença de apuração', somaComp, 'dashboard');
+  add('Empreiteiro (PIX) realizado', S(real, (p) => p.totalEmpreiteiroPix), 'Σ coluna Empreiteiro (PIX) das quinzenas REALIZADAS', 'Contas a Pagar', 'grupo Empreiteiro (PIX) do extrato por conta, que remonta os lançamentos pela data', gMov('pix'), 'dashboard');
+  add('Administração RS (PIX) realizada', S(real, (p) => p.totalAdmPix), 'Σ coluna ADM das quinzenas REALIZADAS (regra: taxa × base, salvo valor informado)', 'Contas a Pagar', 'grupo Administração do extrato por conta', gMov('adm'), 'dashboard');
   const mesesReal = new Set(real.map((p) => monthKeyFromDateStr(p.vencimento || p.vencPlanejado || '')).filter(Boolean));
   const fatReal = S(faturasCartao().filter((f) => mesesReal.has(f.mes)), (f) => f.total);
   add('Cartão (materiais) realizado', S(real, (p) => p.gastoCartao), 'Σ coluna Cartão das quinzenas REALIZADAS', 'Contas a Pagar', 'Σ itens de cartão do Detalhamento FC nas faturas dos meses com quinzena realizada', fatReal, 'detalhamento');
-  add('Evolução CAIXA (juros, seguro) realizada', S(real, (p) => p.parcelaEvolucaoCaixa), 'Σ coluna Evolução CAIXA das quinzenas REALIZADAS', 'Contas a Pagar', 'resumo.totalEvolucaoCaixaPago', r.totalEvolucaoCaixaPago, 'dashboard');
+  add('Evolução CAIXA (juros, seguro) realizada', S(real, (p) => p.parcelaEvolucaoCaixa), 'Σ coluna Evolução CAIXA das quinzenas REALIZADAS', 'Contas a Pagar', 'grupo Evolução CAIXA do extrato por conta', gMov('evolucao'), 'dashboard');
   add('Serviços preliminares pagos direto', m.preliminares, 'Σ valor realizado dos itens das categorias pagas direto pelo proprietário', 'Detalhamento FC', 'resumo.totalPagoDiretoProprietario', r.totalPagoDiretoProprietario, 'detalhamento');
   add('Lote líquido (custo do terreno)', m.lote, 'pago bruto ao terrenista (CAIXA + proprietário) − devolução', 'Parâmetros, Liberação PCI', 'Parâmetros: custo do terreno + multa de lote', custoLote, 'parametros');
   const libs = (VIEW.liberacoesCaixa || []).filter((l) => (l.status || 'REALIZADO') === 'REALIZADO');
@@ -13283,6 +13706,19 @@ function renderAnaliseEm(root, opts = {}) {
       <div class="muted" style="margin-bottom:6px">Cada número das telas principais com a fórmula, a tela de origem e uma checagem por outro caminho. "Confere" = os dois caminhos dão o mesmo valor.</div>
       <div class="table-scroll"><table class="extrato-table rel-table analise-memorial"><thead><tr><th>Número</th><th class="num">Valor</th><th>Fórmula</th><th>Fonte (tela)</th><th>Checagem por outro caminho</th><th class="num">Valor da checagem</th><th>Situação</th></tr></thead>
       <tbody>${mem.map((l) => `<tr><td><strong>${esc(l.nome)}</strong></td><td class="num">${money(l.valor)}</td><td class="muted">${esc(l.formula)}</td><td class="muted">${esc(l.fonte)}</td><td class="muted">${esc(l.checagem)}</td><td class="num">${money(l.valorB)}</td><td>${Math.abs(l.dif) > 0.05 ? `<span class="badge red">difere ${money(l.dif)}</span>` : '<span class="badge green">confere</span>'}</td></tr>`).join('')}</tbody></table></div>`;
+    root.appendChild(p);
+  }
+
+  // Coerência entre telas
+  {
+    const p = document.createElement('div');
+    p.className = 'panel';
+    const linhas = coerenciaEntreTelas();
+    const fora = linhas.filter((l) => !l.ok).length;
+    p.innerHTML = `<h3 class="mov-h3">Coerência entre telas: o mesmo número lido em lugares diferentes</h3>
+      <div class="muted" style="margin-bottom:6px">Cada linha é um conceito calculado por caminhos independentes. ${fora ? `<strong>${fora} conceito(s)</strong> aparecem com valores diferentes e viraram apontamento acima.` : 'Todos os conceitos batem entre as telas.'}</div>
+      <div class="table-scroll"><table class="extrato-table rel-table analise-memorial"><thead><tr><th>Número</th><th>Onde aparece</th><th class="num">Valor</th><th>Situação</th></tr></thead>
+      <tbody>${linhas.map((l) => l.leituras.map((x, i) => `<tr${i === 0 ? '' : ' class="rel-sub"'}>${i === 0 ? `<td rowspan="${l.leituras.length}"><strong>${esc(l.conceito)}</strong>${l.nota ? `<div class="muted">${esc(l.nota)}</div>` : ''}</td>` : ''}<td>${esc(x.tela)}</td><td class="num">${money(x.valor)}</td>${i === 0 ? `<td rowspan="${l.leituras.length}" class="${l.ok ? 'st-ok' : 'st-neg'}">${l.ok ? 'confere' : `diferença ${money(l.dif)}`}</td>` : ''}</tr>`).join('')).join('')}</tbody></table></div>`;
     root.appendChild(p);
   }
 
