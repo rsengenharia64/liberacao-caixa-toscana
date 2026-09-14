@@ -516,6 +516,8 @@
   .saldo-zerado-tag { font-size: 11px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase;
     background: var(--danger); color: #fff; padding: 3px 8px; border-radius: 999px; vertical-align: middle; margin-left: 8px; }
   .mov-proprio { color: var(--danger); font-weight: 700; }
+  .card-alerta-proprio { margin-top: 6px; font-size: 12px; line-height: 1.35; color: var(--danger);
+    background: rgba(200, 40, 40, .07); border-left: 3px solid var(--danger); padding: 5px 8px; border-radius: 4px; }
   .saldo-ponte .proprio { border-top: 1px dashed var(--danger); padding-top: 4px; margin-top: 2px; }
   .value-drill:disabled { opacity: 1; cursor: pointer; }
   .value-drill .drill-hint {
@@ -6763,19 +6765,40 @@ function projecaoSaldoConta() {
     eventos.push({ data: d, tipo: 'saida', valor: v, descricao: `${p.label || 'Quinzena'} (PIX ${money(p.totalEmpreiteiroPix)} + ADM ${money(p.totalAdmPix)} + cartão ${money(p.gastoCartao)} + evolução ${money(p.parcelaEvolucaoCaixa)})`, origem: 'Contas a Pagar › quinzenas com status PLANEJADO', tela: 'dashboard' });
   }
   eventos.sort((a, b) => String(a.data || '9999-12-31').localeCompare(String(b.data || '9999-12-31')));
+  /* Mesma cascata do Dashboard — e isso PRECISA ser a mesma conta.
+     -----------------------------------------------------------------------
+     Esta projeção acumulava saldo sem travar em zero, então o Demonstrativo
+     mostrava saldo negativo enquanto o card do Dashboard mostrava zero com o
+     rombo classificado como recurso próprio: duas telas contando a mesma
+     realidade com sinais opostos. Agora o saldo trava em zero aqui também e o
+     que faltaria vai para `proprioTotal`, mês a mês — o negativo de antes é
+     exatamente esse número. */
   const meses = [];
   let saldo = saldoHoje;
+  let proprioTotal = 0;
   for (const e of eventos) {
     const mk = e.data ? e.data.slice(0, 7) : 'sem-data';
     let m = meses.find((x) => x.mes === mk);
-    if (!m) { meses.push(m = { mes: mk, label: mk === 'sem-data' ? 'Sem data' : `${MESES_CONTROLE[Number(mk.slice(5, 7)) - 1]} de ${mk.slice(0, 4)}`, saldoInicio: saldo, entradas: [], saidas: [], entradaTotal: 0, saidaTotal: 0 }); }
-    if (e.tipo === 'entrada') { m.entradas.push(e); m.entradaTotal = round2(m.entradaTotal + e.valor); saldo = round2(saldo + e.valor); }
-    else { m.saidas.push(e); m.saidaTotal = round2(m.saidaTotal + e.valor); saldo = round2(saldo - e.valor); }
+    if (!m) { meses.push(m = { mes: mk, label: mk === 'sem-data' ? 'Sem data' : `${MESES_CONTROLE[Number(mk.slice(5, 7)) - 1]} de ${mk.slice(0, 4)}`, saldoInicio: saldo, entradas: [], saidas: [], entradaTotal: 0, saidaTotal: 0, proprioMes: 0 }); }
+    if (e.tipo === 'entrada') {
+      m.entradas.push(e); m.entradaTotal = round2(m.entradaTotal + e.valor);
+      saldo = round2(saldo + e.valor);
+    } else {
+      m.saidas.push(e); m.saidaTotal = round2(m.saidaTotal + e.valor);
+      const daCaixa = Math.min(saldo, e.valor);
+      const doProprio = round2(e.valor - daCaixa);
+      saldo = round2(saldo - daCaixa);
+      proprioTotal = round2(proprioTotal + doProprio);
+      m.proprioMes = round2(m.proprioMes + doProprio);
+    }
     m.saldoFim = saldo;
+    m.proprioAcum = proprioTotal;
   }
   const mesAtual = hoje.slice(0, 7);
   const doMes = meses.find((m) => m.mes === mesAtual);
-  const pior = meses.length ? meses.reduce((a, m) => (m.saldoFim < a.saldoFim ? m : a)) : null;
+  // O "pior mês" deixa de ser o de saldo mais negativo (não existe mais) e
+  // passa a ser o que mais puxou recurso próprio — que é o que dói de fato.
+  const pior = meses.length ? meses.reduce((a, m) => (m.proprioMes > a.proprioMes ? m : a)) : null;
   return {
     hoje, saldoHoje, meses,
     saldoFimMesAtual: doMes ? doMes.saldoFim : saldoHoje,
@@ -6783,7 +6806,8 @@ function projecaoSaldoConta() {
     saldoFinal: meses.length ? meses[meses.length - 1].saldoFim : saldoHoje,
     entradasPrevistas: round2(meses.reduce((a, m) => a + m.entradaTotal, 0)),
     saidasPlanejadas: round2(meses.reduce((a, m) => a + m.saidaTotal, 0)),
-    pior,
+    proprioNecessario: proprioTotal,
+    pior: pior && pior.proprioMes > 0 ? pior : null,
   };
 }
 
@@ -6816,11 +6840,12 @@ function abrirProjecaoSaldoConta() {
       </tbody></table>`;
     body.appendChild(tw);
     const fim = document.createElement('div');
-    fim.className = pr.pior && pr.pior.saldoFim < 0 ? 'mov-fech-aviso' : 'mov-fech-ok';
+    const precisaProprio = Number(pr.proprioNecessario) || 0;
+    fim.className = precisaProprio > 0 ? 'mov-fech-aviso' : 'mov-fech-ok';
     fim.style.marginTop = '10px';
-    fim.innerHTML = pr.pior && pr.pior.saldoFim < 0
-      ? `Com o que está lançado hoje, a conta fica negativa em <strong>${money(pr.pior.saldoFim)}</strong> no fim de ${esc(pr.pior.label)}: nesse mês faltam <strong>${money(Math.abs(pr.pior.saldoFim))}</strong> de liberação do banco ou de aporte. Para cobrir, o crédito ainda a liberar é de ${money(Number(r.saldoCaixaDisponivel) || 0)}.`
-      : `Com o que está lançado hoje, a conta fecha positiva em todos os meses; o menor saldo é <strong>${money(pr.pior ? pr.pior.saldoFim : pr.saldoHoje)}</strong>${pr.pior ? ` no fim de ${esc(pr.pior.label)}` : ''}.`;
+    fim.innerHTML = precisaProprio > 0
+      ? `Com o que está lançado hoje, a verba do banco não cobre tudo: <strong>${money(precisaProprio)}</strong> sairão de recurso próprio até o fim do que está lançado${pr.pior ? `, com o maior aperto em ${esc(pr.pior.label)} (${money(pr.pior.proprioMes)} só nesse mês)` : ''}. A conta do CAIXA não fica negativa — ela zera, e a diferença é sua. Crédito ainda a liberar: ${money(Number(r.saldoCaixaDisponivel) || 0)}.`
+      : `Com o que está lançado hoje, a liberação do banco cobre todas as quinzenas: nenhum recurso próprio é consumido no período.`;
     body.appendChild(fim);
   }, { wide: true });
 }
@@ -8202,10 +8227,11 @@ function renderDashboard() {
       <div class="progress-bar" style="margin-top:6px"><span style="width:${Math.min(100, r.percExecucaoFinanceira * 100)}%"></span></div>
       <div class="card-sub">Gasto total da obra (${money(r.totalGastoAcumulado)}: quinzenas realizadas + lote + serviços preliminares) sobre o financiamento total disponível: crédito CAIXA (${money(r.creditoCaixaTotalPCI)}) + recurso próprio planejado (${money(r.recursoProprioPlanejado)})</div>
     </div>
-    ${(() => { const pr = projecaoSaldoConta(); return `<div class="card ${pr.pior && pr.pior.saldoFim < 0 ? 'warn' : ''}">
+    ${(() => { const pr = projecaoSaldoConta(); const prop = Number(pr.proprioNecessario) || 0; return `<div class="card ${prop > 0 ? 'warn' : ''}">
       <div class="card-label">Saldo em conta projetado (fim de ${esc(pr.mesAtualLabel)})</div>
       ${cardValueDrill('saldoProjetado', pr.saldoFimMesAtual, 'ver mês a mês')}
-      <div class="card-sub">Saldo de hoje ${money(pr.saldoHoje)} + entradas previstas ${money(pr.entradasPrevistas)} − quinzenas planejadas ${money(pr.saidasPlanejadas)}. Só lançamento com status PLANEJADO entra; clique para ver mês a mês, linha por linha.</div>
+      ${prop > 0 ? `<div class="card-alerta-proprio">Consome <strong>${money(prop)}</strong> de recurso próprio no período — a conta do CAIXA zera antes de cobrir as quinzenas.</div>` : ''}
+      <div class="card-sub">Saldo de hoje ${money(pr.saldoHoje)} + entradas previstas ${money(pr.entradasPrevistas)} − quinzenas planejadas ${money(pr.saidasPlanejadas)}${prop > 0 ? ` + recurso próprio ${money(prop)}` : ''}. Só lançamento com status PLANEJADO entra; clique para ver mês a mês, linha por linha.</div>
     </div>`; })()}
     <div class="card">
       <div class="card-label">Valor caixa liberado</div>
@@ -14057,7 +14083,10 @@ function memorialCalculo() {
   const ccMem = conciliacaoCreditoCaixa();
   {
     const pr = projecaoSaldoConta();
-    add('Saldo em conta projetado (card do Demonstrativo)', pr.saldoFinal, 'saldo em conta de hoje + liberações previstas − quinzenas planejadas (só status PLANEJADO)', 'Dashboard › saldo em conta · Liberação PCI · Contas a Pagar', 'saldo de hoje + entradas previstas − saídas planejadas, somadas à parte', round2(pr.saldoHoje + pr.entradasPrevistas - pr.saidasPlanejadas), 'dashboard');
+    /* A conferência tem de usar a MESMA conta da projeção: com o saldo travado
+       em zero, o que faltaria virou recurso próprio, então ele entra somando —
+       senão esta linha acusaria divergência do tamanho exato do próprio. */
+    add('Saldo em conta projetado (card do Demonstrativo)', pr.saldoFinal, 'saldo de hoje + liberações previstas − quinzenas planejadas + recurso próprio necessário (a conta trava em zero)', 'Dashboard › saldo em conta · Liberação PCI · Contas a Pagar', 'saldo de hoje + entradas previstas − saídas planejadas + próprio necessário', round2(pr.saldoHoje + pr.entradasPrevistas - pr.saidasPlanejadas + (Number(pr.proprioNecessario) || 0)), 'dashboard');
   }
   add('PCI ainda a liberar', ccMem.aLiberar, 'crédito PCI contratado − crédito CAIXA liberado (devolução de terceiro não consome crédito)', 'Parâmetros › crédito CAIXA total do PCI · Liberação PCI', 'crédito PCI − (entradas da conta da obra − devoluções e depósitos)', round2(ccMem.total - (m.entradasCaixa - ccMem.somaFora)), 'pci');
   add('Saldo em conta (Dashboard)', r.saldoContaRealizado, `liberações e devoluções desde ${dateBR(r.marcoSaldoConta)} − custo total das quinzenas REALIZADAS desde essa data`, 'Dashboard › Saldo em conta', 'saldo da conta da obra no extrato por conta (entradas − saídas)', m.contas[0].saldo, 'painel');
