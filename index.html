@@ -508,6 +508,9 @@
   .value-drill.small .drill-hint { font-size: 10px; padding: 3px 7px; }
   .value-drill .drill-value { border-bottom: 2px dashed var(--accent); }
   .value-drill:hover .drill-value { color: var(--accent-ink); }
+  /* Número clicável dentro de uma tabela — abre a composição que o sustenta. */
+  .drill-num { cursor: pointer; border-bottom: 1px dashed var(--accent); }
+  .drill-num:hover { color: var(--accent-ink); border-bottom-style: solid; }
   .value-drill:disabled { opacity: 1; cursor: pointer; }
   .value-drill .drill-hint {
     font: 600 11px/1 "Archivo", sans-serif; color: var(--accent-ink); background: var(--accent-soft);
@@ -1789,26 +1792,47 @@ function recompute(state) {
   // Configurável em Parâmetros > Regras de cálculo (marcoSaldoConta); ausente
   // no estado = data original apurada na planilha (25/06/2026).
   const MARCO_SALDO_CONTA = (state.parametros && state.parametros.marcoSaldoConta) || '2026-06-25';
-  function saldoContaNoPeriodo(ateData, incluirPlanejado) {
-    const entradas = sum(
-      liberacoesCaixa.filter((l) => (
-        (incluirPlanejado || l.status !== 'PLANEJADO')
-        && (l.data || '') >= MARCO_SALDO_CONTA
-        && (!ateData || (l.data || '') <= ateData)
-      )),
-      (l) => l.valor,
-    );
-    const saidas = sum(
-      parcelas.filter((p) => {
-        if (!incluirPlanejado && p.status !== 'REALIZADO') return false;
-        const dataOcorrencia = p.vencimento || p.vencPlanejado || '';
-        return dataOcorrencia >= MARCO_SALDO_CONTA && (!ateData || dataOcorrencia <= ateData);
-      }),
-      (p) => p.custoTotal,
-    );
-    return round2(entradas - saidas);
+  /* Cascata de fontes: a conta é bancária e não fica negativa. A saída come o
+     saldo liberado da CAIXA e o que sobrar sai do recurso próprio — podendo
+     partir o mesmo pagamento em dois. Antes da 1ª liberação o saldo é zero e
+     tudo cai em próprio sozinho, sem regra de fase. Mesma lógica de
+     cascataConta() na camada de view; aqui alimenta STATE.resumo. */
+  function cascataContaNoPeriodo(ateData, incluirPlanejado) {
+    const eventos = [];
+    for (const l of liberacoesCaixa) {
+      if (!incluirPlanejado && l.status === 'PLANEJADO') continue;
+      const data = l.data || '';
+      if (data < MARCO_SALDO_CONTA || (ateData && data > ateData)) continue;
+      eventos.push({ data, ordem: 0, valor: Number(l.valor) || 0 });
+    }
+    for (const p of parcelas) {
+      if (!incluirPlanejado && p.status !== 'REALIZADO') continue;
+      const data = p.vencimento || p.vencPlanejado || '';
+      if (!data || data < MARCO_SALDO_CONTA || (ateData && data > ateData)) continue;
+      eventos.push({ data, ordem: 1, valor: -(Number(p.custoTotal) || 0) });
+    }
+    eventos.sort((a, b) => a.data.localeCompare(b.data) || a.ordem - b.ordem);
+    let saldo = 0;
+    let proprio = 0;
+    for (const e of eventos) {
+      if (e.valor >= 0) { saldo = round2(saldo + e.valor); continue; }
+      const precisa = -e.valor;
+      const daCaixa = Math.min(saldo, precisa);
+      saldo = round2(saldo - daCaixa);
+      proprio = round2(proprio + (precisa - daCaixa));
+    }
+    return { saldo, proprio };
   }
-  const saldoContaRealizado = saldoContaNoPeriodo(null, false);
+  function saldoContaNoPeriodo(ateData, incluirPlanejado) {
+    return cascataContaNoPeriodo(ateData, incluirPlanejado).saldo;
+  }
+  const cascataRealizada = cascataContaNoPeriodo(null, false);
+  const saldoContaRealizado = cascataRealizada.saldo;
+  /* Recurso próprio consumido DEPOIS do marco por insuficiência de saldo —
+     não confundir com os aportes lançados em Parâmetros, que são os consumos
+     anteriores à 1ª liberação. Este é o valor que a conta antiga escondia
+     dentro de um saldo negativo. */
+  const proprioPorInsuficiencia = cascataRealizada.proprio;
   const saidasContaDesdeMarco = round2(sum(
     parcelas.filter((p) => p.status === 'REALIZADO' && (p.vencimento || p.vencPlanejado || '') >= MARCO_SALDO_CONTA),
     (p) => p.custoTotal,
@@ -1908,6 +1932,13 @@ function recompute(state) {
     simulando: SIMULACAO.ativa && Object.keys(SIMULACAO.params).length > 0,
     simulacaoParams: { ...SIMULACAO.params },
     saldoContaRealizado,
+    /* Recurso próprio consumido DEPOIS do marco porque o saldo da CAIXA não
+       cobriu a quinzena. Diferente dos itens lançados em Parâmetros, que são
+       os consumos anteriores à 1ª liberação. O `realizado` é o que já saiu de
+       fato; o `projetado` inclui as quinzenas planejadas — é o aviso que
+       aparece antes de o dinheiro faltar. */
+    proprioPorInsuficiencia,
+    proprioPorInsuficienciaProjetado: cascataContaNoPeriodo(null, true).proprio,
     tetoAvancoEfetivo,
   };
 
@@ -2467,18 +2498,51 @@ function renderMesFilter({ months, selected, onChange }) {
 // decide se conta só REALIZADO ou também PLANEJADO — mesma lógica de
 // saldoContaNoPeriodo() em recompute(), duplicada aqui porque o filtro
 // (janela 2) é só do cliente, sem recalcular STATE inteiro a cada mudança.
+/* Cascata de fontes de recurso — CAIXA primeiro, próprio no que faltar.
+   -------------------------------------------------------------------------
+   A conta da obra é uma conta bancária: ela não fica negativa. Enquanto há
+   saldo liberado, o pagamento sai da CAIXA; quando o saldo acaba, o que falta
+   sai do recurso próprio — inclusive dividido DENTRO de um mesmo pagamento
+   (parte CAIXA, parte próprio). Antes da 1ª liberação o saldo é zero, então
+   `min(0, valor) = 0` e tudo vira próprio sozinho: não existe regra de fase
+   nem data de corte no código, é consequência da mesma conta.
+
+   O que antes aparecia como saldo negativo não era buraco na CAIXA — era
+   consumo de recurso próprio exibido no lugar errado. Agora o saldo trava em
+   zero e a diferença vai para onde pertence. */
+function cascataConta(liberacoesCaixa, parcelas, marco, ateData, incluirPlanejado) {
+  const eventos = [];
+  for (const l of liberacoesCaixa || []) {
+    if (!incluirPlanejado && l.status === 'PLANEJADO') continue;
+    const data = l.data || '';
+    if (data < marco || (ateData && data > ateData)) continue;
+    eventos.push({ data, ordem: 0, valor: Number(l.valor) || 0 });
+  }
+  for (const p of parcelas || []) {
+    if (!incluirPlanejado && p.status !== 'REALIZADO') continue;
+    const data = p.vencimento || p.vencPlanejado || '';
+    if (!data || data < marco || (ateData && data > ateData)) continue;
+    eventos.push({ data, ordem: 1, valor: -(Number(p.custoTotal) || 0) });
+  }
+  // Na mesma data a entrada credita antes da saída — é o que o banco faz.
+  eventos.sort((a, b) => a.data.localeCompare(b.data) || a.ordem - b.ordem);
+
+  let saldo = 0;
+  let proprio = 0;
+  for (const e of eventos) {
+    if (e.valor >= 0) { saldo = round2(saldo + e.valor); continue; }
+    const precisa = -e.valor;
+    const daCaixa = Math.min(saldo, precisa);
+    saldo = round2(saldo - daCaixa);
+    proprio = round2(proprio + (precisa - daCaixa));
+  }
+  return { saldo, proprio };
+}
+
+// Saldo em conta na data. Nunca negativo: o que faltaria já foi debitado do
+// recurso próprio (ver cascataConta). Mantida para quem já consumia o número.
 function saldoContaAte(liberacoesCaixa, parcelas, marco, ateData, incluirPlanejado) {
-  const entradas = (liberacoesCaixa || [])
-    .filter((l) => (incluirPlanejado || l.status !== 'PLANEJADO') && (l.data || '') >= marco && (!ateData || (l.data || '') <= ateData))
-    .reduce((a, l) => a + (Number(l.valor) || 0), 0);
-  const saidas = (parcelas || [])
-    .filter((p) => {
-      if (!incluirPlanejado && p.status !== 'REALIZADO') return false;
-      const dataOcorrencia = p.vencimento || p.vencPlanejado || '';
-      return dataOcorrencia >= marco && (!ateData || dataOcorrencia <= ateData);
-    })
-    .reduce((a, p) => a + (Number(p.custoTotal) || 0), 0);
-  return Math.round((entradas - saidas) * 100) / 100;
+  return cascataConta(liberacoesCaixa, parcelas, marco, ateData, incluirPlanejado).saldo;
 }
 
 // Constrói um painel de "saldo em conta" com seu próprio filtro "até qual
@@ -2522,23 +2586,22 @@ function renderSaldoContaPanel({ title, subtitle, filtroLabel, getFiltro, setFil
   panel.querySelector('.saldoContaFiltroSlot').appendChild(filtroWrap);
 
   const ateData = selecionado ? selecionado.vencPlanejado : null;
-  const valor = saldoContaAte(liberacoesCaixa, parcelas, marco, ateData, incluirPlanejado);
+  const { saldo: valor, proprio: consumoProprio } = cascataConta(liberacoesCaixa, parcelas, marco, ateData, incluirPlanejado);
   const valorEl = panel.querySelector('.card-value');
   valorEl.textContent = money(valor);
-  valorEl.style.color = valor < 0 ? 'var(--danger)' : 'var(--good)';
+  valorEl.style.color = consumoProprio > 0 ? 'var(--danger)' : 'var(--good)';
 
-  /* Saldo negativo não é só um número vermelho: significa que a obra vai
-     consumir recurso próprio naquela data. Dizemos quanto, e quanto sobraria
-     da verba própria depois disso — que é a decisão real por trás do sinal. */
-  if (valor < 0) {
-    const falta = round2(Math.abs(valor));
+  /* O saldo não fica mais negativo — então o alerta deixa de ser "número
+     vermelho" e passa a ser o que de fato importa: quanto de recurso próprio
+     esta data já consumiu, e quanto sobraria da verba depois disso. */
+  if (consumoProprio > 0) {
     const disponivel = Number(VIEW.resumo.saldoRecursoDisponivel) || 0;
-    const sobra = round2(disponivel - falta);
+    const sobra = round2(disponivel - consumoProprio);
     const aviso = document.createElement('div');
     aviso.className = `saldo-negativo${sobra < 0 ? ' critico' : ''}`;
     aviso.innerHTML = sobra < 0
-      ? `<strong>Faltam ${money(falta)} nessa data.</strong> O recurso próprio disponível (${money(disponivel)}) não cobre — ficariam ${money(Math.abs(sobra))} descobertos. É preciso antecipar medição da CAIXA ou remanejar parcelas.`
-      : `<strong>Faltam ${money(falta)} nessa data</strong>, que serão consumidos da verba de recurso próprio. Restariam ${money(sobra)} dos ${money(disponivel)} disponíveis hoje.`;
+      ? `<strong>${money(consumoProprio)} saem do recurso próprio até essa data.</strong> O disponível (${money(disponivel)}) não cobre — ficariam ${money(Math.abs(sobra))} descobertos. É preciso antecipar medição da CAIXA ou remanejar parcelas.`
+      : `<strong>${money(consumoProprio)} saem do recurso próprio até essa data</strong> — a conta CAIXA zera antes de cobrir tudo. Restariam ${money(sobra)} dos ${money(disponivel)} disponíveis hoje.`;
     panel.appendChild(aviso);
   }
 
@@ -2595,19 +2658,55 @@ function movimentosConta() {
     });
   }
   movs.sort((a, b) => a.data.localeCompare(b.data) || a.ordem - b.ordem);
-  let saldoReal = 0;
-  let saldoProj = 0;
+
+  /* Duas cascatas em paralelo — uma só com o realizado, outra somando o
+     previsto — pela mesma regra de cascataConta(): a saída consome o saldo da
+     CAIXA e o que não couber vira recurso próprio, podendo partir o mesmo
+     pagamento em dois. O saldo trava em zero; o rombo vira `proprio`. */
+  let saldoReal = 0, saldoProj = 0;
+  let propReal = 0, propProj = 0;
   for (const m of movs) {
-    const sinal = m.tipo === 'entrada' ? 1 : -1;
-    saldoProj = round2(saldoProj + sinal * m.valor);
-    if (m.realizado) saldoReal = round2(saldoReal + sinal * m.valor);
+    if (m.tipo === 'entrada') {
+      saldoProj = round2(saldoProj + m.valor);
+      m.caixaProjetado = m.valor;
+      m.proprioProjetado = 0;
+      if (m.realizado) saldoReal = round2(saldoReal + m.valor);
+      m.caixaRealizado = m.realizado ? m.valor : 0;
+      m.proprioRealizado = 0;
+    } else {
+      const daCaixaProj = Math.min(saldoProj, m.valor);
+      const doProprioProj = round2(m.valor - daCaixaProj);
+      saldoProj = round2(saldoProj - daCaixaProj);
+      propProj = round2(propProj + doProprioProj);
+      m.caixaProjetado = round2(daCaixaProj);
+      m.proprioProjetado = doProprioProj;
+
+      if (m.realizado) {
+        const daCaixaReal = Math.min(saldoReal, m.valor);
+        const doProprioReal = round2(m.valor - daCaixaReal);
+        saldoReal = round2(saldoReal - daCaixaReal);
+        propReal = round2(propReal + doProprioReal);
+        m.caixaRealizado = round2(daCaixaReal);
+        m.proprioRealizado = doProprioReal;
+      } else {
+        m.caixaRealizado = 0;
+        m.proprioRealizado = 0;
+      }
+    }
     m.saldoProjetado = saldoProj;
     m.saldoRealizado = saldoReal;
+    m.proprioAcumProjetado = propProj;
+    m.proprioAcumRealizado = propReal;
     m.futuro = m.data > hoje;
   }
   const entradasReal = round2(movs.filter((m) => m.tipo === 'entrada' && m.realizado).reduce((a, m) => a + m.valor, 0));
   const saidasReal = round2(movs.filter((m) => m.tipo === 'saida' && m.realizado).reduce((a, m) => a + m.valor, 0));
-  return { movs, marco, hoje, entradasReal, saidasReal, saldoHoje: round2(entradasReal - saidasReal) };
+  return {
+    movs, marco, hoje, entradasReal, saidasReal,
+    saldoHoje: saldoReal,
+    proprioRealizado: propReal,
+    proprioProjetado: propProj,
+  };
 }
 
 // Saldo projetado numa data: tudo até ela, realizado ou planejado.
@@ -2617,8 +2716,70 @@ function saldoProjetadoEm(movs, ateData) {
   return ultimo;
 }
 
+/* Entrada de crédito do banco (medição/PLS) — as únicas linhas do extrato que
+   têm composição por categoria para abrir. Devolução de terceiro e depósito
+   entram na conta mas não são liberação medida, então não abrem. */
+function ehLiberacaoPLS(m) {
+  return m.tipo === 'entrada' && m.origem === 'Liberação PCI' && !/estorno|devolu|dep[óo]sito/i.test(m.descricao || '');
+}
+
+/* Racional do número liberado: o banco libera contra medição física, e a
+   medição é a verba CAIXA de cada categoria multiplicada pelo % de avanço.
+   Esta janela abre essa conta linha a linha e fecha com a diferença entre o
+   que as categorias sustentam e o que o banco de fato depositou — que é
+   justamente o que se discute com o engenheiro da CAIXA. */
+function abrirComposicaoLiberacao(m) {
+  const cats = (VIEW.categorias || []).filter((c) => (Number(c.caixaLiberadoCategoria) || 0) > 0.004);
+  const totalCats = round2(cats.reduce((a, c) => a + (Number(c.caixaLiberadoCategoria) || 0), 0));
+  const diff = round2((Number(m.valor) || 0) - totalCats);
+  openModal(`Composição da liberação — ${dateBR(m.data)}`, (body) => {
+    const topo = document.createElement('div');
+    topo.className = 'extrato-total-line';
+    topo.innerHTML = `<span>${esc(m.descricao)}</span><strong>${money(m.valor)}</strong>`;
+    body.appendChild(topo);
+
+    const nota = document.createElement('div');
+    nota.className = 'muted';
+    nota.style.margin = '8px 0';
+    nota.textContent = 'Liberável por categoria = verba CAIXA da categoria × % de avanço efetivo. Edite a verba ou o % na aba Liberação PCI › "Liberação por categoria" e este número acompanha.';
+    body.appendChild(nota);
+
+    const tw = document.createElement('div');
+    tw.className = 'table-scroll';
+    tw.innerHTML = `<table class="extrato-table">
+      <thead><tr><th>Nº</th><th class="wrap">Categoria</th><th class="num">Verba CAIXA</th><th class="num">% avanço</th><th class="num">Liberável</th></tr></thead>
+      <tbody>
+        ${cats.map((c) => `<tr>
+          <td>${c.numero}</td>
+          <td class="wrap">${esc(c.nome)}</td>
+          <td class="num">${money(c.verbaCaixa)}</td>
+          <td class="num">${pct(c.percAvancoEfetivo)}</td>
+          <td class="num"><strong>${money(c.caixaLiberadoCategoria)}</strong></td>
+        </tr>`).join('') || '<tr><td colspan="5" class="muted">Nenhuma categoria com avanço medido.</td></tr>'}
+        <tr class="extrato-residuo"><td colspan="4"><strong>Liberável acumulado pelas categorias</strong></td><td class="num"><strong>${money(totalCats)}</strong></td></tr>
+        <tr class="extrato-residuo"><td colspan="4"><strong>Depositado nesta liberação</strong></td><td class="num"><strong>${money(m.valor)}</strong></td></tr>
+        <tr class="extrato-residuo"><td colspan="4"><strong>Diferença</strong> <span class="muted">${diff > 0 ? 'o banco liberou mais do que as categorias sustentam' : diff < 0 ? 'ainda há medição a liberar' : 'bate exatamente'}</span></td><td class="num"><strong>${money(diff)}</strong></td></tr>
+      </tbody></table>`;
+    body.appendChild(tw);
+  });
+}
+
+/* Etiqueta de fonte de uma linha do extrato. Uma saída pode ser paga por
+   duas fontes ao mesmo tempo — é o caso quando o saldo da CAIXA acaba no meio
+   do pagamento —, então a célula mostra o split, não um rótulo único. */
+function fonteDoMovimento(m) {
+  if (m.tipo === 'entrada') return '<span class="badge blue">CAIXA</span>';
+  const temCaixa = m.caixaProjetado > 0;
+  const temProprio = m.proprioProjetado > 0;
+  if (temCaixa && temProprio) {
+    return `<span class="badge blue">CAIXA ${money(m.caixaProjetado)}</span> <span class="badge amber">próprio ${money(m.proprioProjetado)}</span>`;
+  }
+  if (temProprio) return `<span class="badge amber">próprio</span>`;
+  return '<span class="badge blue">CAIXA</span>';
+}
+
 function abrirExtratoConta() {
-  const { movs, marco, hoje, entradasReal, saidasReal, saldoHoje } = movimentosConta();
+  const { movs, marco, hoje, entradasReal, saidasReal, saldoHoje, proprioRealizado, proprioProjetado } = movimentosConta();
   const antesDoMarco = (VIEW.parcelas || []).filter((p) => p.status === 'REALIZADO' && (p.vencimento || p.vencPlanejado || '') < marco);
   const custoAntesDoMarco = round2(antesDoMarco.reduce((acc, p) => acc + (Number(p.custoTotal) || 0), 0));
   openModal('Extrato da conta da obra', (body) => {
@@ -2645,19 +2806,29 @@ function abrirExtratoConta() {
     tw.className = 'table-scroll';
     let saldoFinal = movs.length ? movs[movs.length - 1].saldoProjetado : 0;
     tw.innerHTML = `<table class="extrato-table extrato-conta">
-      <thead><tr><th>Data</th><th>Movimento</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo</th></tr></thead>
+      <thead><tr><th>Data</th><th>Movimento</th><th class="num">Entrada</th><th class="num">Saída</th><th>Fonte</th><th class="num">Saldo</th></tr></thead>
       <tbody>
-        <tr class="extrato-grupo"><td colspan="5">Saldo inicial em ${dateBR(marco)}: ${money(0)} — antes do marco, ${money(custoAntesDoMarco)} de custo (${antesDoMarco.map((p) => esc(p.mesReferenciaLabel || p.label)).join(', ')}) foram pagos com recurso próprio e ficam fora desta conta</td></tr>
-        ${movs.map((m) => `<tr class="${m.realizado ? '' : 'mov-previsto'}${m.data > hoje ? ' mov-futuro' : ''}">
+        <tr class="extrato-grupo"><td colspan="6">Saldo inicial em ${dateBR(marco)}: ${money(0)} — antes do marco, ${money(custoAntesDoMarco)} de custo (${antesDoMarco.map((p) => esc(p.mesReferenciaLabel || p.label)).join(', ')}) foram pagos com recurso próprio e ficam fora desta conta</td></tr>
+        ${movs.map((m, i) => `<tr class="${m.realizado ? '' : 'mov-previsto'}${m.data > hoje ? ' mov-futuro' : ''}">
           <td>${dateBR(m.data)}${m.realizado ? '' : ' <span class="badge gray">previsto</span>'}</td>
           <td>${esc(m.descricao)}<br><span class="muted cf-sub">${esc(m.origem)}</span></td>
-          <td class="num mov-entrada">${m.tipo === 'entrada' ? money(m.valor) : ''}</td>
+          <td class="num mov-entrada">${m.tipo === 'entrada' ? (ehLiberacaoPLS(m) ? `<span class="drill-num" data-comp="${i}" title="ver o que compõe este valor">${money(m.valor)}</span>` : money(m.valor)) : ''}</td>
           <td class="num mov-saida">${m.tipo === 'saida' ? money(m.valor) : ''}</td>
-          <td class="num ${m.saldoProjetado < 0 ? 'cf-atraso' : ''}"><strong>${money(m.saldoProjetado)}</strong></td>
-        </tr>`).join('') || '<tr><td colspan="5" class="muted">Nenhuma movimentação a partir do marco.</td></tr>'}
-        <tr class="extrato-residuo"><td colspan="2"><strong>Saldo hoje (só realizado)</strong></td><td class="num"><strong>${money(entradasReal)}</strong></td><td class="num"><strong>${money(saidasReal)}</strong></td><td class="num"><strong>${money(saldoHoje)}</strong></td></tr>
-        <tr class="extrato-residuo"><td colspan="4"><strong>Saldo ao fim do que está lançado (realizado + previsto)</strong></td><td class="num ${saldoFinal < 0 ? 'cf-atraso' : ''}"><strong>${money(saldoFinal)}</strong></td></tr>
+          <td>${fonteDoMovimento(m)}</td>
+          <td class="num"><strong>${money(m.saldoProjetado)}</strong></td>
+        </tr>`).join('') || '<tr><td colspan="6" class="muted">Nenhuma movimentação a partir do marco.</td></tr>'}
+        <tr class="extrato-residuo"><td colspan="2"><strong>Saldo hoje (só realizado)</strong></td><td class="num"><strong>${money(entradasReal)}</strong></td><td class="num"><strong>${money(saidasReal)}</strong></td><td>${proprioRealizado > 0 ? `<span class="badge amber">próprio ${money(proprioRealizado)}</span>` : ''}</td><td class="num"><strong>${money(saldoHoje)}</strong></td></tr>
+        <tr class="extrato-residuo"><td colspan="4"><strong>Saldo ao fim do que está lançado (realizado + previsto)</strong></td><td>${proprioProjetado > 0 ? `<span class="badge amber">próprio ${money(proprioProjetado)}</span>` : ''}</td><td class="num"><strong>${money(saldoFinal)}</strong></td></tr>
       </tbody></table>`;
+    /* Rastreabilidade: o valor de cada liberação do banco abre a composição
+       que o sustenta, categoria por categoria. Delegado porque a tabela é
+       montada por innerHTML. */
+    tw.addEventListener('click', (ev) => {
+      const alvo = ev.target.closest('[data-comp]');
+      if (!alvo) return;
+      const mov = movs[Number(alvo.dataset.comp)];
+      if (mov) abrirComposicaoLiberacao(mov);
+    });
     body.appendChild(tw);
   }, { wide: true });
 }
@@ -8177,8 +8348,18 @@ function renderAvancos() {
     }
     tr.appendChild(itensTd);
 
+    /* O % efetivo é editável direto na linha. Antes era texto fixo, e isso
+       criava um beco sem saída: clicar em "usar % dos itens" limpava o
+       override e o valor caía para o % calculado dos itens — 100% na maioria
+       das categorias, já que item orçado = item realizado — sem nenhum campo
+       para corrigir depois. Agora digitar na célula grava percAvancoManual de
+       volta, e o botão continua servindo só para voltar ao cálculo dos itens. */
     const percTd = document.createElement('td');
-    percTd.innerHTML = `<span class="num badge-cell ${c.origemPercAvanco === 'manual' ? 'manual' : 'auto'}">${pct(c.percAvancoEfetivo)}</span>`;
+    percTd.appendChild(percentInput({
+      value: c.percAvancoEfetivo,
+      manual: c.origemPercAvanco === 'manual',
+      onSave: (v) => updateCategoria(c.id, { percAvancoManual: v }),
+    }));
     tr.appendChild(percTd);
 
     const barTd = document.createElement('td');
@@ -8431,7 +8612,18 @@ function renderCronograma() {
     tr.appendChild(td(`<span class="num">${c.cronogramaPrevisto ? c.cronogramaPrevisto.duracaoDias : '—'}</span>`));
     tr.appendChild(td(`<span class="num">${pct(c.percPrevisto)}</span>`));
 
-    tr.appendChild(td(`<span class="num badge-cell ${c.origemPercAvanco === 'manual' ? 'manual' : 'auto'}">${pct(c.percAvancoEfetivo)}</span>`));
+    /* O texto do painel sempre prometeu "edite aqui também", mas a célula era
+       só leitura — obrigava a sair do Cronograma para lançar avanço. Agora o
+       % realizado é editável na própria linha, gravando no mesmo campo que a
+       aba Lançar Avanços usa (percAvancoManual), então as duas telas nunca
+       divergem. */
+    const realTd = document.createElement('td');
+    realTd.appendChild(percentInput({
+      value: c.percAvancoEfetivo,
+      manual: c.origemPercAvanco === 'manual',
+      onSave: (v) => updateCategoria(c.id, { percAvancoManual: v }),
+    }));
+    tr.appendChild(realTd);
 
     const info = STATUS_CRONOGRAMA_INFO[c.statusCronograma] || STATUS_CRONOGRAMA_INFO['sem-dados'];
     tr.appendChild(td(`<span class="badge ${info.badge}">${info.label}</span>`));
@@ -8869,7 +9061,8 @@ function renderLancamentoQuinzenaPanel() {
   body.innerHTML = `<table class="data">
     <thead><tr>
       <th>Nº</th><th class="wrap">Categoria</th><th class="num">Peso</th><th class="num">Valor orçado</th>
-      <th class="num">% atual (acumulado)</th><th class="num">Novo % acumulado</th><th class="num">Valor gerado</th>
+      <th class="num">% antes deste lançamento</th><th class="num">Novo % acumulado</th>
+      <th class="num">Δ desta quinzena</th><th class="num">Valor gerado</th>
     </tr></thead>
     <tbody></tbody>
   </table>`;
@@ -8892,13 +9085,22 @@ function renderLancamentoQuinzenaPanel() {
     novoPercInput.title = 'Teto de medição: nunca mais que 100%.';
     tr.appendChild(td(novoPercInput));
 
+    /* Esta tabela é a do LANÇAMENTO — o que muda nesta quinzena. A tabela de
+       baixo ("Avanço acumulado por categoria") é o histórico somado. As duas
+       mostravam o mesmo % acumulado e ficavam indistinguíveis; o delta é o
+       número que só existe aqui, e é ele que vira valor gerado. */
+    const deltaCell = document.createElement('td');
+    deltaCell.className = 'num';
+    deltaCell.textContent = pct(0);
+    tr.appendChild(deltaCell);
+
     const valorGeradoCell = document.createElement('td');
     valorGeradoCell.className = 'num';
     valorGeradoCell.textContent = money(0);
     tr.appendChild(valorGeradoCell);
 
     tbody.appendChild(tr);
-    rows.push({ categoria: c, percAtual, novoPercInput, valorGeradoCell });
+    rows.push({ categoria: c, percAtual, novoPercInput, deltaCell, valorGeradoCell });
   }
   panel.appendChild(body);
 
@@ -8967,7 +9169,10 @@ function renderLancamentoQuinzenaPanel() {
     let valorGeradoPeriodo = 0;
     for (const r of rows) {
       const novoPerc = Math.min(100, Math.max(0, Number(r.novoPercInput.value) || 0));
-      const deltaValor = r.categoria.valorOrcado * ((novoPerc - r.percAtual) / 100);
+      const deltaPerc = novoPerc - r.percAtual;
+      const deltaValor = r.categoria.valorOrcado * (deltaPerc / 100);
+      r.deltaCell.textContent = (deltaPerc > 0 ? '+' : '') + pct(deltaPerc / 100);
+      r.deltaCell.style.color = deltaPerc > 0.004 ? 'var(--good)' : deltaPerc < -0.004 ? 'var(--danger)' : '';
       r.valorGeradoCell.textContent = money(deltaValor);
       r.valorGeradoCell.style.color = deltaValor > 0.004 ? 'var(--good)' : deltaValor < -0.004 ? 'var(--danger)' : '';
       valorGeradoPeriodo += deltaValor;
@@ -9522,26 +9727,75 @@ function renderPCI() {
       </div>
     </div>
     <div class="table-scroll"><table class="data"><thead><tr>
-      <th>Etapa</th><th class="wrap">Descrição</th><th class="num">% limite acumulado</th><th class="num">Valor da etapa</th>
-      <th class="num">Mês programado</th>
+      <th style="width:64px">Etapa</th>
+      <th class="wrap" style="min-width:220px">Descrição</th>
+      <th class="num" style="width:130px">% limite acumulado</th>
+      <th class="num" style="width:150px">Valor da etapa</th>
+      <th class="num" style="width:190px">Valor calculado (verba × %)</th>
+      <th class="num" style="width:120px">Mês programado</th>
     </tr></thead><tbody></tbody>
     <tfoot></tfoot></table></div>
   `;
   root.appendChild(panel);
   const tbody = panel.querySelector('tbody');
-  for (const e of VIEW.liberacaoPCI) {
+
+  /* O valor da etapa era só digitado à mão, sem nenhuma amarração com a verba
+     por categoria — dava para escrever qualquer número e nada acusava. Agora
+     cada etapa mostra, ao lado, quanto ela valeria pela planilha "Liberação
+     por categoria (verba CAIXA)": a faixa de % entre a etapa anterior e esta,
+     aplicada ao total de verba das categorias. A 1ª etapa é a aquisição do
+     lote, que não sai da verba das categorias — usa o financiamento do lote.
+     O número calculado não sobrescreve nada sozinho: o cronograma do banco
+     manda, e o botão "usar" aplica quando você quiser alinhar os dois. */
+  const totalVerba = Number(VIEW.resumo.totalVerbaCaixaCategorias) || 0;
+  const etapas = VIEW.liberacaoPCI || [];
+  let percAnterior = 0;
+  for (const e of etapas) {
+    const percAtual = Number(e.percLimiteAcumulado) || 0;
+    const faixa = Math.max(0, percAtual - percAnterior);
+    const calculado = (percAtual === 0 && percAnterior === 0)
+      ? round2(Number(VIEW.parametros?.financiamentoLoteCaixa) || 0)
+      : round2(totalVerba * faixa);
+    percAnterior = percAtual;
+
     const tr = document.createElement('tr');
     tr.appendChild(td(`${e.etapa}`));
     tr.appendChild(td(textInput({ value: e.descricao, wide: true, onSave: (v) => updateLiberacaoPCI(e.etapa, { descricao: v }) })));
     tr.appendChild(td(numberInput({ value: Math.round(e.percLimiteAcumulado * 1000) / 10, step: '0.1', onSave: (v) => updateLiberacaoPCI(e.etapa, { percLimiteAcumulado: v / 100 }) })));
     tr.appendChild(td(numberInput({ value: e.valor, onSave: (v) => updateLiberacaoPCI(e.etapa, { valor: v }) })));
+
+    const calcTd = document.createElement('td');
+    calcTd.className = 'num';
+    const divergencia = round2(calculado - (Number(e.valor) || 0));
+    calcTd.innerHTML = `<span class="num" title="${faixa > 0 ? `faixa de ${pct(faixa)} sobre ${money(totalVerba)} de verba das categorias` : 'aquisição do lote — financiamento do lote'}">${money(calculado)}</span>`
+      + (Math.abs(divergencia) > 0.5 ? ` <span class="badge gray" title="diferença para o valor da etapa">${divergencia > 0 ? '+' : ''}${money(divergencia)}</span>` : '');
+    if (Math.abs(divergencia) > 0.5) {
+      const usar = document.createElement('button');
+      usar.className = 'btn small';
+      usar.style.marginLeft = '6px';
+      usar.textContent = 'usar';
+      usar.title = 'Grava o valor calculado como valor da etapa';
+      usar.onclick = () => updateLiberacaoPCI(e.etapa, { valor: calculado });
+      calcTd.appendChild(usar);
+    }
+    tr.appendChild(calcTd);
+
     tr.appendChild(td(numberInput({ value: e.mesProgramado, step: '1', onSave: (v) => updateLiberacaoPCI(e.etapa, { mesProgramado: v }) })));
     tbody.appendChild(tr);
   }
+  const somaCalculada = round2(etapas.reduce((acc, e, i) => {
+    const pAnt = i === 0 ? 0 : (Number(etapas[i - 1].percLimiteAcumulado) || 0);
+    const pAt = Number(e.percLimiteAcumulado) || 0;
+    const v = (pAt === 0 && pAnt === 0)
+      ? (Number(VIEW.parametros?.financiamentoLoteCaixa) || 0)
+      : totalVerba * Math.max(0, pAt - pAnt);
+    return acc + v;
+  }, 0));
   const tfoot = panel.querySelector('tfoot');
   tfoot.innerHTML = `<tr>
     <td colspan="3">TOTAL</td>
     <td class="num">${money(VIEW.resumo.creditoCaixaTotalPCI)}</td>
+    <td class="num">${money(somaCalculada)}</td>
     <td></td>
   </tr>`;
 
@@ -9717,7 +9971,15 @@ function renderLiberacaoPorCategoria() {
     tr.appendChild(td(`${c.numero}`));
     tr.appendChild(td(`<span class="wrap">${esc(c.nome)}</span>`));
     tr.appendChild(td(numberInput({ value: c.verbaCaixa, onSave: (v) => updateCategoria(c.id, { verbaCaixa: v }) })));
-    tr.appendChild(td(`<span class="num">${pct(c.percAvancoEfetivo)}</span>`));
+    /* O % que comanda a liberação passa a ser editável aqui — é ele que
+       multiplica a verba e define o "Liberado (auto)", então precisa poder ser
+       ajustado na própria linha em vez de só na aba de avanços. Grava no mesmo
+       percAvancoManual, mantendo as telas em sincronia. */
+    tr.appendChild(td(percentInput({
+      value: c.percAvancoEfetivo,
+      manual: c.origemPercAvanco === 'manual',
+      onSave: (v) => updateCategoria(c.id, { percAvancoManual: v }),
+    })));
     tr.appendChild(td(`<span class="num" style="font-weight:700">${money(c.caixaLiberadoCategoria)}</span> <span class="badge ${c.origemCaixaCategoria === 'manual' ? 'accent' : 'gray'}">${c.origemCaixaCategoria}</span>`));
     const manualTd = document.createElement('td');
     const manualInput = numberInput({
@@ -12988,6 +13250,39 @@ async function compEnviar(pasta, files) {
   if (enviados.length) { afterMutation(); await compCarregar(true); }
   return { enviados, erros };
 }
+/* Apagar comprovante enviado por engano.
+   -------------------------------------------------------------------------
+   Antes, arquivo subido errado ficava para sempre: o upload usa x-upsert e só
+   sobrescreve quando o nome é idêntico — comprovante com nome diferente,
+   ou na pasta errada, não tinha como sair. Remove do bucket e limpa o meta
+   (valor informado, quem enviou), senão sobrava registro órfão apontando para
+   um arquivo que não existe mais. */
+async function compApagar(caminho) {
+  const alvo = `${NUVEM_CFG.url}/storage/v1/object/${COMP_BUCKET}/${caminho.split('/').map(encodeURIComponent).join('/')}`;
+  const r = await fetch(alvo, { method: 'DELETE', headers: compHeaders() });
+  if (!r.ok && r.status !== 404) throw new Error(`apagar ${r.status}`);
+  const est = compEstado();
+  if (est.meta && est.meta[caminho]) { delete est.meta[caminho]; }
+  afterMutation();
+  await compCarregar(true);
+  return true;
+}
+
+/* Confirmação explícita antes de apagar — é ação irreversível e o arquivo
+   pode ser o único comprovante de um pagamento. */
+async function compConfirmarApagar(arquivo, aoTerminar) {
+  const nome = arquivo.nome || arquivo.caminho;
+  if (!window.confirm(`Apagar "${nome}" definitivamente?\n\nO arquivo sai do acervo e não dá para desfazer. Se for só troca, apague e envie o correto em seguida.`)) return;
+  try {
+    await compApagar(arquivo.caminho);
+    toast('Comprovante apagado.', 'ok');
+    if (typeof aoTerminar === 'function') aoTerminar();
+    else renderComprovantes();
+  } catch (e) {
+    toast(`Não deu para apagar: ${e.message || e}`, 'err');
+  }
+}
+
 function compCriarPasta(caminho) {
   const limpo = caminho.split('/').map((p) => compNomeSeguro(p)).filter(Boolean).join('/');
   if (!limpo) return null;
@@ -13115,8 +13410,20 @@ function renderComprovantes() {
       tr.querySelector('.comp-obs').appendChild(obs);
       const ac = tr.querySelector('.comp-acoes');
       const bAbrir = document.createElement('a'); bAbrir.className = 'btn small filter-control'; bAbrir.textContent = 'Abrir'; bAbrir.href = compUrlPublica(a.caminho); bAbrir.target = '_blank'; bAbrir.rel = 'noopener'; ac.appendChild(bAbrir);
-      const bOc = document.createElement('button'); bOc.type = 'button'; bOc.className = 'btn small'; bOc.textContent = m.oculto ? 'Reexibir' : 'Ocultar'; bOc.title = 'Comprovante errado ou duplicado: some da lista, mas fica guardado (não há exclusão).';
+      const bOc = document.createElement('button'); bOc.type = 'button'; bOc.className = 'btn small'; bOc.textContent = m.oculto ? 'Reexibir' : 'Ocultar'; bOc.title = 'Tira da lista sem apagar — para duplicado que você prefere manter guardado.';
       bOc.onclick = () => compAtualizarMeta(a.caminho, { oculto: !m.oculto }); ac.appendChild(bOc);
+      /* Subiu errado? Antes só dava para ocultar, e o arquivo ficava no acervo
+         para sempre. Agora apaga de verdade — é o caminho para trocar por um
+         comprovante correto. Só com sessão de lançamento. */
+      if (!READONLY) {
+        const bDel = document.createElement('button');
+        bDel.type = 'button';
+        bDel.className = 'btn small danger';
+        bDel.textContent = 'Apagar';
+        bDel.title = 'Remove o arquivo do acervo definitivamente — use quando o comprovante subiu errado e você vai enviar o correto.';
+        bDel.onclick = () => { COMP.pastaAtiva = a.pasta || ''; compConfirmarApagar(a, desenhar); };
+        ac.appendChild(bDel);
+      }
       return tr;
     };
     const desenharNo = (n, nivel) => {
@@ -13296,8 +13603,19 @@ function renderRDO() {
       tr.querySelector('.comp-obs').appendChild(obs);
       const ac = tr.querySelector('.comp-acoes');
       const bAbrir = document.createElement('a'); bAbrir.className = 'btn small filter-control'; bAbrir.textContent = 'Abrir'; bAbrir.href = compUrlPublica(a.caminho); bAbrir.target = '_blank'; bAbrir.rel = 'noopener'; ac.appendChild(bAbrir);
-      const bOc = document.createElement('button'); bOc.type = 'button'; bOc.className = 'btn small'; bOc.textContent = m.oculto ? 'Reexibir' : 'Ocultar'; bOc.title = 'RDO errado ou duplicado: some da lista, mas fica guardado (não há exclusão).';
+      const bOc = document.createElement('button'); bOc.type = 'button'; bOc.className = 'btn small'; bOc.textContent = m.oculto ? 'Reexibir' : 'Ocultar'; bOc.title = 'Tira da lista sem apagar — para duplicado que você prefere manter guardado.';
       bOc.onclick = () => { compAtualizarMeta(a.caminho, { oculto: !m.oculto }); desenhar(); }; ac.appendChild(bOc);
+      /* Mesmo caso dos comprovantes: RDO enviado no mês errado precisa sair
+         para o correto entrar no lugar. */
+      if (!READONLY) {
+        const bDel = document.createElement('button');
+        bDel.type = 'button';
+        bDel.className = 'btn small danger';
+        bDel.textContent = 'Apagar';
+        bDel.title = 'Remove o RDO do acervo definitivamente — use quando subiu no mês errado e você vai reenviar.';
+        bDel.onclick = () => compConfirmarApagar(a, desenhar);
+        ac.appendChild(bDel);
+      }
       return tr;
     };
 
