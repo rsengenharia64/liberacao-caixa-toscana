@@ -511,6 +511,12 @@
   /* Número clicável dentro de uma tabela — abre a composição que o sustenta. */
   .drill-num { cursor: pointer; border-bottom: 1px dashed var(--accent); }
   .drill-num:hover { color: var(--accent-ink); border-bottom-style: solid; }
+  /* Saldo zero por esgotamento da verba do banco: precisa gritar, não passar
+     despercebido como se fosse conta equilibrada. */
+  .saldo-zerado-tag { font-size: 11px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase;
+    background: var(--danger); color: #fff; padding: 3px 8px; border-radius: 999px; vertical-align: middle; margin-left: 8px; }
+  .mov-proprio { color: var(--danger); font-weight: 700; }
+  .saldo-ponte .proprio { border-top: 1px dashed var(--danger); padding-top: 4px; margin-top: 2px; }
   .value-drill:disabled { opacity: 1; cursor: pointer; }
   .value-drill .drill-hint {
     font: 600 11px/1 "Archivo", sans-serif; color: var(--accent-ink); background: var(--accent-soft);
@@ -2859,6 +2865,18 @@ function renderSaldoContaGrid() {
   const antesDoMarco = (VIEW.parcelas || []).filter((p) => p.status === 'REALIZADO' && (p.vencimento || p.vencPlanejado || '') < r.marcoSaldoConta);
   const custoAntesDoMarco = round2(antesDoMarco.reduce((acc, p) => acc + (Number(p.custoTotal) || 0), 0));
 
+  /* Quanto de recurso próprio a conta já precisou puxar até esta data.
+     -----------------------------------------------------------------------
+     Sem esta linha a ponte não fecha: com o saldo travado em zero, somar
+     realizado + PLS − custos dá um número negativo que não aparece em lugar
+     nenhum. O próprio é exatamente esse rombo — e é a informação mais
+     importante da tela, porque saldo zero parece tranquilidade quando na
+     verdade quer dizer que o dinheiro do banco acabou e a diferença vai sair
+     do bolso. */
+  const proprioAte = round2(ate.reduce((v, m) => (m.proprioAcumProjetado != null ? m.proprioAcumProjetado : v), 0));
+  const proprioDisponivel = Number(r.saldoRecursoDisponivel) || 0;
+  const proprioSobra = round2(proprioDisponivel - proprioAte);
+
   const panel = document.createElement('div');
   panel.className = 'panel';
   panel.innerHTML = `
@@ -2877,7 +2895,7 @@ function renderSaldoContaGrid() {
       </div>
       <div class="saldo-bloco">
         <div class="card-label">Saldo previsto em <span class="saldo-prox-slot"></span> <span class="saldo-prox-info"></span></div>
-        <div class="card-value" style="color:${saldoProx < 0 ? 'var(--danger)' : 'var(--good)'}">${money(saldoProx)}</div>
+        <div class="card-value" style="color:${proprioAte > 0 ? 'var(--danger)' : 'var(--good)'}">${money(saldoProx)}${proprioAte > 0 ? ' <span class="saldo-zerado-tag">conta CAIXA zerada</span>' : ''}</div>
         <div class="saldo-ponte">
           <div><span>Saldo realizado</span><strong>${money(ponte.realizadoAte)}</strong></div>
           <div class="mais"><span>+ Liberação CAIXA prevista (PLS)</span><strong class="mov-entrada">${money(ponte.entradasPrev)}</strong>${ponte.plsPrevistas.length
@@ -2886,8 +2904,16 @@ function renderSaldoContaGrid() {
               ? `<em class="muted cf-sub">a próxima medição prevista é ${esc(ponte.proximaPls.obs || 'PLS')} — ${money(ponte.proximaPls.valor)} em ${dateBR(ponte.proximaPls.data)}, <strong>depois desta quinzena</strong>; escolha uma quinzena a partir dela para vê-la entrar</em>`
               : '<em class="muted cf-sub">nenhuma medição PLS planejada — lance em Liberação PCI</em>')}</div>
           <div class="menos"><span>− Custos previstos das quinzenas</span><strong class="mov-saida">${money(ponte.saidasPrev)}</strong></div>
-          <div class="igual"><span>= Saldo previsto</span><strong style="color:${saldoProx < 0 ? 'var(--danger)' : 'var(--good)'}">${money(saldoProx)}</strong></div>
+          ${proprioAte > 0 ? `<div class="mais proprio"><span>+ Recurso próprio necessário <em class="muted cf-sub">a verba do banco acaba antes de cobrir os custos — esta é a diferença que sai do seu bolso</em></span><strong class="mov-proprio">${money(proprioAte)}</strong></div>` : ''}
+          <div class="igual"><span>= Saldo previsto</span><strong style="color:${proprioAte > 0 ? 'var(--danger)' : 'var(--good)'}">${money(saldoProx)}</strong></div>
         </div>
+        ${proprioAte > 0 ? `<div class="saldo-negativo${proprioSobra < 0 ? ' critico' : ''}">
+          <strong>Saldo zero não é saldo tranquilo:</strong> a conta do CAIXA zera nesta data e
+          <strong>${money(proprioAte)} saem de recurso próprio</strong> para fechar as quinzenas até aqui.
+          ${proprioSobra < 0
+            ? `Sua verba própria disponível é ${money(proprioDisponivel)} — <strong>faltam ${money(Math.abs(proprioSobra))}</strong>. É preciso antecipar medição da CAIXA ou remanejar parcelas.`
+            : `Restariam <strong>${money(proprioSobra)}</strong> dos ${money(proprioDisponivel)} de verba própria disponível.`}
+        </div>` : ''}
       </div>
       <div class="saldo-acoes">
         <button type="button" class="btn small filter-control" data-acao="extrato-conta">Ver extrato</button>
