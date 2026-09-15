@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T123220">
+<meta name="app-version" content="20260915T123808">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2840,6 +2840,10 @@ function movimentosConta() {
   return {
     movs, marco, hoje, entradasReal, saidasReal,
     saldoHoje: saldoReal,
+    // Saldo de hoje SEM trava: entradas − saídas, e ponto. É o que o card do
+    // topo passa a mostrar — deixar o topo em zero enquanto a ponte ao lado
+    // dizia −45.248,31 era a mesma conta contando duas histórias.
+    saldoHojeBruto: round2(entradasReal - saidasReal),
     proprioRealizado: propReal,
     proprioProjetado: propProj,
   };
@@ -3187,6 +3191,30 @@ function resultadoDoPeriodo(movs, de, ate) {
   const soma = (f) => round2(dentro.filter(f).reduce((a, m) => a + (Number(m.valor) || 0), 0));
   const entradas = soma((m) => m.tipo === 'entrada');
   const saidas = soma((m) => m.tipo === 'saida');
+  const resultado = round2(entradas - saidas);
+
+  /* Saldo de abertura e de fechamento. Sem eles o bloco ficava solto: o mês de
+     setembro dava −13.958,72 de movimento e o saldo previsto dava +5.341,02, e
+     não havia na tela o número que liga os dois — o saldo que veio de agosto
+     (R$ 19.299,74). Com a abertura à vista a conta fecha na frente do usuário:
+     19.299,74 − 13.958,72 = 5.341,02. */
+  const saldoInicial = round2((movs || [])
+    .filter((m) => m.data < de)
+    .reduce((a, m) => a + (m.tipo === 'entrada' ? m.valor : -m.valor), 0));
+  const saldoFinal = round2(saldoInicial + resultado);
+
+  /* O pior momento DENTRO do período. Um mês pode fechar positivo e mesmo
+     assim ter passado por um vale negativo — foi o caso de setembro, que
+     mergulha a −109.567,92 no dia 25 e só se recompõe quando a medição entra
+     no dia 30. Esse vale é dinheiro do bolso que precisou estar disponível. */
+  let corrente = saldoInicial;
+  let vale = saldoInicial;
+  let valeData = de;
+  for (const m of dentro) {
+    corrente = round2(corrente + (m.tipo === 'entrada' ? m.valor : -m.valor));
+    if (corrente < vale) { vale = corrente; valeData = m.data; }
+  }
+
   return {
     de,
     ate,
@@ -3196,13 +3224,17 @@ function resultadoDoPeriodo(movs, de, ate) {
     saidasPlanejadas: soma((m) => m.tipo === 'saida' && !m.realizado),
     entradasRealizadas: soma((m) => m.tipo === 'entrada' && m.realizado),
     entradasPlanejadas: soma((m) => m.tipo === 'entrada' && !m.realizado),
-    resultado: round2(entradas - saidas),
+    resultado,
+    saldoInicial,
+    saldoFinal,
+    vale,
+    valeData,
   };
 }
 
 function renderSaldoContaGrid() {
   const r = VIEW.resumo;
-  const { movs, hoje, entradasReal, saidasReal, saldoHoje } = movimentosConta();
+  const { movs, hoje, entradasReal, saidasReal, saldoHoje, saldoHojeBruto } = movimentosConta();
   const periodos = buildQuinzenaPeriods(VIEW.meta?.dataInicio, VIEW.meta?.previsaoTermino).filter((p) => p.vencPlanejado >= r.marcoSaldoConta);
   const proxima = FILTRO_SALDO_CONTA_ATE || proximaQuinzena(periodos, hoje);
   /* A ponte do saldo previsto: o que já está na conta, mais o que o CAIXA
@@ -3259,9 +3291,12 @@ function renderSaldoContaGrid() {
       <div class="saldo-bloco">
         <div class="card-label">Saldo hoje · ${dateBR(hoje)}</div>
         <button type="button" class="value-drill small filter-control" data-acao="extrato-conta" title="Clique para ver o extrato — movimento a movimento">
-          <span class="drill-value card-value" style="color:${saldoHoje < 0 ? 'var(--danger)' : 'var(--good)'}">${money(saldoHoje)}</span><span class="drill-hint">ver extrato</span>
+          <span class="drill-value card-value" style="color:${saldoHojeBruto < -0.004 ? 'var(--danger)' : 'var(--good)'}">${money(saldoHojeBruto)}</span><span class="drill-hint">ver extrato</span>
         </button>
         <div class="card-sub"><span class="mov-entrada">Entradas ${money(entradasReal)}</span> − <span class="mov-saida">Saídas ${money(saidasReal)}</span> · só o realizado</div>
+        ${saldoHojeBruto < -0.004
+          ? `<div class="card-sub" style="font-size:11px; color:var(--danger)"><strong>${money(round2(-saldoHojeBruto))} já saíram de recurso próprio</strong> — a verba do banco não cobriu tudo. Na conta do CAIXA há ${money(saldoHoje)}.</div>`
+          : ''}
         ${custoAntesDoMarco > 0 ? `<div class="saldo-fora-conta">Fora desta conta: <strong>${money(custoAntesDoMarco)}</strong> em ${antesDoMarco.length} quinzena(s) antes de ${dateBR(r.marcoSaldoConta)} (${antesDoMarco.map((p) => esc(p.mesReferenciaLabel || p.label)).join(', ')}), pagas com <strong>recurso próprio</strong>. Saídas ${money(saidasReal)} + ${money(custoAntesDoMarco)} = custo total realizado ${money(round2(saidasReal + custoAntesDoMarco))}.</div>` : ''}
       </div>
       <div class="saldo-bloco">
@@ -3283,10 +3318,21 @@ function renderSaldoContaGrid() {
           const negativo = saldoProx < -0.004;
           const corSaldo = negativo ? 'var(--danger)' : 'var(--good)';
           const selo = negativo ? ' <span class="saldo-zerado-tag">consumindo recurso próprio</span>' : '';
+          /* O sinal do mês diz MOVIMENTO, não consumo de próprio. Chamar um mês
+             de "−13.958,72 de recurso próprio" estava errado: o mês pode fechar
+             com saldo positivo (setembro fecha em +5.341,02) porque veio saldo
+             do mês anterior. Consumo de próprio é quando o SALDO fica negativo,
+             e isso o número grande já diz. */
+          const mesAte = proxima ? fimDoMes(proxima.mes) : null;
+          const resMes = proxima ? resultadoDoPeriodo(movs, `${proxima.mes}-01`, mesAte) : null;
+          const tagMes = resMes
+            ? `<div class="saldo-sinal-mes ${resMes.resultado < -0.004 ? 'ruim' : 'bom'}">No mês de ${esc(nomeDoMes(proxima.mes))}: <strong>${resMes.resultado < 0 ? 'saiu' : 'entrou'} ${money(Math.abs(resMes.resultado))} a mais</strong> <span class="muted">— entrou ${money(resMes.entradas)}, saiu ${money(resMes.saidas)}. Abriu o mês com ${money(resMes.saldoInicial)} e fecha com ${money(resMes.saldoFinal)}.</span></div>`
+            : '';
           return `<div class="card-value" style="color:${corSaldo}">${money(saldoProx)}${selo}</div>
             <div class="card-sub" style="font-size:11px">${negativo
               ? `saldo anterior + entradas − saídas até esta data. <strong>Negativo = ${money(round2(-saldoProx))} saindo de recurso próprio.</strong> Na conta do banco há ${money(saldoCaixaProx)}.`
-              : `saldo anterior + entradas − saídas até esta data. Sobra na conta. ${saldoCaixaProx !== saldoProx ? `Na conta do banco há ${money(saldoCaixaProx)}.` : ''}`}</div>`;
+              : `saldo anterior + entradas − saídas até esta data. Sobra na conta. ${saldoCaixaProx !== saldoProx ? `Na conta do banco há ${money(saldoCaixaProx)}.` : ''}`}</div>
+            ${tagMes}`;
         })()}
         <div class="saldo-ponte">
           <div><span>Saldo realizado até aqui <em class="muted cf-sub">tudo que já entrou menos tudo que já saiu, desde ${dateBR(r.marcoSaldoConta)}</em></span><strong style="color:${ponte.realizadoAte < 0 ? 'var(--danger)' : 'inherit'}">${money(ponte.realizadoAte)}</strong></div>
@@ -3317,16 +3363,24 @@ function renderSaldoContaGrid() {
         const mesAte = fimDoMes(proxima.mes);
         const m = resultadoDoPeriodo(movs, `${proxima.mes}-01`, mesAte);
         const cor = (v) => (v < -0.004 ? 'var(--danger)' : v > 0.004 ? 'var(--good)' : 'var(--ink)');
+        /* A conta do período agora é um extrato de verdade: abre com o saldo
+           que veio do período anterior, soma o que entrou, subtrai o que saiu e
+           fecha com o saldo do fim. É essa abertura que faltava para os números
+           conversarem — o movimento do mês e o saldo previsto pareciam se
+           contradizer só porque o saldo de entrada não estava em lugar nenhum. */
         const caixa = (titulo, sub, x) => `
           <div class="periodo-bloco">
             <div class="periodo-titulo">${titulo} <span class="muted" style="font-weight:400; text-transform:none; letter-spacing:0">${sub}</span></div>
-            <div class="teto-linha"><span>Entrou (liberação CAIXA)</span><strong class="mov-entrada">${money(x.entradas)}</strong></div>
-            <div class="teto-linha"><span>Saiu (custo das quinzenas)</span><strong class="mov-saida">${money(x.saidas)}</strong></div>
-            <div class="teto-linha resultado"><span>${x.resultado < 0 ? 'Consumo de recurso próprio no período' : 'Sobra do período'}</span><strong style="color:${cor(x.resultado)}">${money(Math.abs(x.resultado))}</strong></div>
+            <div class="teto-linha"><span>Saldo no início</span><strong style="color:${cor(x.saldoInicial)}">${money(x.saldoInicial)}</strong></div>
+            <div class="teto-linha"><span>+ Entrou (liberação CAIXA)</span><strong class="mov-entrada">${money(x.entradas)}</strong></div>
+            <div class="teto-linha"><span>− Saiu (custo das quinzenas)</span><strong class="mov-saida">${money(x.saidas)}</strong></div>
+            <div class="teto-linha"><span>${x.resultado < 0 ? '= Movimento do período (saiu mais do que entrou)' : '= Movimento do período (entrou mais do que saiu)'}</span><strong style="color:${cor(x.resultado)}">${money(x.resultado)}</strong></div>
+            <div class="teto-linha resultado"><span>Saldo no fim</span><strong style="color:${cor(x.saldoFinal)}">${money(x.saldoFinal)}</strong></div>
             <div class="teto-linha muted" style="font-size:11px"><span>do custo, ${money(x.saidasRealizadas)} já pago e ${money(x.saidasPlanejadas)} a pagar</span></div>
+            ${x.vale < -0.004 ? `<div class="teto-linha" style="font-size:11px; color:var(--danger)"><span>No pior dia (${dateBR(x.valeData)}) o saldo chega a <strong>${money(x.vale)}</strong> — recurso próprio cobrindo até a medição entrar</span></div>` : ''}
           </div>`;
         return `<div class="saldo-periodo">
-          <div class="periodo-cabecalho">Resultado do período <span class="muted">— só o que cai dentro da janela: nada de antes, nada de depois</span></div>
+          <div class="periodo-cabecalho">Resultado do período <span class="muted">— saldo que veio de antes, o que entrou e saiu dentro da janela, e o saldo com que o período fecha</span></div>
           <div class="periodo-grid">
             ${caixa('Quinzena selecionada', `${dateBR(q.de)} a ${dateBR(q.ate)}`, q)}
             ${caixa(`Mês de ${esc(nomeDoMes(proxima.mes))}`, `${dateBR(m.de)} a ${dateBR(m.ate)} · as duas quinzenas`, m)}
