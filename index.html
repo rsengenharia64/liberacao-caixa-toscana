@@ -3233,32 +3233,11 @@ function abrirExtratoCustoTotal(parcelas, total) {
     resumo.innerHTML = `Já realizado: <strong>${money(realizado)}</strong> &nbsp;·&nbsp; Ainda planejado: <strong>${money(planejado)}</strong>`;
     body.appendChild(resumo);
 
-    /* Previsto embaixo do realizado, com o desvio.
-       -----------------------------------------------------------------------
-       O planejado de cada quinzena é uma foto congelada (ver
-       congelarPrevistoParcelas) e não muda quando o pagamento é lançado. Sem
-       mostrá-lo aqui, o número aparecia sozinho e não dava para saber se o que
-       saiu foi o que estava combinado — que é justamente a leitura que
-       interessa na hora de pagar, dia 10 e dia 25. */
-    const celPrevisto = (atual, prev) => {
-      const a = Number(atual) || 0;
-      if (prev === null || prev === undefined || prev === false) return money(a);
-      const pv = Number(prev) || 0;
-      const d = round2(a - pv);
-      const forte = Math.abs(d) >= 0.005;
-      const cor = !forte ? '' : (d > 0 ? ' style="color:var(--danger)"' : ' style="color:var(--accent-ink)"');
-      return `<span${cor}>${money(a)}</span>`
-        + `<div class="muted cf-sub">prev ${money(pv)}${forte ? ` · <strong${cor}>${d > 0 ? '+' : ''}${money(d)}</strong>` : ' · ok'}</div>`;
-    };
-    const somaPrev = (campo) => {
-      let temAlgum = false;
-      const s = linhas.reduce((acc, p) => {
-        if (p.previsto && p.previsto[campo] !== undefined) { temAlgum = true; return acc + (Number(p.previsto[campo]) || 0); }
-        return acc;
-      }, 0);
-      return temAlgum ? round2(s) : null;
-    };
-
+    /* O extrato fica com UM número por célula. O previsto de cada quinzena
+       continua guardado (ver congelarPrevistoParcelas) e aparece onde ele é
+       útil sem atrapalhar: dentro da janela de registro do pagamento, ao lado
+       do campo que está sendo preenchido. Mostrá-lo aqui, em todas as colunas
+       ao mesmo tempo, transformou a tabela num muro de números. */
     const wrap = document.createElement('div');
     wrap.className = 'table-scroll';
     wrap.style.maxHeight = '46vh';
@@ -3276,21 +3255,21 @@ function abrirExtratoCustoTotal(parcelas, total) {
         <tbody>${linhas.map((p) => `
           <tr class="${p.status === 'PLANEJADO' ? 'planejado' : ''}" data-parcela="${esc(p.id)}">
             <td>${esc(p.mesReferenciaLabel || p.label || mesQuinzenaLabel(p.mesReferencia, p.quinzena || 1))}</td>
-            <td class="num">${celPrevisto(p.totalEmpreiteiroPix, p.previsto && p.previsto.totalEmpreiteiroPix)}</td>
-            <td class="num">${celPrevisto(p.totalAdmPix, p.previsto && p.previsto.totalAdmPix)}</td>
-            <td class="num">${celPrevisto(p.gastoCartao, p.previsto && p.previsto.gastoCartao)}</td>
-            <td class="num">${celPrevisto(p.parcelaEvolucaoCaixa, p.previsto && p.previsto.parcelaEvolucaoCaixa)}</td>
-            <td class="num"><strong>${celPrevisto(p.custoTotal, p.previsto && p.previsto.custoTotal)}</strong></td>
+            <td class="num">${money(p.totalEmpreiteiroPix)}</td>
+            <td class="num">${money(p.totalAdmPix)}</td>
+            <td class="num">${money(p.gastoCartao)}</td>
+            <td class="num">${money(p.parcelaEvolucaoCaixa)}</td>
+            <td class="num"><strong>${money(p.custoTotal)}</strong></td>
             <td class="no-print pix-celula" data-pix="${esc(p.id)}"></td>
           </tr>`).join('')}
         </tbody>
         <tfoot><tr>
           <td>Total</td>
-          <td class="num">${celPrevisto(somaEmp, somaPrev('totalEmpreiteiroPix'))}</td>
-          <td class="num">${celPrevisto(somaAdm, somaPrev('totalAdmPix'))}</td>
-          <td class="num">${celPrevisto(somaCartao, somaPrev('gastoCartao'))}</td>
-          <td class="num">${celPrevisto(somaEvol, somaPrev('parcelaEvolucaoCaixa'))}</td>
-          <td class="num">${celPrevisto(total, somaPrev('custoTotal'))}</td>
+          <td class="num">${money(somaEmp)}</td>
+          <td class="num">${money(somaAdm)}</td>
+          <td class="num">${money(somaCartao)}</td>
+          <td class="num">${money(somaEvol)}</td>
+          <td class="num">${money(total)}</td>
           <td class="no-print"></td>
         </tr></tfoot>
       </table>`;
