@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T144054">
+<meta name="app-version" content="20260915T151025">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6982,6 +6982,47 @@ function movimentoDinheiro({ incluirPlanejado = false } = {}) {
   }
 
   linhas.sort((a, b) => String(a.data || '0000').localeCompare(String(b.data || '0000')) || (a.tipo === 'entrada' ? -1 : 1));
+
+  /* QUEM PAGOU CADA SAÍDA — pela cascata, não pela data da primeira liberação.
+     -----------------------------------------------------------------------
+     A regra antiga marcava como "próprio" apenas o que foi pago ANTES da
+     primeira liberação do CAIXA; daí em diante tudo virava "CAIXA", mesmo
+     quando a conta do banco estava zerada. Por isso esta tela mostrava o
+     recurso próprio parado em ~R$ 320 mil enquanto o cabeçalho, já na conta
+     nova, dizia R$ 365 mil — dois números para a mesma coisa na mesma linha.
+
+     Agora vale a mesma cascata do saldo em conta: as entradas do banco
+     abastecem o saldo, cada saída consome o que houver, e o que faltar é
+     recurso próprio. Quando um pagamento é coberto pelas duas fontes, a linha
+     é PARTIDA em duas — assim cada linha continua tendo uma única natureza e
+     todo o resto da tela (somas, crachás, agrupamento por conta) segue
+     funcionando sem saber da mudança. */
+  {
+    let saldoCaixa = 0;
+    const partidas = [];
+    for (const x of linhas) {
+      if (x.tipo === 'entrada') {
+        if (x.natureza === 'caixa' && x.status === 'REALIZADO') saldoCaixa = round2(saldoCaixa + (Number(x.valor) || 0));
+        partidas.push(x);
+        continue;
+      }
+      if (x.status !== 'REALIZADO') { partidas.push(x); continue; }
+      const valor = round2(Number(x.valor) || 0);
+      if (valor <= 0) { partidas.push(x); continue; }
+      const daCaixa = round2(Math.min(saldoCaixa, valor));
+      const doProprio = round2(valor - daCaixa);
+      saldoCaixa = round2(saldoCaixa - daCaixa);
+      if (daCaixa > 0.004 && doProprio > 0.004) {
+        partidas.push({ ...x, natureza: 'caixa', valor: daCaixa, descricao: `${x.descricao} · parte paga pela conta do CAIXA` });
+        partidas.push({ ...x, natureza: 'proprio', valor: doProprio, descricao: `${x.descricao} · parte paga com recurso próprio` });
+      } else {
+        partidas.push({ ...x, natureza: doProprio > 0.004 ? 'proprio' : 'caixa' });
+      }
+    }
+    linhas.length = 0;
+    linhas.push(...partidas);
+  }
+
   const somaSe = (f) => round2(linhas.filter(f).reduce((a, x) => a + x.valor, 0));
   const real = (x) => x.status === 'REALIZADO';
   const entradas = somaSe((x) => x.tipo === 'entrada' && real(x));
