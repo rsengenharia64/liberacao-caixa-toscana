@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T115314">
+<meta name="app-version" content="20260915T120314">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -541,6 +541,13 @@
   .saldo-zerado-tag { font-size: 11px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase;
     background: var(--danger); color: #fff; padding: 3px 8px; border-radius: 999px; vertical-align: middle; margin-left: 8px; }
   .mov-proprio { color: var(--danger); font-weight: 700; }
+  /* Sinal de bater o olho: o mês fechou sobrando ou tirando do bolso. Fica
+     colado no saldo porque é a leitura que o saldo sozinho não entrega — a
+     conta pode terminar com dinheiro do banco e ainda assim o mês ter
+     consumido recurso próprio. */
+  .saldo-sinal-mes { margin-top: 6px; font-size: 12px; line-height: 1.4; padding: 5px 9px; border-radius: 6px; }
+  .saldo-sinal-mes.ruim { color: var(--danger); background: rgba(200, 40, 40, .08); border-left: 3px solid var(--danger); }
+  .saldo-sinal-mes.bom { color: var(--good); background: rgba(30, 140, 70, .08); border-left: 3px solid var(--good); }
   .card-alerta-proprio { margin-top: 6px; font-size: 12px; line-height: 1.35; color: var(--danger);
     background: rgba(200, 40, 40, .07); border-left: 3px solid var(--danger); padding: 5px 8px; border-radius: 4px; }
   .saldo-ponte .proprio { border-top: 1px dashed var(--danger); padding-top: 4px; margin-top: 2px; }
@@ -3067,7 +3074,34 @@ function renderSaldoContaGrid() {
       <div class="saldo-bloco">
         <div class="card-label">Saldo previsto em <span class="saldo-prox-slot"></span> <span class="saldo-prox-info"></span></div>
         ${proxima ? `<div class="card-sub" style="font-size:11px">conta tudo que cair até <strong>${dateBR(ateData)}</strong> — o período inteiro da quinzena, não só o dia do pagamento</div>` : ''}
-        <div class="card-value" style="color:${proprioAte > 0 ? 'var(--danger)' : 'var(--good)'}">${money(saldoProx)}${proprioAte > 0 ? ' <span class="saldo-zerado-tag">conta CAIXA zerada</span>' : ''}</div>
+        ${(() => {
+          /* O número grande e o selo contavam histórias opostas.
+             -------------------------------------------------------------
+             O selo "conta CAIXA zerada" aparecia sempre que houvesse QUALQUER
+             consumo de próprio acumulado desde o marco — mesmo quando a conta
+             terminava o período com dinheiro. Em Setembro/2ª dava exatamente
+             isso: R$ 50.589,33 em verde-escuro ao lado de um selo vermelho
+             dizendo que a conta estava zerada. E os R$ 50 mil não eram um bom
+             sinal por si só: o mês custou R$ 13.958,72 do bolso do dono.
+
+             Agora o selo só aparece quando a conta REALMENTE zera, e ao lado
+             do saldo fica o resultado DO MÊS — que é o sinal de bater o olho:
+             sobrou, ou saiu do próprio e quanto. */
+          const contaZerou = Math.abs(saldoProx) < 0.005;
+          const mesAte = proxima ? fimDoMes(proxima.mes) : null;
+          const resMes = proxima ? resultadoDoPeriodo(movs, `${proxima.mes}-01`, mesAte) : null;
+          const consomeNoMes = resMes ? round2(-resMes.resultado) : 0;
+          const corSaldo = contaZerou ? 'var(--danger)' : (saldoProx < 0 ? 'var(--danger)' : 'var(--good)');
+          const selo = contaZerou ? ' <span class="saldo-zerado-tag">conta CAIXA zerada</span>' : '';
+          const tagMes = resMes
+            ? (consomeNoMes > 0.004
+              ? `<div class="saldo-sinal-mes ruim">No mês de ${esc(nomeDoMes(proxima.mes))}: <strong>${money(consomeNoMes)} saem de recurso próprio</strong> <span class="muted">— entrou ${money(resMes.entradas)}, saiu ${money(resMes.saidas)}</span></div>`
+              : `<div class="saldo-sinal-mes bom">No mês de ${esc(nomeDoMes(proxima.mes))}: <strong>sobram ${money(Math.abs(consomeNoMes))}</strong> <span class="muted">— entrou ${money(resMes.entradas)}, saiu ${money(resMes.saidas)}</span></div>`)
+            : '';
+          return `<div class="card-value" style="color:${corSaldo}">${money(saldoProx)}${selo}</div>
+            <div class="card-sub" style="font-size:11px">saldo da conta do CAIXA no fim do período — dinheiro do banco, já descontado o que o próprio cobriu</div>
+            ${tagMes}`;
+        })()}
         <div class="saldo-ponte">
           <div><span>Saldo realizado</span><strong>${money(ponte.realizadoAte)}</strong></div>
           <div class="mais"><span>+ Liberação CAIXA prevista (PLS)</span><strong class="mov-entrada">${money(ponte.entradasPrev)}</strong>${ponte.plsPrevistas.length
