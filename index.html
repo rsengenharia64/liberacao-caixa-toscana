@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T122425">
+<meta name="app-version" content="20260915T123220">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1612,6 +1612,11 @@ function calcularViabilidade(ctx) {
       fontesDisponiveis, conciliacao, reservaGiro,
       giroCaixa, giroProprio, giroDisponivel, giroOrcado, giroGap,
       financiamentoObraCaixa: num(p.financiamentoObraCaixa),
+      // Os dois números que explicam por que a coluna "Bancado pelo CAIXA"
+      // soma menos que o crédito contratado: o limite que o banco reserva
+      // para a obra e o que a obra de fato custa.
+      limiteObra: num(p.financiamentoObraCaixa),
+      custoConstrucaoProjetado: round2((rubricas.find((r) => r.id === 'construcao') || {}).projetado || 0),
       participacaoFinanciamento: div(creditoAplicado, custoEconomicoProjetado),
       participacaoCapitalProprio: div(capitalProprioNecessario, custoEconomicoProjetado),
     },
@@ -7474,6 +7479,29 @@ function abrirExtratoViabilidade(secaoInicial = null) {
         <thead><tr><th>Rubrica</th><th class="num">Orçado</th><th class="num">Realizado</th><th class="num">Comprometido</th><th class="num">A incorrer</th><th class="num">Projetado</th><th class="num">Bancado pelo CAIXA</th><th class="num">Recurso próprio</th></tr></thead>
         <tbody>${linhasRubricas}
           <tr class="extrato-residuo"><td><strong>Custo econômico total</strong></td><td class="num"><strong>${money(v.custoEconomicoOrcado)}</strong></td><td class="num"><strong>${money(v.custoEconomicoRealizado)}</strong></td><td class="num"><strong>${money(v.custoEconomicoComprometido)}</strong></td><td class="num"><strong>${money(v.custoEconomicoProjetado - v.custoEconomicoRealizado - v.custoEconomicoComprometido)}</strong></td><td class="num"><strong>${money(v.custoEconomicoProjetado)}</strong></td><td class="num"><strong>${money(f.creditoAplicado)}</strong></td><td class="num"><strong>${money(f.capitalProprioNecessario)}</strong></td></tr>
+          ${(() => {
+            /* Por que a coluna "Bancado pelo CAIXA" não fecha no crédito contratado.
+               --------------------------------------------------------------
+               Cada rubrica só pode ser bancada até o que ela CUSTA: porCaixa =
+               min(custo projetado, limite que o banco destina àquela rubrica).
+               A linha de obra tem limite de financiamento maior que o contrato
+               do empreiteiro, então sobra crédito contratado sem custo para
+               aplicar — e a coluna soma menos que o contrato. O número está
+               certo; o que faltava era dizer isso na tela, senão parece erro. */
+            const contratado = round2(Number(f.creditoContratado) || 0);
+            const aplicado = round2(Number(f.creditoAplicado) || 0);
+            const folga = round2(contratado - aplicado);
+            if (Math.abs(folga) < 0.01) return '';
+            return `<tr class="extrato-residuo">
+              <td colspan="6"><strong>Crédito CAIXA contratado</strong> <span class="muted">limite do PCI</span></td>
+              <td class="num"><strong>${money(contratado)}</strong></td><td></td></tr>
+            <tr class="extrato-residuo">
+              <td colspan="6"><strong>${folga > 0 ? 'Crédito contratado sem custo para aplicar' : 'Custo acima do crédito contratado'}</strong>
+                <span class="muted">${folga > 0
+                  ? `cada rubrica só pode ser bancada até o que ela custa. A linha de obra tem limite de ${money(Number(f.limiteObra) || 0)} e o contrato do empreiteiro custa ${money(Number(f.custoConstrucaoProjetado) || 0)} — a diferença é crédito que existe no contrato mas não tem despesa correspondente para consumir`
+                  : 'as rubricas financiáveis custam mais do que o crédito contratado cobre'}</span></td>
+              <td class="num"><strong style="color:${folga > 0 ? 'var(--warn)' : 'var(--danger)'}">${money(folga)}</strong></td><td></td></tr>`;
+          })()}
         </tbody></table></div>
       <div class="table-scroll" style="margin-top:8px"><table class="extrato-table"><tbody>
         ${grupo('Resultado da operação — ' + cenarioRotulo)}
