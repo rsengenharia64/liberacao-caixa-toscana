@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T105556">
+<meta name="app-version" content="20260915T113943">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -311,6 +311,19 @@
   .saldo-ponte > div.igual { border-top: 1px solid var(--border); padding-top: 3px; margin-top: 2px; font-weight: 700; }
   .saldo-ponte > div.igual span { color: var(--ink); }
   .saldo-acoes { display: flex; flex-direction: column; gap: 6px; align-self: center; }
+  /* Consumo acumulado dos dois tetos (crédito CAIXA e recurso próprio). O
+     saldo em conta vive zerado por desenho — a cascata trava em zero e joga a
+     falta no recurso próprio —, então o zero sozinho não conta a história.
+     O que responde "quanto já queimamos e quanto ainda temos" é isto. */
+  .saldo-tetos { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .teto-bloco { display: flex; flex-direction: column; gap: 3px; }
+  .teto-titulo { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+  .teto-valor { font-family: "IBM Plex Mono", monospace; font-size: 19px; font-weight: 700; line-height: 1.15; }
+  .teto-linha { font-size: 12px; color: var(--ink-soft); display: flex; justify-content: space-between; gap: 10px; }
+  .teto-linha strong { font-family: "IBM Plex Mono", monospace; }
+  .teto-barra { height: 7px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin: 3px 0 2px; }
+  .teto-barra span { display: block; height: 100%; border-radius: 4px; }
+  @media (max-width: 860px) { .saldo-tetos { grid-template-columns: 1fr; } }
   .saldo-prox-select { font-size: 12px; padding: 2px 6px; margin-left: 4px; max-width: 220px; }
   .mov-entrada { color: var(--good); font-weight: 600; }
   .mov-saida { color: var(--danger); font-weight: 600; }
@@ -2994,6 +3007,43 @@ function renderSaldoContaGrid() {
         <button type="button" class="btn small filter-control" data-acao="extrato-conta">Ver extrato</button>
         <button type="button" class="btn small filter-control" data-acao="imprimir-conta">Imprimir extrato</button>
       </div>
+      ${(() => {
+        /* O saldo em conta zera por desenho: a cascata trava em zero e a falta
+           vira consumo de recurso próprio. Só que um "R$ 0,00" nos dois
+           blocos acima não diz nem quanto de PLS já foi queimado do limite
+           contratado, nem quanto do bolso já entrou — e eram justamente esses
+           dois números que davam a leitura. Ficam aqui, acumulados, com
+           quanto resta de cada teto. */
+        const pciContratado = Number(r.creditoCaixaTotalPCI) || 0;
+        const pciLiberado = Number(r.caixaLiberadaAcumulada) || 0;
+        const pciSaldo = round2(pciContratado - pciLiberado);
+        const pciPerc = pciContratado > 0 ? Math.min(1, Math.max(0, pciLiberado / pciContratado)) : 0;
+
+        const propPlanejado = Number(r.recursoProprioPlanejado) || 0;
+        const propConsumido = Number(r.totalConsumoRecursoProprio) || 0;
+        const propSaldo = round2(propPlanejado - propConsumido);
+        const propPerc = propPlanejado > 0 ? Math.min(1, Math.max(0, propConsumido / propPlanejado)) : 0;
+
+        const barra = (perc, cor) => `<div class="teto-barra"><span style="width:${(perc * 100).toFixed(1)}%; background:${cor}"></span></div>`;
+        return `<div class="saldo-tetos">
+          <div class="teto-bloco">
+            <div class="teto-titulo">Crédito CAIXA consumido (PLS)</div>
+            <div class="teto-valor" style="color:var(--accent)">${money(pciLiberado)}</div>
+            ${barra(pciPerc, 'var(--accent)')}
+            <div class="teto-linha"><span>Limite contratado</span><strong>${money(pciContratado)}</strong></div>
+            <div class="teto-linha"><span>Ainda a liberar</span><strong style="color:${pciSaldo > 0 ? 'var(--good)' : 'var(--danger)'}">${money(pciSaldo)}</strong></div>
+            <div class="teto-linha muted" style="font-size:11px"><span>${pct(pciPerc)} do limite já liberado pelo banco</span></div>
+          </div>
+          <div class="teto-bloco">
+            <div class="teto-titulo">Recurso próprio consumido</div>
+            <div class="teto-valor" style="color:${propSaldo < 0 ? 'var(--danger)' : 'var(--warn)'}">${money(propConsumido)}</div>
+            ${barra(propPerc, propSaldo < 0 ? 'var(--danger)' : 'var(--warn)')}
+            <div class="teto-linha"><span>Planejado</span><strong>${money(propPlanejado)}</strong></div>
+            <div class="teto-linha"><span>Ainda disponível</span><strong style="color:${propSaldo > 0 ? 'var(--good)' : 'var(--danger)'}">${money(propSaldo)}</strong></div>
+            <div class="teto-linha muted" style="font-size:11px"><span>${pct(propPerc)} da verba própria já usada${propSaldo < 0 ? ' — estourou o planejado' : ''}</span></div>
+          </div>
+        </div>`;
+      })()}
     </div>
   `;
   // Seletor da quinzena da projeção — dentro do rótulo, discreto.
