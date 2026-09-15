@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T083209">
+<meta name="app-version" content="20260915T083937">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -15905,11 +15905,53 @@ function congelarPrevistoParcelas() {
   }
 }
 
+/* Destrava o % de avanço zerado por cima de um histórico REALIZADO.
+   --------------------------------------------------------------------------
+   percAvancoManual funciona como override: qualquer valor definido ganha do
+   cálculo pelos itens E do histórico. O problema é que ZERO é um valor
+   definido. Quando um lançamento é apagado ou corrigido e esse campo fica em
+   0, o zero passa a mandar — e a categoria aparece com 0% mesmo tendo avanços
+   REALIZADOS de 40% e 50% registrados logo ao lado. Foi o que aconteceu com
+   oito categorias (Supra estrutura, Paredes, Outros Serviços...): o dado não
+   se perdeu, ficou soterrado por um zero.
+
+   A cura é conservadora de propósito: só age quando o campo está em zero (ou
+   vazio) E existe avanço REALIZADO maior que zero no histórico. Um percentual
+   que alguém digitou de fato — inclusive um zero deliberado logo após um
+   avanço realizado — não é tocado, porque nesse caso o histórico e o campo
+   contam a mesma história e não há conflito a resolver. Cada destravamento
+   entra no registro de alterações, para não ser mágica silenciosa. */
+function destravarAvancosZeradosPorHistorico() {
+  const h = STATE.historicoAvancos || [];
+  if (!h.length) return 0;
+  let curados = 0;
+  for (const cat of (STATE.categorias || [])) {
+    const atual = cat.percAvancoManual;
+    const zerado = atual === null || atual === undefined || Number(atual) === 0;
+    if (!zerado) continue;
+    const realizados = h
+      .filter((x) => x.categoriaId === cat.id && x.status === 'REALIZADO' && Number(x.percAvancoNovo) > 0)
+      .sort((a, b) => String(a.data || '').localeCompare(String(b.data || ''))
+        || String(a.timestamp || '').localeCompare(String(b.timestamp || '')));
+    if (!realizados.length) continue;
+    const valor = Number(realizados[realizados.length - 1].percAvancoNovo) || 0;
+    if (valor <= 0) continue;
+    cat.percAvancoManual = valor;
+    curados++;
+    try {
+      registrarAlteracao('Lançar Avanços', cat.nome, '% avanço restaurado do histórico',
+        atual === null || atual === undefined ? '—' : pct(Number(atual)), pct(valor));
+    } catch (e) { /* auditoria é acessório: nunca pode impedir a cura */ }
+  }
+  return curados;
+}
+
 function normalizarEstadoCarregado() {
   normalizarParametros();
   migrarMesFaturaDaPlanilha();
   migrarItensCartaoSemVinculo();
   migrarBaseAdm();
+  destravarAvancosZeradosPorHistorico();
   congelarPrevistoParcelas();
 }
 normalizarEstadoCarregado();
