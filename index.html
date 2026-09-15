@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T143829">
+<meta name="app-version" content="20260915T144054">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3470,8 +3470,8 @@ function renderSaldoContaGrid() {
             <div class="teto-linha"><span>Planejado</span><strong>${money(propPlanejado)}</strong></div>
             <div class="teto-linha"><span>Ainda disponível</span><strong style="color:${propSaldo > 0 ? 'var(--good)' : 'var(--danger)'}">${money(propSaldo)}</strong></div>
             <div class="teto-linha muted" style="font-size:11px"><span>${pct(propPerc)} da verba própria já usada${propSaldo < 0 ? ' — estourou o planejado' : ''}</span></div>
-            ${naoRegistrado > 0.004 ? `<div class="teto-linha" style="font-size:11px; color:var(--danger); margin-top:4px">
-              <span><strong>${money(naoRegistrado)} ainda não estão lançados</strong> em Parâmetros › Consumos de recurso próprio. A lista traz ${money(registradoTotal)}${ultimoRegistro ? ` e o último item é de ${dateBR(ultimoRegistro)}` : ''}; a conta da obra já consumiu mais que isso. O número acima já soma os dois — lance os itens que faltam para a lista bater.</span></div>` : ''}
+            ${naoRegistrado > 0.004 ? `<div class="teto-linha" style="font-size:11px; color:var(--warn); margin-top:4px">
+              <span>Deste total, <strong>${money(registradoTotal)}</strong> vêm dos itens lançados à mão${ultimoRegistro ? ` (o último é de ${dateBR(ultimoRegistro)})` : ''} e <strong>${money(naoRegistrado)}</strong> o sistema calculou pela conta da obra — quinzenas que a verba do banco não cobriu. Esse item aparece na lista em Parâmetros marcado como automático; se você lançar as quinzenas detalhadas, ele encolhe sozinho.</span></div>` : ''}
           </div>
         </div>`;
       })()}
@@ -11488,6 +11488,19 @@ function renderConsumosRecursoProprioPanel() {
     const tbody = tbl.querySelector('tbody');
     for (const item of [...itens].sort(ordenarConsumos)) {
       const tr = document.createElement('tr');
+      /* O item calculado pela conta não é editável: ele é recomputado a cada
+         carga a partir das liberações e das quinzenas realizadas. Editar aqui
+         daria a impressão de que o valor ficou, quando na verdade ele seria
+         reescrito no próximo carregamento. Some sozinho conforme as quinzenas
+         forem lançadas uma a uma. */
+      if (item.auto) {
+        tr.appendChild(td(`<span class="wrap">${esc(item.descricao)}</span> <span class="badge blue">automático</span>`));
+        tr.appendChild(td(item.data ? dateBR(item.data) : '—'));
+        tr.appendChild(td(`<span class="num">${money(item.valor)}</span>`));
+        tr.appendChild(td('<span class="muted" style="font-size:11px">calculado</span>'));
+        tbody.appendChild(tr);
+        continue;
+      }
       tr.appendChild(td(textInput({ value: item.descricao, wide: true, onSave: (v) => updateConsumoRecursoProprio(item.id, { descricao: v }) })));
       tr.appendChild(td(dateInput({ value: item.data, onSave: (v) => updateConsumoRecursoProprio(item.id, { data: v }) })));
       tr.appendChild(td(moneyInput({ value: item.valor, onSave: (v) => updateConsumoRecursoProprio(item.id, { valor: v }) })));
