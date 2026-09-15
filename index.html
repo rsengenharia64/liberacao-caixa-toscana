@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T000531">
+<meta name="app-version" content="20260915T001748">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -5463,7 +5463,33 @@ function addAjuste(patch) {
   });
   afterMutation();
 }
-function deleteAjuste(id) { STATE.fluxoCaixaAjustes = STATE.fluxoCaixaAjustes.filter((a) => a.id !== id); afterMutation(); }
+/* Corrigir um ajuste já lançado.
+   -------------------------------------------------------------------------
+   Antes só dava para apagar e redigitar: um valor errado obrigava a destruir
+   o lançamento e recriá-lo, perdendo o histórico e abrindo espaço para erro
+   novo. Agora cada campo é editável no lugar, e a mudança fica registrada no
+   log de alterações com o valor anterior. */
+function updateAjuste(id, patch) {
+  const a = (STATE.fluxoCaixaAjustes || []).find((x) => x.id === id);
+  if (!a) return;
+  const rotulo = a.descricao || dateBR(a.data) || id;
+  if (patch.data !== undefined) { registrarAlteracao('Fluxo de caixa', rotulo, 'data', a.data, patch.data); a.data = patch.data; }
+  if (patch.tipo !== undefined) {
+    const novo = patch.tipo === 'entrada' ? 'entrada' : 'saida';
+    registrarAlteracao('Fluxo de caixa', rotulo, 'tipo', a.tipo, novo);
+    a.tipo = novo;
+  }
+  if (patch.valor !== undefined) { registrarAlteracao('Fluxo de caixa', rotulo, 'valor', a.valor, Number(patch.valor) || 0); a.valor = Number(patch.valor) || 0; }
+  if (patch.descricao !== undefined) { registrarAlteracao('Fluxo de caixa', rotulo, 'descrição', a.descricao, patch.descricao); a.descricao = patch.descricao; }
+  afterMutation();
+}
+
+function deleteAjuste(id) {
+  const a = (STATE.fluxoCaixaAjustes || []).find((x) => x.id === id);
+  if (a) registrarAlteracao('Fluxo de caixa', a.descricao || dateBR(a.data) || id, 'ajuste removido', a.valor, null);
+  STATE.fluxoCaixaAjustes = STATE.fluxoCaixaAjustes.filter((x) => x.id !== id);
+  afterMutation();
+}
 
 // Cria (ou atualiza, se `parcelaExistente` for passada) a parcela de Contas a
 // Pagar ligada a um avanço individual lançado em "Histórico de avanços" — o
@@ -9880,20 +9906,47 @@ function renderFluxo() {
   if (!VIEW.fluxoCaixaAjustes.length) {
     wrap.innerHTML = '<div class="muted">Nenhum ajuste manual lançado.</div>';
   } else {
-    wrap.innerHTML = `<table class="data"><thead><tr><th>Data</th><th>Tipo</th><th class="num">Valor</th><th class="wrap">Descrição</th><th></th></tr></thead>
-      <tbody>${VIEW.fluxoCaixaAjustes.map((a) => `
-        <tr>
-          <td>${dateBR(a.data)}</td>
-          <td><span class="badge ${a.tipo === 'entrada' ? 'green' : 'red'}">${a.tipo}</span></td>
-          <td class="num">${money(a.valor)}</td>
-          <td class="wrap">${esc(a.descricao)}</td>
-          <td><button class="icon-btn" data-del="${a.id}">🗑</button></td>
-        </tr>`).join('')}</tbody></table>`;
+    /* Linhas editáveis no lugar. Corrigir um lançamento errado não deve exigir
+       apagar e redigitar — o valor certo entra por cima, e o log guarda o que
+       havia antes. */
+    const tbl = document.createElement('table');
+    tbl.className = 'data';
+    tbl.innerHTML = `<thead><tr>
+      <th style="min-width:130px">Data</th><th style="min-width:120px">Tipo</th>
+      <th class="num" style="min-width:130px">Valor</th>
+      <th class="wrap" style="min-width:220px">Descrição</th><th style="min-width:44px"></th>
+    </tr></thead><tbody></tbody>`;
+    const tb = tbl.querySelector('tbody');
+    for (const a of VIEW.fluxoCaixaAjustes) {
+      const tr = document.createElement('tr');
+      tr.appendChild(td(dateInput({ value: a.data, onSave: (v) => updateAjuste(a.id, { data: v }) })));
+      tr.appendChild(td(selectInput({
+        value: a.tipo,
+        options: ['entrada', 'saida'],
+        onSave: (v) => updateAjuste(a.id, { tipo: v }),
+      })));
+      tr.appendChild(td(moneyInput({ value: a.valor, onSave: (v) => updateAjuste(a.id, { valor: v }) })));
+      tr.appendChild(td(textInput({ value: a.descricao, wide: true, onSave: (v) => updateAjuste(a.id, { descricao: v }) })));
+      const delTd = document.createElement('td');
+      const delBtn = document.createElement('button');
+      delBtn.className = 'icon-btn';
+      delBtn.textContent = '🗑';
+      delBtn.title = 'Remover este ajuste';
+      delBtn.onclick = async () => {
+        if (await confirmDialog(`Remover o ajuste "${a.descricao || dateBR(a.data)}" de ${money(a.valor)}?`)) deleteAjuste(a.id);
+      };
+      delTd.appendChild(delBtn);
+      tr.appendChild(delTd);
+      tb.appendChild(tr);
+    }
+    wrap.appendChild(tbl);
   }
   ajustesPanel.appendChild(wrap);
-  ajustesPanel.querySelectorAll('[data-del]').forEach((btn) => {
-    btn.onclick = () => deleteAjuste(btn.dataset.del);
-  });
+  if (READONLY) {
+    ajustesPanel.querySelectorAll('input, select, button').forEach((el) => {
+      if (!el.classList.contains('filter-control')) el.disabled = true;
+    });
+  }
   root.appendChild(ajustesPanel);
 
   document.getElementById('btnNovoAjuste').onclick = () => openNovoAjusteModal();
