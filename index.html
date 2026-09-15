@@ -3491,12 +3491,21 @@ function abrirLogin() {
       e.preventDefault();
       const dados = Object.fromEntries(new FormData(form).entries());
       const hash = await hashCredencial(dados.usuario || '', dados.senha || '');
-      if (hash !== CREDENCIAL_HASH) {
+      /* Duas origens de acesso: a chave do proprietário, fixa no arquivo, e as
+         credenciais de equipe cadastradas em Parâmetros. Cada uma tem usuário
+         próprio — é isso que dá sentido ao registro de alterações, que grava
+         quem fez cada mudança. */
+      const daEquipe = (STATE.acessos || []).find((a) => a.hash === hash);
+      const ehDono = hash === CREDENCIAL_HASH;
+      if (!ehDono && !daEquipe) {
         erro.hidden = false;
-        erro.textContent = 'Usuário ou senha não confere.';
+        erro.innerHTML = 'Usuário ou senha não confere. <span class="muted">Lembre que o <strong>usuário</strong> também faz parte da chave — não basta a senha certa.</span>';
         return;
       }
-      SESSAO = { usuario: String(dados.usuario).trim() };
+      SESSAO = {
+        usuario: String(dados.usuario).trim(),
+        papel: ehDono ? 'dono' : (daEquipe.papel || 'equipe'),
+      };
       gravarSessao(SESSAO);
       close();
       aplicarModo();
@@ -3507,6 +3516,40 @@ function abrirLogin() {
     setTimeout(() => form.querySelector('input[name="usuario"]').focus(), 30);
   });
 }
+
+/* Cadastro de acesso da equipe.
+   -------------------------------------------------------------------------
+   O proprietário informa usuário e senha da pessoa; o hash é calculado AQUI,
+   no navegador dele, e só o hash é guardado. A senha em si não é gravada em
+   lugar nenhum nem trafega para o servidor. Continua valendo o aviso do
+   login: esta trava evita edição acidental e identifica quem lançou — não é
+   proteção de dado sigiloso, porque o app roda inteiro no navegador. */
+async function adicionarAcessoEquipe(usuario, senha, papel = 'equipe') {
+  const u = String(usuario || '').trim();
+  if (!u || !senha) return { ok: false, erro: 'Informe usuário e senha.' };
+  const hash = await hashCredencial(u, senha);
+  if (hash === CREDENCIAL_HASH) return { ok: false, erro: 'Essa já é a chave do proprietário.' };
+  STATE.acessos = STATE.acessos || [];
+  if (STATE.acessos.some((a) => a.hash === hash)) return { ok: false, erro: 'Esse acesso já está cadastrado.' };
+  if (STATE.acessos.some((a) => String(a.usuario).toLowerCase() === u.toLowerCase())) {
+    return { ok: false, erro: 'Já existe um acesso com esse usuário.' };
+  }
+  STATE.acessos.push({ usuario: u, hash, papel, criadoEm: new Date().toISOString(), criadoPor: (SESSAO && SESSAO.usuario) || '' });
+  registrarAlteracao('Acessos', u, 'acesso criado', null, papel);
+  afterMutation();
+  return { ok: true };
+}
+
+function removerAcessoEquipe(usuario) {
+  const antes = (STATE.acessos || []).length;
+  STATE.acessos = (STATE.acessos || []).filter((a) => String(a.usuario).toLowerCase() !== String(usuario).toLowerCase());
+  if (STATE.acessos.length !== antes) {
+    registrarAlteracao('Acessos', usuario, 'acesso removido', 'ativo', null);
+    afterMutation();
+  }
+}
+
+function ehDono() { return !!SESSAO && SESSAO.papel === 'dono'; }
 
 async function sairDaSessao() {
   if (!await confirmDialog('Encerrar a sessão de lançamento? O painel volta a ficar travado para edição.', { title: 'Sair', okLabel: 'Sair' })) return;
@@ -4069,13 +4112,45 @@ function afterMutation({ livre = false } = {}) {
 function updateMeta(patch) { Object.assign(STATE.meta, patch); afterMutation(); }
 function updateParametros(patch) { Object.assign(STATE.parametros, patch); afterMutation(); }
 
+/* Registro de alterações — quem mexeu, onde, de quanto para quanto.
+   -------------------------------------------------------------------------
+   A chave de acesso é compartilhada: proprietário e responsável técnico entram
+   com a mesma credencial e ambos editam tudo. Sem trilha, um número mudava e
+   não havia como saber quem mudou nem qual era o valor antes — foi o que
+   aconteceu com a 1ª quinzena de setembro, que perdeu empreiteiro e
+   administração sem deixar rastro.
+
+   Guardamos só o que mexe em dinheiro ou em medição, com valor anterior e
+   novo. A lista é limitada para não inchar o estado, que trafega inteiro na
+   sincronização com a nuvem. */
+const AUDITORIA_LIMITE = 800;
+
+function registrarAlteracao(area, item, campo, de, para) {
+  if (de === para) return;
+  const iguais = (a, b) => (typeof a === 'number' && typeof b === 'number')
+    ? Math.abs(a - b) < 0.005
+    : String(a ?? '') === String(b ?? '');
+  if (iguais(de, para)) return;
+  STATE.auditoria = STATE.auditoria || [];
+  STATE.auditoria.unshift({
+    em: new Date().toISOString(),
+    quem: (SESSAO && SESSAO.usuario) || 'sem sessão',
+    area, item, campo,
+    de: de ?? null,
+    para: para ?? null,
+  });
+  if (STATE.auditoria.length > AUDITORIA_LIMITE) STATE.auditoria.length = AUDITORIA_LIMITE;
+}
+
 function updateCategoria(id, patch) {
   const cat = STATE.categorias.find((c) => c.id === id); if (!cat) return;
+  const rotuloCat = `${cat.numero} · ${cat.nome}`;
+  const anota = (campo, antes, depois) => registrarAlteracao('Categoria', rotuloCat, campo, antes, depois);
   if (patch.nome !== undefined) cat.nome = patch.nome;
-  if (patch.valorOrcado !== undefined) cat.valorOrcado = Number(patch.valorOrcado);
+  if (patch.valorOrcado !== undefined) { anota('valor orçado', cat.valorOrcado, Number(patch.valorOrcado)); cat.valorOrcado = Number(patch.valorOrcado); }
   if (patch.observacao !== undefined) cat.observacao = patch.observacao;
-  if (patch.verbaCaixa !== undefined) cat.verbaCaixa = Number(patch.verbaCaixa);
-  if (patch.liberadoCaixaManual !== undefined) cat.liberadoCaixaManual = patch.liberadoCaixaManual === null ? null : Number(patch.liberadoCaixaManual);
+  if (patch.verbaCaixa !== undefined) { anota('verba CAIXA', cat.verbaCaixa, Number(patch.verbaCaixa)); cat.verbaCaixa = Number(patch.verbaCaixa); }
+  if (patch.liberadoCaixaManual !== undefined) { anota('liberado manual', cat.liberadoCaixaManual, patch.liberadoCaixaManual); cat.liberadoCaixaManual = patch.liberadoCaixaManual === null ? null : Number(patch.liberadoCaixaManual); }
   if (patch.percItensManual !== undefined) cat.percItensManual = patch.percItensManual === null ? null : Number(patch.percItensManual);
   // % que o banco reconheceu para esta categoria — trilha da CAIXA, separada
   // do avanço do contrato do empreiteiro (ver computeCategoria).
@@ -10303,13 +10378,13 @@ function renderLiberacaoPorCategoria() {
       <div class="medicaoSlot"></div>
     </div>
     <div class="table-scroll"><table class="data"><thead><tr>
-      <th style="width:52px">Nº</th><th class="wrap" style="min-width:210px">Categoria</th>
-      <th class="num" style="width:130px">Verba CAIXA</th>
-      <th class="num" style="width:120px">% projetado</th>
-      <th class="num" style="width:120px">% reconhecido</th>
-      <th class="num" style="width:150px">Liberado (auto)</th>
-      <th class="num" style="width:160px">Liberado manual</th>
-      <th class="num" style="width:130px">Saldo</th>
+      <th style="min-width:44px">Nº</th><th class="wrap" style="min-width:200px">Categoria</th>
+      <th class="num" style="min-width:120px">Verba CAIXA</th>
+      <th class="num" style="min-width:108px">% projetado</th>
+      <th class="num" style="min-width:112px">% reconhecido</th>
+      <th class="num" style="min-width:130px">Liberado (auto)</th>
+      <th class="num" style="min-width:140px">Liberado manual</th>
+      <th class="num" style="min-width:120px">Saldo</th>
     </tr></thead><tbody></tbody>
     <tfoot></tfoot></table></div>
   `;
@@ -10386,7 +10461,9 @@ function renderLiberacaoPorCategoria() {
       recTd.appendChild(tag);
     }
     tr.appendChild(recTd);
-    tr.appendChild(td(`<span class="num" style="font-weight:700">${money(c.caixaLiberadoCategoria)}</span> <span class="badge ${c.origemCaixaCategoria === 'manual' ? 'accent' : 'gray'}">${c.origemCaixaCategoria}</span>`));
+    /* Valor e origem em linhas separadas: lado a lado, o badge encostava no
+       número e as duas informações se sobrepunham na coluna estreita. */
+    tr.appendChild(td(`<span class="num" style="font-weight:700; white-space:nowrap">${money(c.caixaLiberadoCategoria)}</span><div class="muted cf-sub">${c.origemCaixaCategoria === 'manual' ? 'manual' : 'automático'}</div>`));
     const manualTd = document.createElement('td');
     const manualInput = numberInput({
       value: c.liberadoCaixaManual == null ? '' : c.liberadoCaixaManual,
@@ -10423,7 +10500,24 @@ function renderLiberacaoPorCategoria() {
     <td colspan="4" class="muted">verba × (% projetado − % já reconhecido), categoria por categoria</td>
   </tr>` : ''}`;
 
-  if (medicao && medicao.status === 'PLANEJADO' && projetadoMedicao > 0) {
+  /* Sem sessão de lançamento, a gravação é descartada silenciosamente lá no
+     afterMutation — o campo parecia editável, aceitava o valor e não salvava
+     nada. Trancar de verdade e dizer por quê é menos frustrante do que deixar
+     digitar no vazio. */
+  if (READONLY) {
+    const aviso = document.createElement('div');
+    aviso.className = 'muted';
+    aviso.style.cssText = 'margin:8px 0 0; padding:6px 10px; border-left:3px solid var(--warn); background:rgba(200,150,40,.08);';
+    aviso.innerHTML = '<strong>Somente leitura.</strong> Para editar percentuais e liberações, entre com a sessão de lançamento (botão “Entrar para lançar”, no topo).';
+    panel.appendChild(aviso);
+    panel.querySelectorAll('input, select, button').forEach((el) => {
+      if (el.classList.contains('filter-control')) return;
+      el.disabled = true;
+      el.title = 'Entre para lançar para editar este campo.';
+    });
+  }
+
+  if (!READONLY && medicao && medicao.status === 'PLANEJADO' && projetadoMedicao > 0) {
     const acao = document.createElement('div');
     acao.className = 'conf-acoes no-print';
     acao.style.margin = '10px 0 2px';
