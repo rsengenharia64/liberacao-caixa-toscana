@@ -3233,6 +3233,32 @@ function abrirExtratoCustoTotal(parcelas, total) {
     resumo.innerHTML = `Já realizado: <strong>${money(realizado)}</strong> &nbsp;·&nbsp; Ainda planejado: <strong>${money(planejado)}</strong>`;
     body.appendChild(resumo);
 
+    /* Previsto embaixo do realizado, com o desvio.
+       -----------------------------------------------------------------------
+       O planejado de cada quinzena é uma foto congelada (ver
+       congelarPrevistoParcelas) e não muda quando o pagamento é lançado. Sem
+       mostrá-lo aqui, o número aparecia sozinho e não dava para saber se o que
+       saiu foi o que estava combinado — que é justamente a leitura que
+       interessa na hora de pagar, dia 10 e dia 25. */
+    const celPrevisto = (atual, prev) => {
+      const a = Number(atual) || 0;
+      if (prev === null || prev === undefined || prev === false) return money(a);
+      const pv = Number(prev) || 0;
+      const d = round2(a - pv);
+      const forte = Math.abs(d) >= 0.005;
+      const cor = !forte ? '' : (d > 0 ? ' style="color:var(--danger)"' : ' style="color:var(--accent-ink)"');
+      return `<span${cor}>${money(a)}</span>`
+        + `<div class="muted cf-sub">prev ${money(pv)}${forte ? ` · <strong${cor}>${d > 0 ? '+' : ''}${money(d)}</strong>` : ' · ok'}</div>`;
+    };
+    const somaPrev = (campo) => {
+      let temAlgum = false;
+      const s = linhas.reduce((acc, p) => {
+        if (p.previsto && p.previsto[campo] !== undefined) { temAlgum = true; return acc + (Number(p.previsto[campo]) || 0); }
+        return acc;
+      }, 0);
+      return temAlgum ? round2(s) : null;
+    };
+
     const wrap = document.createElement('div');
     wrap.className = 'table-scroll';
     wrap.style.maxHeight = '46vh';
@@ -3250,21 +3276,21 @@ function abrirExtratoCustoTotal(parcelas, total) {
         <tbody>${linhas.map((p) => `
           <tr class="${p.status === 'PLANEJADO' ? 'planejado' : ''}" data-parcela="${esc(p.id)}">
             <td>${esc(p.mesReferenciaLabel || p.label || mesQuinzenaLabel(p.mesReferencia, p.quinzena || 1))}</td>
-            <td class="num">${money(p.totalEmpreiteiroPix)}</td>
-            <td class="num">${money(p.totalAdmPix)}</td>
-            <td class="num">${money(p.gastoCartao)}</td>
-            <td class="num">${money(p.parcelaEvolucaoCaixa)}</td>
-            <td class="num"><strong>${money(p.custoTotal)}</strong></td>
+            <td class="num">${celPrevisto(p.totalEmpreiteiroPix, p.previsto && p.previsto.totalEmpreiteiroPix)}</td>
+            <td class="num">${celPrevisto(p.totalAdmPix, p.previsto && p.previsto.totalAdmPix)}</td>
+            <td class="num">${celPrevisto(p.gastoCartao, p.previsto && p.previsto.gastoCartao)}</td>
+            <td class="num">${celPrevisto(p.parcelaEvolucaoCaixa, p.previsto && p.previsto.parcelaEvolucaoCaixa)}</td>
+            <td class="num"><strong>${celPrevisto(p.custoTotal, p.previsto && p.previsto.custoTotal)}</strong></td>
             <td class="no-print pix-celula" data-pix="${esc(p.id)}"></td>
           </tr>`).join('')}
         </tbody>
         <tfoot><tr>
           <td>Total</td>
-          <td class="num">${money(somaEmp)}</td>
-          <td class="num">${money(somaAdm)}</td>
-          <td class="num">${money(somaCartao)}</td>
-          <td class="num">${money(somaEvol)}</td>
-          <td class="num">${money(total)}</td>
+          <td class="num">${celPrevisto(somaEmp, somaPrev('totalEmpreiteiroPix'))}</td>
+          <td class="num">${celPrevisto(somaAdm, somaPrev('totalAdmPix'))}</td>
+          <td class="num">${celPrevisto(somaCartao, somaPrev('gastoCartao'))}</td>
+          <td class="num">${celPrevisto(somaEvol, somaPrev('parcelaEvolucaoCaixa'))}</td>
+          <td class="num">${celPrevisto(total, somaPrev('custoTotal'))}</td>
           <td class="no-print"></td>
         </tr></tfoot>
       </table>`;
@@ -3287,6 +3313,21 @@ function abrirExtratoCustoTotal(parcelas, total) {
           titulo: `Administração RS Engenharia — ${rotulo}`, descricao: `ADM ${rotulo}`,
           txid: `ADM${String(p.id).replace(/[^A-Za-z0-9]/g, '')}`.slice(0, 20),
         }, 'PIX administração'));
+      }
+      /* Fechar a quinzena: grava o que saiu de fato e trava. Sem este botão o
+         usuário tinha de lembrar de travar célula por célula — e esquecer
+         significava a fórmula reescrever o pago. */
+      if (!READONLY) {
+        const bReg = document.createElement('button');
+        bReg.type = 'button';
+        bReg.className = `btn small${p.status === 'REALIZADO' ? '' : ' primary'}`;
+        bReg.style.marginTop = '4px';
+        bReg.textContent = p.status === 'REALIZADO' ? 'Pagamento registrado' : 'Registrar pagamento';
+        bReg.title = p.status === 'REALIZADO'
+          ? 'Quinzena fechada — clique para revisar ou desfazer.'
+          : 'Informe o que saiu de fato para o empreiteiro e para a administração. O valor fica travado e o previsto continua guardado ao lado.';
+        bReg.onclick = () => abrirRegistroPagamento(p.id);
+        cel.appendChild(bReg);
       }
     }
     body.appendChild(wrap);
@@ -4925,6 +4966,191 @@ function aplicarPixDerivadoDosAvancos() {
     mexeu += 1;
   }
   return mexeu;
+}
+
+/* Registrar o pagamento de uma quinzena.
+   -------------------------------------------------------------------------
+   Dia 10 e dia 25 o dinheiro sai. Até aqui o app só tinha o valor calculado, e
+   quem pagava precisava lembrar de travar a célula na mão — se esquecesse, a
+   fórmula reescrevia o pago na primeira mudança de avanço. Foi assim que a 1ª
+   quinzena de setembro perdeu empreiteiro e administração.
+
+   Esta função fecha a quinzena: grava o que de fato saiu, liga os overrides
+   para que nenhum recálculo encoste mais nesses números, e marca REALIZADO.
+   O previsto continua intacto ao lado, então previsto × realizado × desvio
+   ficam registrados. Nada aqui é automático demais: os valores chegam por
+   parâmetro, venham eles do comprovante ou digitados à mão. */
+function registrarPagamentoQuinzena(parcelaId, { empreiteiro, adm, dataPagamento, obs } = {}) {
+  const p = STATE.parcelas.find((x) => x.id === parcelaId);
+  if (!p) return false;
+  p.overrides = p.overrides || {};
+
+  if (empreiteiro !== undefined && empreiteiro !== null && empreiteiro !== '') {
+    p.totalEmpreiteiroPix = round2(Number(empreiteiro) || 0);
+    p.overrides.totalEmpreiteiroPix = true;
+  }
+  if (adm !== undefined && adm !== null && adm !== '') {
+    p.totalAdmPix = round2(Number(adm) || 0);
+    p.overrides.totalAdmPix = true;
+  }
+  p.totalATransferir = round2((Number(p.totalEmpreiteiroPix) || 0) + (Number(p.totalAdmPix) || 0));
+  p.overrides.totalATransferir = true;
+  p.custoTotal = round2(p.totalATransferir + (Number(p.gastoCartao) || 0) + (Number(p.parcelaEvolucaoCaixa) || 0));
+  p.overrides.custoTotal = true;
+
+  p.vencimento = dataPagamento || p.vencimento || p.vencPlanejado || null;
+  p.status = 'REALIZADO';
+  p.pagamento = {
+    registradoEm: new Date().toISOString(),
+    registradoPor: (SESSAO && SESSAO.usuario) || '',
+    empreiteiro: Number(p.totalEmpreiteiroPix) || 0,
+    adm: Number(p.totalAdmPix) || 0,
+    data: p.vencimento,
+  };
+  if (obs) p.obs = p.obs ? `${p.obs} · ${obs}` : obs;
+  afterMutation();
+  return true;
+}
+
+/* Desfaz o registro: solta os travamentos e devolve a quinzena ao cálculo.
+   Existe porque errar o lançamento é normal, e sem saída o usuário fica preso
+   com um número errado congelado. */
+function desfazerPagamentoQuinzena(parcelaId) {
+  const p = STATE.parcelas.find((x) => x.id === parcelaId);
+  if (!p) return false;
+  p.overrides = p.overrides || {};
+  p.overrides.totalEmpreiteiroPix = false;
+  p.overrides.totalAdmPix = false;
+  p.overrides.totalATransferir = false;
+  p.overrides.custoTotal = false;
+  p.status = 'PLANEJADO';
+  p.vencimento = null;
+  delete p.pagamento;
+  aplicarPixDerivadoDosAvancos();
+  afterMutation();
+  return true;
+}
+
+/* Comprovantes já enviados cujo valor bate com o que se pretende pagar.
+   Serve de atalho: em vez de digitar, o usuário reconhece o comprovante pelo
+   valor e confirma. Se nada casar, o campo manual continua lá. */
+function comprovantesCandidatos(valor) {
+  const alvo = round2(Number(valor) || 0);
+  if (!alvo) return [];
+  const cache = (COMP && COMP.cache) || null;
+  if (!cache) return [];
+  const meta = compEstado().meta || {};
+  return (cache.arquivos || [])
+    .filter((a) => Math.abs(round2(Number((meta[a.caminho] || {}).valor) || 0) - alvo) < 0.02)
+    .slice(0, 5);
+}
+
+/* Janela de registro do pagamento da quinzena.
+   -------------------------------------------------------------------------
+   Abre já preenchida com o PREVISTO — que é o valor combinado e, na maioria
+   das vezes, o que sai. O usuário confere contra o comprovante e corrige o que
+   for diferente. O automático aqui é a sugestão, nunca a imposição: se o
+   comprovante não casar com nada, os dois campos continuam livres para digitar. */
+function abrirRegistroPagamento(parcelaId) {
+  const p = (VIEW.parcelas || []).find((x) => x.id === parcelaId)
+    || (STATE.parcelas || []).find((x) => x.id === parcelaId);
+  if (!p) return;
+  const prev = p.previsto || {};
+  const rotulo = p.mesReferenciaLabel || p.label || 'Quinzena';
+
+  openModal(`Registrar pagamento — ${rotulo}`, (body, close) => {
+    const info = document.createElement('div');
+    info.className = 'muted';
+    info.style.marginBottom = '10px';
+    info.innerHTML = p.status === 'REALIZADO'
+      ? 'Esta quinzena já está registrada como paga. Você pode corrigir os valores ou desfazer o registro e devolvê-la ao cálculo automático.'
+      : 'Informe o que saiu de fato. Os campos vêm preenchidos com o <strong>previsto</strong>; corrija o que tiver sido diferente. Ao confirmar, os valores ficam travados — nenhum recálculo de avanço os reescreve.';
+    body.appendChild(info);
+
+    const form = document.createElement('div');
+    form.className = 'form-grid';
+
+    /* moneyInput guarda o valor já formatado em BRL no .value, então ler o
+       campo direto daria NaN. O valor numérico chega pelo onSave — guardamos
+       numa referência e é ela que vai para o registro. */
+    const linha = (rotuloCampo, valorInicial, previstoCampo) => {
+      const ref = { valor: round2(Number(valorInicial) || 0) };
+      const lab = document.createElement('label');
+      lab.innerHTML = `${rotuloCampo}`;
+      const inp = moneyInput({
+        value: ref.valor,
+        onSave: (v) => { ref.valor = round2(Number(v) || 0); if (typeof atualizarCasados === 'function') atualizarCasados(); },
+      });
+      ref.input = inp;
+      lab.appendChild(inp);
+      if (previstoCampo !== undefined && previstoCampo !== null) {
+        const dica = document.createElement('div');
+        dica.className = 'muted cf-sub';
+        dica.textContent = `previsto ${money(Number(previstoCampo) || 0)}`;
+        lab.appendChild(dica);
+      }
+      form.appendChild(lab);
+      return ref;
+    };
+
+    const baseEmp = p.status === 'REALIZADO' ? p.totalEmpreiteiroPix : (prev.totalEmpreiteiroPix ?? p.totalEmpreiteiroPix);
+    const baseAdm = p.status === 'REALIZADO' ? p.totalAdmPix : (prev.totalAdmPix ?? p.totalAdmPix);
+    const inpEmp = linha('Empreiteiro (PIX) — pago', baseEmp, prev.totalEmpreiteiroPix);
+    const inpAdm = linha('Administração (PIX) — pago', baseAdm, prev.totalAdmPix);
+
+    const labData = document.createElement('label');
+    labData.textContent = 'Data do pagamento';
+    const inpData = document.createElement('input');
+    inpData.type = 'date';
+    inpData.className = 'cell-input';
+    inpData.value = (p.vencimento || p.vencPlanejado || '').slice(0, 10);
+    labData.appendChild(inpData);
+    form.appendChild(labData);
+    body.appendChild(form);
+
+    // Comprovantes já enviados com valor igual ao que está no campo — atalho de
+    // conferência, não obrigação.
+    const casados = document.createElement('div');
+    casados.className = 'muted';
+    casados.style.margin = '10px 0';
+    function atualizarCasados() {
+      const achados = [inpEmp.valor, inpAdm.valor].flatMap((v) => comprovantesCandidatos(v));
+      casados.innerHTML = achados.length
+        ? `Comprovantes com esse valor já no acervo: ${achados.map((a) => `<strong>${esc(a.nome)}</strong>`).join(', ')}`
+        : 'Nenhum comprovante com esse valor no acervo ainda — você pode enviar depois, na aba Comprovantes.';
+    }
+    atualizarCasados();
+    body.appendChild(casados);
+
+    const acoes = document.createElement('div');
+    acoes.style.cssText = 'display:flex; gap:8px; justify-content:flex-end; margin-top:12px;';
+    if (p.status === 'REALIZADO') {
+      const bUndo = document.createElement('button');
+      bUndo.className = 'btn small danger';
+      bUndo.textContent = 'Desfazer registro';
+      bUndo.onclick = async () => {
+        if (!(await confirmDialog('Desfazer o registro? A quinzena volta a ser calculada automaticamente pelos avanços.'))) return;
+        desfazerPagamentoQuinzena(p.id);
+        close();
+        toast('Registro desfeito — quinzena de volta ao cálculo.', 'ok');
+      };
+      acoes.appendChild(bUndo);
+    }
+    const bOk = document.createElement('button');
+    bOk.className = 'btn primary';
+    bOk.textContent = p.status === 'REALIZADO' ? 'Salvar correção' : 'Confirmar pagamento';
+    bOk.onclick = () => {
+      registrarPagamentoQuinzena(p.id, {
+        empreiteiro: inpEmp.valor,
+        adm: inpAdm.valor,
+        dataPagamento: inpData.value || null,
+      });
+      close();
+      toast('Pagamento registrado — valores travados.', 'ok');
+    };
+    acoes.appendChild(bOk);
+    body.appendChild(acoes);
+  });
 }
 
 function voltarPixAoCalculo(parcelaId) {
