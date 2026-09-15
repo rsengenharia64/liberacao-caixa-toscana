@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260914T233346">
+<meta name="app-version" content="20260914T234008">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2187,19 +2187,47 @@ function mostrarFaixaAtualizacao(remota) {
   document.body.insertBefore(f, document.body.firstChild);
 }
 
+/* Atualizar de verdade.
+   -------------------------------------------------------------------------
+   A versão anterior apagava os caches e chamava update() no service worker —
+   mas nunca o REMOVIA, e recarregava antes de o novo assumir o controle. O
+   service worker antigo seguia no comando e devolvia a mesma cópia: a faixa
+   de "versão nova" reaparecia a cada clique, num laço sem fim.
+
+   Agora o registro é cancelado. Sem service worker, a próxima navegação vai
+   obrigatoriamente à rede; o registro é refeito no carregamento seguinte, já
+   com o arquivo novo. É mais lento por um carregamento e não tem como falhar. */
 async function atualizarAppAgora() {
   toast('Atualizando…');
   try {
-    if ('caches' in window) { const ks = await caches.keys(); await Promise.all(ks.map((k) => caches.delete(k))); }
     if ('serviceWorker' in navigator) {
       const regs = await navigator.serviceWorker.getRegistrations();
-      await Promise.all(regs.map((r) => r.update().catch(() => {})));
-      if (navigator.serviceWorker.controller) navigator.serviceWorker.controller.postMessage('limpar-cache');
+      // unregister, não update: é o que garante sair do controle do antigo.
+      await Promise.all(regs.map((r) => r.unregister().catch(() => {})));
+    }
+    if ('caches' in window) {
+      const ks = await caches.keys();
+      await Promise.all(ks.map((k) => caches.delete(k)));
     }
   } catch { /* segue para o reload de qualquer jeito */ }
   const u = new URL(location.href);
   u.searchParams.set('v', String(Date.now()));
+  // replace evita empilhar histórico a cada tentativa de atualização.
   location.replace(u.toString());
+}
+
+/* O service worker novo avisa quando assume — recarrega uma única vez para a
+   aba passar a rodar o código recém-instalado, sem o usuário precisar fazer
+   nada. A trava por sessionStorage impede que isso vire um ciclo de reloads. */
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.addEventListener('message', (ev) => {
+    if (!ev.data || ev.data.tipo !== 'sw-atualizado') return;
+    try {
+      if (sessionStorage.getItem('swRecarregado') === ev.data.versao) return;
+      sessionStorage.setItem('swRecarregado', ev.data.versao);
+    } catch { /* sem storage: recarrega uma vez e pronto */ }
+    location.reload();
+  });
 }
 let APP_INSTALADO = false;
 function appAbertoComoInstalado() {
