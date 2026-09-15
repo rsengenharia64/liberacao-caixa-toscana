@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T114625">
+<meta name="app-version" content="20260915T115144">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -315,6 +315,18 @@
      saldo em conta vive zerado por desenho — a cascata trava em zero e joga a
      falta no recurso próprio —, então o zero sozinho não conta a história.
      O que responde "quanto já queimamos e quanto ainda temos" é isto. */
+  /* Resultado do período: a conta fechada dentro da janela escolhida. O saldo
+     em conta é acumulado e não responde "como foi o mês" — este bloco responde. */
+  .saldo-periodo { grid-column: 1 / -1; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .periodo-cabecalho { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; margin-bottom: 8px; }
+  .periodo-cabecalho .muted { text-transform: none; letter-spacing: 0; font-weight: 400; }
+  .periodo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; }
+  .periodo-bloco { display: flex; flex-direction: column; gap: 2px; background: var(--surface-2); border-radius: 7px; padding: 8px 10px; }
+  .periodo-titulo { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; margin-bottom: 3px; }
+  .periodo-bloco .teto-linha.resultado { border-top: 1px solid var(--border); margin-top: 3px; padding-top: 4px; font-weight: 700; }
+  .periodo-bloco .teto-linha.resultado span { color: var(--ink); }
+  .periodo-bloco .teto-linha.resultado strong { font-size: 15px; }
+  @media (max-width: 860px) { .periodo-grid { grid-template-columns: 1fr; } }
   .saldo-tetos { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 22px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
   .teto-bloco { display: flex; flex-direction: column; gap: 3px; }
   .teto-titulo { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
@@ -2948,6 +2960,46 @@ function fimDaQuinzena(p) {
   }
   return `${p.mes}-15`;
 }
+function inicioDaQuinzena(p) {
+  if (!p || !p.mes) return null;
+  return Number(p.quinzena) === 2 ? `${p.mes}-16` : `${p.mes}-01`;
+}
+function fimDoMes(mes) {
+  const [ano, m] = String(mes).split('-').map(Number);
+  if (!ano || !m) return null;
+  return `${mes}-${String(new Date(Date.UTC(ano, m, 0)).getUTCDate()).padStart(2, '0')}`;
+}
+
+/* Resultado DO PERÍODO — entrou menos saiu, dentro da janela e só dela.
+   --------------------------------------------------------------------------
+   O saldo em conta é acumulado por natureza: ele arrasta tudo desde o marco.
+   Isso responde "quanto tem na conta", mas não responde "como foi o mês" — e
+   era essa a pergunta sem resposta na tela. Setembro é o exemplo: a ponte
+   mostrava custo de R$ 64.319,61 (só a quinzena PLANEJADA, porque a 1ª já
+   estava realizada e tinha ido para o acumulado) enquanto o painel de baixo
+   mostrava R$ 128.867,66 (as duas quinzenas). Dois escopos diferentes na
+   mesma tela, e o resultado do mês — R$ 114.908,94 de entrada contra
+   R$ 128.867,66 de custo, ou seja R$ 13.958,72 saindo do próprio — não
+   aparecia em lugar nenhum.
+
+   Aqui a conta é fechada dentro da janela: nada de antes, nada de depois. */
+function resultadoDoPeriodo(movs, de, ate) {
+  const dentro = (movs || []).filter((m) => m.data >= de && m.data <= ate);
+  const soma = (f) => round2(dentro.filter(f).reduce((a, m) => a + (Number(m.valor) || 0), 0));
+  const entradas = soma((m) => m.tipo === 'entrada');
+  const saidas = soma((m) => m.tipo === 'saida');
+  return {
+    de,
+    ate,
+    entradas,
+    saidas,
+    saidasRealizadas: soma((m) => m.tipo === 'saida' && m.realizado),
+    saidasPlanejadas: soma((m) => m.tipo === 'saida' && !m.realizado),
+    entradasRealizadas: soma((m) => m.tipo === 'entrada' && m.realizado),
+    entradasPlanejadas: soma((m) => m.tipo === 'entrada' && !m.realizado),
+    resultado: round2(entradas - saidas),
+  };
+}
 
 function renderSaldoContaGrid() {
   const r = VIEW.resumo;
@@ -3032,6 +3084,28 @@ function renderSaldoContaGrid() {
         <button type="button" class="btn small filter-control" data-acao="extrato-conta">Ver extrato</button>
         <button type="button" class="btn small filter-control" data-acao="imprimir-conta">Imprimir extrato</button>
       </div>
+      ${(() => {
+        if (!proxima) return '';
+        const q = resultadoDoPeriodo(movs, inicioDaQuinzena(proxima), fimDaQuinzena(proxima));
+        const mesAte = fimDoMes(proxima.mes);
+        const m = resultadoDoPeriodo(movs, `${proxima.mes}-01`, mesAte);
+        const cor = (v) => (v < -0.004 ? 'var(--danger)' : v > 0.004 ? 'var(--good)' : 'var(--ink)');
+        const caixa = (titulo, sub, x) => `
+          <div class="periodo-bloco">
+            <div class="periodo-titulo">${titulo} <span class="muted" style="font-weight:400; text-transform:none; letter-spacing:0">${sub}</span></div>
+            <div class="teto-linha"><span>Entrou (liberação CAIXA)</span><strong class="mov-entrada">${money(x.entradas)}</strong></div>
+            <div class="teto-linha"><span>Saiu (custo das quinzenas)</span><strong class="mov-saida">${money(x.saidas)}</strong></div>
+            <div class="teto-linha resultado"><span>${x.resultado < 0 ? 'Consumo de recurso próprio no período' : 'Sobra do período'}</span><strong style="color:${cor(x.resultado)}">${money(Math.abs(x.resultado))}</strong></div>
+            <div class="teto-linha muted" style="font-size:11px"><span>do custo, ${money(x.saidasRealizadas)} já pago e ${money(x.saidasPlanejadas)} a pagar</span></div>
+          </div>`;
+        return `<div class="saldo-periodo">
+          <div class="periodo-cabecalho">Resultado do período <span class="muted">— só o que cai dentro da janela: nada de antes, nada de depois</span></div>
+          <div class="periodo-grid">
+            ${caixa('Quinzena selecionada', `${dateBR(q.de)} a ${dateBR(q.ate)}`, q)}
+            ${caixa(`Mês de ${esc(mesParcelaLabel(`${proxima.mes}-01`) || proxima.mes)}`, `${dateBR(m.de)} a ${dateBR(m.ate)} · as duas quinzenas`, m)}
+          </div>
+        </div>`;
+      })()}
       ${(() => {
         /* O saldo em conta zera por desenho: a cascata trava em zero e a falta
            vira consumo de recurso próprio. Só que um "R$ 0,00" nos dois
