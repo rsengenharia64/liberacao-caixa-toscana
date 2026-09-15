@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T120314">
+<meta name="app-version" content="20260915T121201">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2752,6 +2752,9 @@ function movimentosConta() {
     if (data < marco) continue;
     movs.push({
       data, ordem: 0, tipo: 'entrada',
+      // O id viaja junto para a composição saber DE QUAL medição se trata — sem
+      // ele só dava para mostrar o acumulado de todas, nunca o que esta trouxe.
+      liberacaoId: l.id,
       descricao: `${ehEntradaFora(l) ? (TIPOS_ENTRADA_CONTA[l.tipo] || 'Entrada na conta') : 'Liberação CAIXA'}${l.obs ? ` — ${l.obs}` : ''}`,
       origem: 'Liberação PCI',
       valor: round2(Number(l.valor) || 0),
@@ -2841,20 +2844,110 @@ function ehLiberacaoPLS(m) {
    Esta janela abre essa conta linha a linha e fecha com a diferença entre o
    que as categorias sustentam e o que o banco de fato depositou — que é
    justamente o que se discute com o engenheiro da CAIXA. */
+/* O que UMA medição trouxe, categoria por categoria.
+   --------------------------------------------------------------------------
+   Cada liberação guarda o % acumulado que levou ao banco em cada categoria
+   (l.avancos). O que a medição gerou não é esse acumulado — é o QUANTO ELE
+   ANDOU desde a medição anterior. Então, para cada categoria:
+
+       valor da medição = verba CAIXA × (% desta medição − % da anterior)
+
+   As medições são varridas em ordem de data para descobrir o "% da anterior".
+   Medições antigas, lançadas antes de existir o avanço por categoria, não têm
+   esse mapa — nesse caso não há o que estratificar, e a tela diz isso em vez
+   de inventar um rateio. */
+function composicaoDaMedicao(liberacaoId) {
+  const todas = (VIEW.liberacoesCaixa || [])
+    .filter((l) => !ehEntradaFora(l))
+    .slice()
+    .sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')) || String(a.id).localeCompare(String(b.id)));
+  const idx = todas.findIndex((l) => l.id === liberacaoId);
+  if (idx < 0) return null;
+  const alvo = todas[idx];
+  const mapa = alvo.avancos || {};
+  if (!Object.keys(mapa).length) return { alvo, semMapa: true, linhas: [], total: 0 };
+
+  // % de cada categoria na última medição ANTES desta.
+  const anterior = {};
+  for (let i = 0; i < idx; i++) {
+    for (const [catId, perc] of Object.entries(todas[i].avancos || {})) anterior[catId] = Number(perc) || 0;
+  }
+
+  const linhas = [];
+  for (const [catId, perc] of Object.entries(mapa)) {
+    const cat = (VIEW.categorias || []).find((c) => c.id === catId);
+    if (!cat) continue;
+    const de = Number(anterior[catId]) || 0;
+    const para = Number(perc) || 0;
+    const delta = round2((para - de) * 10000) / 10000;
+    const verba = Number(cat.verbaCaixa) || 0;
+    linhas.push({ cat, de, para, delta, verba, valor: round2(verba * delta) });
+  }
+  linhas.sort((a, b) => a.cat.numero - b.cat.numero);
+  return { alvo, semMapa: false, linhas, total: round2(linhas.reduce((a, l) => a + l.valor, 0)) };
+}
+
 function abrirComposicaoLiberacao(m) {
+  const comp = m.liberacaoId ? composicaoDaMedicao(m.liberacaoId) : null;
   const cats = (VIEW.categorias || []).filter((c) => (Number(c.caixaLiberadoCategoria) || 0) > 0.004);
   const totalCats = round2(cats.reduce((a, c) => a + (Number(c.caixaLiberadoCategoria) || 0), 0));
   const diff = round2((Number(m.valor) || 0) - totalCats);
+
   openModal(`Composição da liberação — ${dateBR(m.data)}`, (body) => {
     const topo = document.createElement('div');
     topo.className = 'extrato-total-line';
     topo.innerHTML = `<span>${esc(m.descricao)}</span><strong>${money(m.valor)}</strong>`;
     body.appendChild(topo);
 
+    /* PARTE 1 — o que ESTA medição trouxe. É a resposta para "o que compõe os
+       R$ 114 mil": o avanço de cada categoria entre a medição anterior e esta,
+       multiplicado pela verba da categoria. */
+    const h1 = document.createElement('h3');
+    h1.style.cssText = 'margin:14px 0 4px; font-size:14px;';
+    h1.textContent = 'O que esta medição trouxe';
+    body.appendChild(h1);
+
+    if (!comp || comp.semMapa) {
+      const aviso = document.createElement('div');
+      aviso.className = 'muted';
+      aviso.style.cssText = 'margin-bottom:10px; padding:8px 10px; background:var(--surface-2); border-radius:6px; line-height:1.45;';
+      aviso.innerHTML = `Esta liberação foi lançada <strong>sem o avanço por categoria</strong>, então não há como estratificar os ${money(m.valor)} — o valor entrou como um total. `
+        + `Para as próximas, preencha o <strong>% projetado</strong> de cada linha na janela "Nova liberação real do CAIXA" ou na aba <strong>Liberação PCI</strong>: aí esta tela passa a mostrar linha a linha o que compõe o depósito.`;
+      body.appendChild(aviso);
+    } else {
+      const total = comp.total;
+      const resto = round2((Number(m.valor) || 0) - total);
+      const tw1 = document.createElement('div');
+      tw1.className = 'table-scroll';
+      tw1.innerHTML = `<table class="extrato-table">
+        <thead><tr><th>Nº</th><th class="wrap">Categoria</th><th class="num">Verba CAIXA</th><th class="num">% anterior → esta</th><th class="num">Avanço</th><th class="num">Valor desta medição</th></tr></thead>
+        <tbody>
+          ${comp.linhas.filter((l) => Math.abs(l.valor) > 0.004).map((l) => `<tr>
+            <td>${l.cat.numero}</td>
+            <td class="wrap">${esc(l.cat.nome)}</td>
+            <td class="num">${money(l.verba)}</td>
+            <td class="num">${pct(l.de)} → <strong>${pct(l.para)}</strong></td>
+            <td class="num">${l.delta > 0 ? '+' : ''}${pct(l.delta)}</td>
+            <td class="num"><strong>${money(l.valor)}</strong></td>
+          </tr>`).join('') || '<tr><td colspan="6" class="muted">Nenhuma categoria avançou nesta medição.</td></tr>'}
+          <tr class="extrato-residuo"><td colspan="5"><strong>Soma do que as categorias geraram nesta medição</strong></td><td class="num"><strong>${money(total)}</strong></td></tr>
+          <tr class="extrato-residuo"><td colspan="5"><strong>Depositado pelo banco</strong></td><td class="num"><strong>${money(m.valor)}</strong></td></tr>
+          ${Math.abs(resto) > 0.004 ? `<tr class="extrato-residuo"><td colspan="5"><strong>Diferença</strong> <span class="muted">${resto > 0 ? 'o banco depositou mais do que o avanço desta medição sustenta' : 'o avanço desta medição dá mais do que o banco depositou'}</span></td><td class="num"><strong>${money(resto)}</strong></td></tr>` : ''}
+        </tbody></table>`;
+      body.appendChild(tw1);
+    }
+
+    /* PARTE 2 — o acumulado da obra, que continua útil como contexto: quanto
+       já é liberável no total contra o que o banco já pôs na conta. */
+    const h2 = document.createElement('h3');
+    h2.style.cssText = 'margin:18px 0 4px; font-size:14px;';
+    h2.textContent = 'Acumulado da obra (contexto)';
+    body.appendChild(h2);
+
     const nota = document.createElement('div');
     nota.className = 'muted';
-    nota.style.margin = '8px 0';
-    nota.textContent = 'Liberável por categoria = verba CAIXA da categoria × % de avanço efetivo. Edite a verba ou o % na aba Liberação PCI › "Liberação por categoria" e este número acompanha.';
+    nota.style.margin = '0 0 8px';
+    nota.textContent = 'Liberável por categoria = verba CAIXA da categoria × % de avanço efetivo, somando tudo que já foi medido até hoje. Edite a verba ou o % na aba Liberação PCI › "Liberação por categoria" e este número acompanha.';
     body.appendChild(nota);
 
     const tw = document.createElement('div');
@@ -2874,7 +2967,7 @@ function abrirComposicaoLiberacao(m) {
         <tr class="extrato-residuo"><td colspan="4"><strong>Diferença</strong> <span class="muted">${diff > 0 ? 'o banco liberou mais do que as categorias sustentam' : diff < 0 ? 'ainda há medição a liberar' : 'bate exatamente'}</span></td><td class="num"><strong>${money(diff)}</strong></td></tr>
       </tbody></table>`;
     body.appendChild(tw);
-  });
+  }, { wide: true });
 }
 
 /* Etiqueta de fonte de uma linha do extrato. Uma saída pode ser paga por
