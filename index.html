@@ -1281,8 +1281,23 @@ function computeCategoria(cat, dataRef, tetoAvancoEfetivo) {
       : percAvancoEfetivo + 0.0001 >= percPrevisto
         ? 'no-prazo'
         : 'atrasado';
+  /* DUAS MEDIÇÕES INDEPENDENTES — empreiteiro e CAIXA.
+     -----------------------------------------------------------------------
+     Antes existia um único percentual servindo aos dois: mexer no avanço para
+     pagar o empreiteiro mexia, junto, no quanto o banco liberava. São coisas
+     diferentes. O avanço da aba "Lançar Avanços" mede o CONTRATO (valorOrcado,
+     PIX quinzenal ao empreiteiro). O percentual da aba "Liberação PCI" mede a
+     VERBA CAIXA (verbaCaixa, liberação por medição do banco), e quem o move é
+     a própria medição, período a período.
+
+     `percCaixaRealizado` é o acumulado que o banco já reconheceu. Enquanto a
+     categoria nunca passou pelo novo fluxo ele é indefinido, e aí seguimos no
+     avanço do contrato — assim nenhum número muda até você começar a lançar
+     pela Liberação PCI. */
   const verbaCaixa = Number(cat.verbaCaixa) || 0;
-  const caixaLiberadoAutoCategoria = round2(verbaCaixa * percAvancoEfetivo);
+  const temPercCaixaProprio = cat.percCaixaRealizado !== null && cat.percCaixaRealizado !== undefined;
+  const percCaixaEfetivo = clamp(temPercCaixaProprio ? Number(cat.percCaixaRealizado) : percAvancoEfetivo, 0, teto);
+  const caixaLiberadoAutoCategoria = round2(verbaCaixa * percCaixaEfetivo);
   const temOverrideCaixa = cat.liberadoCaixaManual !== null && cat.liberadoCaixaManual !== undefined;
   const caixaLiberadoCategoria = temOverrideCaixa ? round2(Number(cat.liberadoCaixaManual)) : caixaLiberadoAutoCategoria;
   return {
@@ -1299,6 +1314,8 @@ function computeCategoria(cat, dataRef, tetoAvancoEfetivo) {
     valorPrevisto,
     statusCronograma,
     verbaCaixa,
+    percCaixaEfetivo: round2(percCaixaEfetivo * 10000) / 10000,
+    origemPercCaixa: temPercCaixaProprio ? 'medicao' : 'avanco-contrato',
     caixaLiberadoAutoCategoria,
     caixaLiberadoCategoria,
     origemCaixaCategoria: temOverrideCaixa ? 'manual' : 'auto',
@@ -2264,6 +2281,8 @@ let FILTRO_QUINZENA_AVANCOS = null;
 let FILTRO_QUINZENA_CRONOGRAMA = null;
 let FILTRO_QUINZENA_FLUXO = null;
 let FILTRO_QUINZENA_PCI = null;
+// Medição da CAIXA cujo % projetado está sendo lançado na aba Liberação PCI.
+let MEDICAO_PCI_ATIVA = null;
 // Filtro por mês (não quinzena) da tabela de Contas a Pagar — mesReferencia
 // (ex.: "2026-09") ou null = "Todos os meses".
 let FILTRO_MES_PARCELAS = null;
@@ -4038,6 +4057,9 @@ function updateCategoria(id, patch) {
   if (patch.verbaCaixa !== undefined) cat.verbaCaixa = Number(patch.verbaCaixa);
   if (patch.liberadoCaixaManual !== undefined) cat.liberadoCaixaManual = patch.liberadoCaixaManual === null ? null : Number(patch.liberadoCaixaManual);
   if (patch.percItensManual !== undefined) cat.percItensManual = patch.percItensManual === null ? null : Number(patch.percItensManual);
+  // % que o banco reconheceu para esta categoria — trilha da CAIXA, separada
+  // do avanço do contrato do empreiteiro (ver computeCategoria).
+  if (patch.percCaixaRealizado !== undefined) cat.percCaixaRealizado = patch.percCaixaRealizado === null ? null : Number(patch.percCaixaRealizado);
   if (patch.percAvancoManual !== undefined) {
     cat.percAvancoManual = patch.percAvancoManual === null ? null : Number(patch.percAvancoManual);
     cat.dataUltimoAvanco = new Date().toISOString().slice(0, 10);
@@ -4655,12 +4677,55 @@ function addLiberacaoCaixa(patch) {
 }
 function updateLiberacaoCaixa(id, patch) {
   const l = (STATE.liberacoesCaixa || []).find((x) => x.id === id); if (!l) return;
+  const statusAnterior = l.status;
   if (patch.tipo !== undefined) { if (patch.tipo && patch.tipo !== 'liberacao') l.tipo = patch.tipo; else delete l.tipo; }
   if (patch.data !== undefined) l.data = patch.data;
   if (patch.valor !== undefined) l.valor = Number(patch.valor);
   if (patch.status !== undefined) l.status = patch.status === 'PLANEJADO' ? 'PLANEJADO' : 'REALIZADO';
   if (patch.obs !== undefined) l.obs = patch.obs;
+  /* Projetado → realizado: a medição saiu do papel, então o % projetado de
+     cada categoria passa a ser o % que o banco reconheceu. É esse gatilho que
+     estrutura o resto — a partir dele a liberação por categoria, o saldo de
+     crédito e o extrato se atualizam sozinhos, sem ninguém redigitar. */
+  if (statusAnterior === 'PLANEJADO' && l.status === 'REALIZADO') aplicarAvancoCaixaDaMedicao(l);
   afterMutation();
+}
+
+/* % de avanço PROJETADO de uma categoria dentro de uma medição da CAIXA.
+   Fica guardado na própria liberação, não na categoria: cada medição tem o
+   seu, e é isso que permite planejar período a período sem contaminar o que
+   o banco já reconheceu. */
+function setAvancoProjetadoCaixa(liberacaoId, categoriaId, perc) {
+  const l = (STATE.liberacoesCaixa || []).find((x) => x.id === liberacaoId); if (!l) return;
+  l.avancos = l.avancos || {};
+  if (perc === null || perc === undefined || perc === '') delete l.avancos[categoriaId];
+  else l.avancos[categoriaId] = Math.max(0, Number(perc) || 0);
+  afterMutation();
+}
+
+// Copia o projetado da medição para o realizado de cada categoria.
+function aplicarAvancoCaixaDaMedicao(l) {
+  const mapa = (l && l.avancos) || {};
+  for (const [catId, perc] of Object.entries(mapa)) {
+    const cat = (STATE.categorias || []).find((c) => c.id === catId);
+    if (cat) cat.percCaixaRealizado = Math.max(0, Number(perc) || 0);
+  }
+}
+
+/* Valor que a medição libera: para cada categoria, a verba CAIXA vezes o
+   quanto o % projetado avança sobre o que o banco já tinha reconhecido. É a
+   conta que substitui o valor digitado à mão. */
+function valorProjetadoDaMedicao(l) {
+  const mapa = (l && l.avancos) || {};
+  let total = 0;
+  for (const [catId, perc] of Object.entries(mapa)) {
+    const cat = (VIEW.categorias || []).find((c) => c.id === catId);
+    if (!cat) continue;
+    const jaReconhecido = Number(cat.percCaixaEfetivo) || 0;
+    const delta = Math.max(0, (Number(perc) || 0) - jaReconhecido);
+    total += (Number(cat.verbaCaixa) || 0) * delta;
+  }
+  return round2(total);
 }
 function deleteLiberacaoCaixa(id) { STATE.liberacoesCaixa = (STATE.liberacoesCaixa || []).filter((l) => l.id !== id); afterMutation(); }
 
@@ -10028,30 +10093,94 @@ function renderLiberacaoPorCategoria() {
     <div class="panel-header">
       <div>
         <h2>Liberação por categoria (verba CAIXA)</h2>
-        <div class="muted">Mesmas 20 categorias do Detalhamento FC — aqui com a verba do crédito CAIXA (não a do contrato do empreiteiro). Libera automaticamente na mesma proporção do % de avanço efetivo da categoria. Use "liberado manual" quando o banco liberar valor diferente do calculado.</div>
+        <div class="muted">Esta aba mede a <strong>verba CAIXA</strong> — independente da aba "Lançar Avanços", que mede o contrato do empreiteiro. Lance o <strong>% projetado</strong> de cada categoria na medição escolhida; quando essa medição passar de PLANEJADO para REALIZADO, o projetado vira o <strong>% reconhecido</strong> e a liberação se atualiza sozinha.</div>
       </div>
+      <div class="medicaoSlot"></div>
     </div>
     <div class="table-scroll"><table class="data"><thead><tr>
-      <th>Nº</th><th class="wrap">Categoria</th><th class="num">Verba CAIXA</th>
-      <th class="num">% avanço</th><th class="num">Liberado (auto)</th><th class="num">Liberado manual (opcional)</th><th class="num">Saldo</th>
+      <th style="width:52px">Nº</th><th class="wrap" style="min-width:210px">Categoria</th>
+      <th class="num" style="width:130px">Verba CAIXA</th>
+      <th class="num" style="width:120px">% projetado</th>
+      <th class="num" style="width:120px">% reconhecido</th>
+      <th class="num" style="width:150px">Liberado (auto)</th>
+      <th class="num" style="width:160px">Liberado manual</th>
+      <th class="num" style="width:130px">Saldo</th>
     </tr></thead><tbody></tbody>
     <tfoot></tfoot></table></div>
   `;
+
+  /* Seletor da medição que está sendo planejada. O % projetado é guardado
+     dentro da própria liberação, então trocar de medição troca a coluna
+     inteira — é assim que se planeja período a período. */
+  const medicoes = (VIEW.liberacoesCaixa || []).filter((l) => !ehEntradaFora(l))
+    .sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
+  if (!MEDICAO_PCI_ATIVA || !medicoes.some((l) => l.id === MEDICAO_PCI_ATIVA)) {
+    const planejada = medicoes.find((l) => l.status === 'PLANEJADO');
+    MEDICAO_PCI_ATIVA = (planejada || medicoes[medicoes.length - 1] || {}).id || null;
+  }
+  const medicao = medicoes.find((l) => l.id === MEDICAO_PCI_ATIVA) || null;
+  const slot = panel.querySelector('.medicaoSlot');
+  if (medicoes.length) {
+    const wrapSel = document.createElement('label');
+    wrapSel.className = 'muted';
+    wrapSel.style.cssText = 'display:flex; gap:6px; align-items:center; font-size:12px;';
+    wrapSel.innerHTML = 'Medição <select class="cell-input filter-control" style="min-width:230px"></select>';
+    const sel = wrapSel.querySelector('select');
+    for (const l of medicoes) {
+      const o = document.createElement('option');
+      o.value = l.id;
+      o.textContent = `${dateBR(l.data)} · ${l.obs || 'Medição'} · ${l.status === 'PLANEJADO' ? 'projetada' : 'realizada'}`;
+      if (l.id === MEDICAO_PCI_ATIVA) o.selected = true;
+      sel.appendChild(o);
+    }
+    sel.onchange = () => { MEDICAO_PCI_ATIVA = sel.value; renderPCI(); };
+    slot.appendChild(wrapSel);
+  }
+
   const tbody = panel.querySelector('tbody');
   for (const c of VIEW.categorias) {
     const tr = document.createElement('tr');
     tr.appendChild(td(`${c.numero}`));
     tr.appendChild(td(`<span class="wrap">${esc(c.nome)}</span>`));
     tr.appendChild(td(numberInput({ value: c.verbaCaixa, onSave: (v) => updateCategoria(c.id, { verbaCaixa: v }) })));
-    /* O % que comanda a liberação passa a ser editável aqui — é ele que
-       multiplica a verba e define o "Liberado (auto)", então precisa poder ser
-       ajustado na própria linha em vez de só na aba de avanços. Grava no mesmo
-       percAvancoManual, mantendo as telas em sincronia. */
-    tr.appendChild(td(percentInput({
-      value: c.percAvancoEfetivo,
-      manual: c.origemPercAvanco === 'manual',
-      onSave: (v) => updateCategoria(c.id, { percAvancoManual: v }),
-    })));
+    /* % PROJETADO: o que se pretende medir nesta liberação. Fica guardado na
+       medição, não na categoria — por isso muda quando você troca a medição no
+       seletor acima. É ele que, ao virar realizado, alimenta o % reconhecido. */
+    const projTd = document.createElement('td');
+    if (medicao) {
+      const projAtual = (medicao.avancos || {})[c.id];
+      const inputProj = percentInput({
+        value: projAtual !== undefined ? Number(projAtual) : Number(c.percCaixaEfetivo) || 0,
+        manual: projAtual !== undefined,
+        onSave: (v) => setAvancoProjetadoCaixa(medicao.id, c.id, v),
+      });
+      inputProj.title = medicao.status === 'PLANEJADO'
+        ? 'Percentual acumulado que esta medição pretende reconhecer nesta categoria.'
+        : 'Medição já realizada — este percentual já foi reconhecido.';
+      projTd.appendChild(inputProj);
+    } else {
+      projTd.innerHTML = '<span class="muted">sem medição</span>';
+    }
+    tr.appendChild(projTd);
+
+    /* % RECONHECIDO: o que o banco já aceitou. É ele que multiplica a verba.
+       Enquanto a categoria nunca passou por uma medição, herda o avanço do
+       contrato — daí o rótulo de origem ao lado. */
+    const recTd = document.createElement('td');
+    recTd.appendChild(percentInput({
+      value: c.percCaixaEfetivo,
+      manual: c.origemPercCaixa === 'medicao',
+      onSave: (v) => updateCategoria(c.id, { percCaixaRealizado: v }),
+    }));
+    if (c.origemPercCaixa !== 'medicao') {
+      const tag = document.createElement('span');
+      tag.className = 'badge gray';
+      tag.style.marginLeft = '4px';
+      tag.textContent = 'do contrato';
+      tag.title = 'Esta categoria ainda não passou por medição da CAIXA — enquanto isso, segue o % de avanço do contrato.';
+      recTd.appendChild(tag);
+    }
+    tr.appendChild(recTd);
     tr.appendChild(td(`<span class="num" style="font-weight:700">${money(c.caixaLiberadoCategoria)}</span> <span class="badge ${c.origemCaixaCategoria === 'manual' ? 'accent' : 'gray'}">${c.origemCaixaCategoria}</span>`));
     const manualTd = document.createElement('td');
     const manualInput = numberInput({
@@ -10073,14 +10202,38 @@ function renderLiberacaoPorCategoria() {
   }
   const tfoot = panel.querySelector('tfoot');
   const r = VIEW.resumo;
+  const projetadoMedicao = medicao ? valorProjetadoDaMedicao(medicao) : 0;
   tfoot.innerHTML = `<tr>
     <td colspan="2">TOTAL</td>
     <td class="num">${money(r.totalVerbaCaixaCategorias)}</td>
     <td></td>
+    <td></td>
     <td class="num">${money(r.totalCaixaLiberadoCategorias)}</td>
     <td></td>
     <td class="num">${money(r.totalVerbaCaixaCategorias - r.totalCaixaLiberadoCategorias)}</td>
-  </tr>`;
+  </tr>
+  ${medicao ? `<tr class="extrato-residuo">
+    <td colspan="3"><strong>Esta medição libera</strong> <span class="muted">${esc(medicao.obs || 'Medição')} · ${dateBR(medicao.data)} · ${medicao.status === 'PLANEJADO' ? 'projetada' : 'realizada'}</span></td>
+    <td class="num"><strong>${money(projetadoMedicao)}</strong></td>
+    <td colspan="4" class="muted">verba × (% projetado − % já reconhecido), categoria por categoria</td>
+  </tr>` : ''}`;
+
+  if (medicao && medicao.status === 'PLANEJADO' && projetadoMedicao > 0) {
+    const acao = document.createElement('div');
+    acao.className = 'conf-acoes no-print';
+    acao.style.margin = '10px 0 2px';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'btn primary small';
+    btn.textContent = `Usar ${money(projetadoMedicao)} como valor desta medição`;
+    btn.title = 'Grava o valor calculado na liberação, no lugar do valor digitado à mão.';
+    btn.onclick = () => { updateLiberacaoCaixa(medicao.id, { valor: projetadoMedicao }); toast('Valor da medição atualizado.', 'ok'); };
+    const nota = document.createElement('span');
+    nota.className = 'muted';
+    nota.textContent = `Hoje a liberação está lançada em ${money(Number(medicao.valor) || 0)}.`;
+    acao.append(btn, nota);
+    panel.appendChild(acao);
+  }
   return panel;
 }
 
