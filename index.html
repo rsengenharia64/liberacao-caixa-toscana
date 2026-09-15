@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T134725">
+<meta name="app-version" content="20260915T134939">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -541,6 +541,10 @@
   .saldo-zerado-tag { font-size: 11px; font-weight: 700; letter-spacing: .02em; text-transform: uppercase;
     background: var(--danger); color: #fff; padding: 3px 8px; border-radius: 999px; vertical-align: middle; margin-left: 8px; }
   .mov-proprio { color: var(--danger); font-weight: 700; }
+  /* Bloco dos meses sem RDO: recolhido, discreto, mas ainda acessível para
+     enviar um relatório retroativo. */
+  .rdo-vazios { background: var(--surface-2); }
+  .rdo-vazios > .comp-pasta { background: var(--surface); margin: 6px 0 0; }
   /* Sinal de bater o olho: o mês fechou sobrando ou tirando do bolso. Fica
      colado no saldo porque é a leitura que o saldo sozinho não entrega — a
      conta pode terminar com dinheiro do banco e ainda assim o mês ter
@@ -15016,14 +15020,19 @@ function renderRDO() {
     const lista = document.createElement('div');
     lista.className = 'comp-arvore';
     const mesAtual = new Date().getMonth();
-    for (let mes = 0; mes < 12; mes += 1) {
+
+    /* Doze pastas sempre abertas, a maioria vazia, empurravam os meses que
+       importam para baixo da dobra: a obra começou em abril, e janeiro a março
+       nunca vão ter RDO. Agora os meses sem nenhum relatório ficam recolhidos
+       num bloco só, que abre quando for preciso enviar um retroativo. */
+    const mesesVazios = [];
+    const montarMes = (mes) => {
       const pasta = rdoPasta(RDO.ano, mes);
       const arquivos = rdoArquivosDoMes(RDO.ano, mes).filter((a) => !filtro || filtro === 'ocultos' || a.nome.toLowerCase().includes(filtro) || ((meta[a.caminho] || {}).obs || '').toLowerCase().includes(filtro));
-      if (filtro && filtro !== 'ocultos' && !arquivos.length) continue;
       const d = document.createElement('details');
       d.className = 'comp-pasta';
       d.open = !!filtro || (Number(RDO.ano) === new Date().getFullYear() && mes === mesAtual) || arquivos.length > 0;
-      d.innerHTML = `<summary><span class="comp-pasta-nome">${String(mes + 1).padStart(2, '0')} · ${RDO_MESES[mes]} ${RDO.ano}</span> <span class="badge ${arquivos.length ? 'green' : 'gray'}">${arquivos.length} RDO</span></summary>`;
+      d.innerHTML = `<summary><span class="comp-pasta-nome">${String(mes + 1).padStart(2, '0')} · ${RDO_MESES[mes]} ${RDO.ano}</span> <span class="badge ${arquivos.length ? 'green' : 'gray'}">${arquivos.length ? `${arquivos.length} RDO` : 'sem RDO'}</span></summary>`;
       const acoes = document.createElement('div');
       acoes.className = 'comp-pasta-acoes no-print';
       const inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true; inp.accept = '.pdf,image/*'; inp.style.display = 'none';
@@ -15046,8 +15055,27 @@ function renderRDO() {
       } else {
         const v = document.createElement('div'); v.className = 'muted comp-vazia'; v.textContent = 'Nenhum RDO enviado neste mês.'; d.appendChild(v);
       }
-      lista.appendChild(d);
+      return { d, arquivos };
+    };
+
+    for (let mes = 0; mes < 12; mes += 1) {
+      const { d, arquivos } = montarMes(mes);
+      if (arquivos.length) { lista.appendChild(d); continue; }
+      // Com filtro de busca ativo, mês vazio não interessa nem recolhido.
+      if (filtro && filtro !== 'ocultos') continue;
+      mesesVazios.push({ mes, d });
     }
+
+    if (mesesVazios.length) {
+      const grupo = document.createElement('details');
+      grupo.className = 'comp-pasta rdo-vazios';
+      grupo.open = false;
+      const nomes = mesesVazios.map((x) => RDO_MESES[x.mes].slice(0, 3)).join(', ');
+      grupo.innerHTML = `<summary><span class="comp-pasta-nome">Meses sem RDO em ${RDO.ano}</span> <span class="badge gray">${mesesVazios.length} ${mesesVazios.length === 1 ? 'mês' : 'meses'}</span> <span class="muted" style="font-weight:400">${esc(nomes)} — abra para enviar um relatório retroativo</span></summary>`;
+      for (const x of mesesVazios) grupo.appendChild(x.d);
+      lista.appendChild(grupo);
+    }
+
     if (!lista.children.length) { const v = document.createElement('div'); v.className = 'muted'; v.textContent = 'Nenhum RDO encontrado com esse filtro.'; lista.appendChild(v); }
     corpo.appendChild(lista);
     if (READONLY) travarSomenteLeitura(lista);
