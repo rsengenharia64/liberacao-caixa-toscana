@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T121201">
+<meta name="app-version" content="20260915T122425">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2781,7 +2781,22 @@ function movimentosConta() {
      pagamento em dois. O saldo trava em zero; o rombo vira `proprio`. */
   let saldoReal = 0, saldoProj = 0;
   let propReal = 0, propProj = 0;
+  /* Saldo BRUTO: a mesma conta sem a trava em zero — entra soma, sai subtrai,
+     e pronto. É o extrato como o banco mostraria se a conta pudesse ficar
+     devedora, e é o número que fecha com os movimentos: saldo anterior +
+     entradas − saídas. Quando ele fica negativo, o negativo É o recurso
+     próprio consumido; não precisa de uma linha somando o próprio de volta
+     para "fechar" a conta — era isso que fazia o saldo previsto dar exatamente
+     o valor da liberação e parecer que o sistema ignorava saldo anterior e
+     saídas do período. O saldo travado continua existindo ao lado, porque é
+     ele que diz quanto dinheiro do BANCO existe de fato. */
+  let brutoReal = 0, brutoProj = 0;
   for (const m of movs) {
+    const sinal = m.tipo === 'entrada' ? 1 : -1;
+    brutoProj = round2(brutoProj + sinal * m.valor);
+    if (m.realizado) brutoReal = round2(brutoReal + sinal * m.valor);
+    m.saldoBrutoProjetado = brutoProj;
+    m.saldoBrutoRealizado = brutoReal;
     if (m.tipo === 'entrada') {
       saldoProj = round2(saldoProj + m.valor);
       m.caixaProjetado = m.valor;
@@ -2830,6 +2845,78 @@ function saldoProjetadoEm(movs, ateData) {
   let ultimo = 0;
   for (const m of movs) { if (m.data <= ateData) ultimo = m.saldoProjetado; }
   return ultimo;
+}
+
+/* Saldo sem trava numa data: saldo anterior + entradas − saídas, do marco até
+   a data. Negativo significa, literalmente, quanto de recurso próprio a obra
+   já precisou pôr para manter as contas em dia. */
+function saldoBrutoEm(movs, ateData, soRealizado = false) {
+  let ultimo = 0;
+  for (const m of movs) {
+    if (m.data > ateData) continue;
+    if (soRealizado && !m.realizado) continue;
+    ultimo = soRealizado ? m.saldoBrutoRealizado : m.saldoBrutoProjetado;
+  }
+  return ultimo;
+}
+
+/* Simulador: escolha um dia e veja o saldo naquela data, com os movimentos
+   que levaram até ele. Pedido direto do usuário — a projeção por quinzena não
+   respondia "e no dia 18?", que é a pergunta de quem precisa decidir se paga
+   ou espera a medição entrar. */
+function abrirSimuladorSaldo(dataInicial) {
+  const { movs, hoje, marco } = movimentosConta();
+  openModal('Simulação de saldo por data', (body) => {
+    const barra = document.createElement('div');
+    barra.className = 'form-grid';
+    barra.style.marginBottom = '10px';
+    barra.innerHTML = `<label>Saldo em que data?<input type="date" id="simData" value="${esc(dataInicial || hoje)}" min="${esc(marco)}"></label>`;
+    body.appendChild(barra);
+
+    const resumo = document.createElement('div');
+    body.appendChild(resumo);
+
+    const tw = document.createElement('div');
+    tw.className = 'table-scroll';
+    body.appendChild(tw);
+
+    const desenhar = () => {
+      const ate = barra.querySelector('#simData').value || hoje;
+      const dentro = movs.filter((m) => m.data <= ate);
+      const entradas = round2(dentro.filter((m) => m.tipo === 'entrada').reduce((a, m) => a + m.valor, 0));
+      const saidas = round2(dentro.filter((m) => m.tipo === 'saida').reduce((a, m) => a + m.valor, 0));
+      const bruto = round2(entradas - saidas);
+      const noBanco = saldoProjetadoEm(movs, ate);
+      const proprio = bruto < 0 ? round2(-bruto) : 0;
+
+      resumo.innerHTML = `
+        <div class="extrato-total-line${bruto < 0 ? ' negativo' : ''}">
+          <span>Saldo em ${dateBR(ate)} — entradas ${money(entradas)} − saídas ${money(saidas)}</span>
+          <strong>${money(bruto)}</strong>
+        </div>
+        <div class="muted" style="margin:8px 0 12px; line-height:1.5">
+          ${bruto < 0
+            ? `Negativo quer dizer que a verba do banco não cobriu tudo: <strong>${money(proprio)}</strong> saíram de recurso próprio até esta data. Na conta do CAIXA propriamente dita há <strong>${money(noBanco)}</strong>.`
+            : `Sobram <strong>${money(bruto)}</strong> na conta até esta data. Na conta do CAIXA há ${money(noBanco)}.`}
+          <br>Conta a partir de ${dateBR(marco)}. Linhas cinza ainda não aconteceram — são previsões de entrada e de pagamento.
+        </div>`;
+
+      tw.innerHTML = `<table class="extrato-table">
+        <thead><tr><th>Data</th><th>Movimento</th><th class="num">Entrada</th><th class="num">Saída</th><th class="num">Saldo</th></tr></thead>
+        <tbody>
+          ${dentro.map((m) => `<tr class="${m.realizado ? '' : 'mov-previsto'}">
+            <td>${dateBR(m.data)}${m.realizado ? '' : ' <span class="badge gray">previsto</span>'}</td>
+            <td>${esc(m.descricao)}</td>
+            <td class="num mov-entrada">${m.tipo === 'entrada' ? money(m.valor) : ''}</td>
+            <td class="num mov-saida">${m.tipo === 'saida' ? money(m.valor) : ''}</td>
+            <td class="num"><strong style="color:${m.saldoBrutoProjetado < 0 ? 'var(--danger)' : 'inherit'}">${money(m.saldoBrutoProjetado)}</strong></td>
+          </tr>`).join('') || '<tr><td colspan="5" class="muted">Nenhum movimento até esta data.</td></tr>'}
+        </tbody></table>`;
+    };
+
+    barra.querySelector('#simData').addEventListener('change', desenhar);
+    desenhar();
+  }, { wide: true });
 }
 
 /* Entrada de crédito do banco (medição/PLS) — as únicas linhas do extrato que
@@ -3120,7 +3207,15 @@ function renderSaldoContaGrid() {
      O corte é o FIM do período da quinzena, não a data de pagamento — senão
      uma liberação lançada depois do dia 25 fica invisível. */
   const ateData = proxima ? (fimDaQuinzena(proxima) || proxima.vencPlanejado) : hoje;
-  const saldoProx = proxima ? saldoProjetadoEm(movs, ateData) : saldoHoje;
+  /* O saldo previsto é o saldo BRUTO — saldo anterior + entradas − saídas, sem
+     trava. A versão travada em zero obrigava uma linha "+ recurso próprio
+     necessário" para a conta fechar, e essa linha empurrava o total de volta
+     para cima: em Setembro/2ª o resultado dava exatamente o valor da liberação
+     (R$ 114.908,94), como se o saldo anterior e as saídas do período não
+     existissem. Agora a conta é a do extrato, e o sinal negativo já diz o que
+     precisa ser dito: aquilo é recurso próprio saindo. */
+  const saldoProx = proxima ? saldoBrutoEm(movs, ateData) : round2(entradasReal - saidasReal);
+  const saldoCaixaProx = proxima ? saldoProjetadoEm(movs, ateData) : saldoHoje;
   const ate = movs.filter((m) => m.data <= ateData);
   const ponte = {
     realizadoAte: round2(ate.filter((m) => m.realizado).reduce((acc, m) => acc + (m.tipo === 'entrada' ? m.valor : -m.valor), 0)),
@@ -3180,41 +3275,34 @@ function renderSaldoContaGrid() {
              Agora o selo só aparece quando a conta REALMENTE zera, e ao lado
              do saldo fica o resultado DO MÊS — que é o sinal de bater o olho:
              sobrou, ou saiu do próprio e quanto. */
-          const contaZerou = Math.abs(saldoProx) < 0.005;
-          const mesAte = proxima ? fimDoMes(proxima.mes) : null;
-          const resMes = proxima ? resultadoDoPeriodo(movs, `${proxima.mes}-01`, mesAte) : null;
-          const consomeNoMes = resMes ? round2(-resMes.resultado) : 0;
-          const corSaldo = contaZerou ? 'var(--danger)' : (saldoProx < 0 ? 'var(--danger)' : 'var(--good)');
-          const selo = contaZerou ? ' <span class="saldo-zerado-tag">conta CAIXA zerada</span>' : '';
-          const tagMes = resMes
-            ? (consomeNoMes > 0.004
-              ? `<div class="saldo-sinal-mes ruim">No mês de ${esc(nomeDoMes(proxima.mes))}: <strong>${money(consomeNoMes)} saem de recurso próprio</strong> <span class="muted">— entrou ${money(resMes.entradas)}, saiu ${money(resMes.saidas)}</span></div>`
-              : `<div class="saldo-sinal-mes bom">No mês de ${esc(nomeDoMes(proxima.mes))}: <strong>sobram ${money(Math.abs(consomeNoMes))}</strong> <span class="muted">— entrou ${money(resMes.entradas)}, saiu ${money(resMes.saidas)}</span></div>`)
-            : '';
+          const negativo = saldoProx < -0.004;
+          const corSaldo = negativo ? 'var(--danger)' : 'var(--good)';
+          const selo = negativo ? ' <span class="saldo-zerado-tag">consumindo recurso próprio</span>' : '';
           return `<div class="card-value" style="color:${corSaldo}">${money(saldoProx)}${selo}</div>
-            <div class="card-sub" style="font-size:11px">saldo da conta do CAIXA no fim do período — dinheiro do banco, já descontado o que o próprio cobriu</div>
-            ${tagMes}`;
+            <div class="card-sub" style="font-size:11px">${negativo
+              ? `saldo anterior + entradas − saídas até esta data. <strong>Negativo = ${money(round2(-saldoProx))} saindo de recurso próprio.</strong> Na conta do banco há ${money(saldoCaixaProx)}.`
+              : `saldo anterior + entradas − saídas até esta data. Sobra na conta. ${saldoCaixaProx !== saldoProx ? `Na conta do banco há ${money(saldoCaixaProx)}.` : ''}`}</div>`;
         })()}
         <div class="saldo-ponte">
-          <div><span>Saldo realizado</span><strong>${money(ponte.realizadoAte)}</strong></div>
+          <div><span>Saldo realizado até aqui <em class="muted cf-sub">tudo que já entrou menos tudo que já saiu, desde ${dateBR(r.marcoSaldoConta)}</em></span><strong style="color:${ponte.realizadoAte < 0 ? 'var(--danger)' : 'inherit'}">${money(ponte.realizadoAte)}</strong></div>
           <div class="mais"><span>+ Liberação CAIXA prevista (PLS)</span><strong class="mov-entrada">${money(ponte.entradasPrev)}</strong>${ponte.plsPrevistas.length
             ? `<em class="muted cf-sub">${ponte.plsPrevistas.map((l) => `${dateBR(l.data)}${l.obs ? ' · ' + esc(l.obs) : ''}: ${money(l.valor)}`).join(' · ')}</em>`
             : (ponte.proximaPls
               ? `<em class="muted cf-sub">a próxima medição prevista é ${esc(ponte.proximaPls.obs || 'PLS')} — ${money(ponte.proximaPls.valor)} em ${dateBR(ponte.proximaPls.data)}, <strong>depois desta quinzena</strong>; escolha uma quinzena a partir dela para vê-la entrar</em>`
               : '<em class="muted cf-sub">nenhuma medição PLS planejada — lance em Liberação PCI</em>')}</div>
           <div class="menos"><span>− Custos previstos das quinzenas</span><strong class="mov-saida">${money(ponte.saidasPrev)}</strong></div>
-          ${proprioAte > 0 ? `<div class="mais proprio"><span>+ Recurso próprio necessário <em class="muted cf-sub">a verba do banco acaba antes de cobrir os custos — esta é a diferença que sai do seu bolso</em></span><strong class="mov-proprio">${money(proprioAte)}</strong></div>` : ''}
-          <div class="igual"><span>= Saldo previsto</span><strong style="color:${proprioAte > 0 ? 'var(--danger)' : 'var(--good)'}">${money(saldoProx)}</strong></div>
+          <div class="igual"><span>= Saldo previsto</span><strong style="color:${saldoProx < -0.004 ? 'var(--danger)' : 'var(--good)'}">${money(saldoProx)}</strong></div>
         </div>
-        ${proprioAte > 0 ? `<div class="saldo-negativo${proprioSobra < 0 ? ' critico' : ''}">
-          <strong>Saldo zero não é saldo tranquilo:</strong> a conta do CAIXA zera nesta data e
-          <strong>${money(proprioAte)} saem de recurso próprio</strong> para fechar as quinzenas até aqui.
+        ${saldoProx < -0.004 ? `<div class="saldo-negativo${proprioSobra < 0 ? ' critico' : ''}">
+          <strong>Saldo negativo:</strong> a verba do banco não cobre os pagamentos até esta data e
+          <strong>${money(round2(-saldoProx))} saem de recurso próprio</strong>.
           ${proprioSobra < 0
             ? `Sua verba própria disponível é ${money(proprioDisponivel)} — <strong>faltam ${money(Math.abs(proprioSobra))}</strong>. É preciso antecipar medição da CAIXA ou remanejar parcelas.`
             : `Restariam <strong>${money(proprioSobra)}</strong> dos ${money(proprioDisponivel)} de verba própria disponível.`}
         </div>` : ''}
       </div>
       <div class="saldo-acoes">
+        <button type="button" class="btn small primary filter-control" data-acao="simular-saldo">Simular por data</button>
         <button type="button" class="btn small filter-control" data-acao="extrato-conta">Ver extrato</button>
         <button type="button" class="btn small filter-control" data-acao="imprimir-conta">Imprimir extrato</button>
       </div>
@@ -3299,6 +3387,11 @@ function renderSaldoContaGrid() {
   ));
 
   panel.querySelectorAll('[data-acao="extrato-conta"]').forEach((b) => { b.onclick = abrirExtratoConta; });
+  const btnSim = panel.querySelector('[data-acao="simular-saldo"]');
+  if (btnSim) {
+    btnSim.title = 'Escolha um dia e veja o saldo naquela data, com os movimentos que levaram até ele.';
+    btnSim.onclick = () => abrirSimuladorSaldo(ateData);
+  }
   panel.querySelector('[data-acao="imprimir-conta"]').onclick = () => { abrirExtratoConta(); setTimeout(() => window.print(), 300); };
 
   /* Saldo previsto negativo: a obra vai consumir recurso próprio nessa
