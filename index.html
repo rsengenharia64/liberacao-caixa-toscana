@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T082710">
+<meta name="app-version" content="20260915T083209">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -4794,15 +4794,30 @@ function updateLiberacaoPCI(etapaNum, patch) {
 // Liberações reais do CAIXA (medições mensais efetivamente pagas pelo banco).
 function addLiberacaoCaixa(patch) {
   STATE.liberacoesCaixa = STATE.liberacoesCaixa || [];
-  STATE.liberacoesCaixa.push({
+  /* Os avanços por categoria podem vir já na criação (janela "Nova liberação
+     real do CAIXA"): é o que mostra em QUAL LINHA da medição o avanço foi
+     feito, em vez de a liberação ser um valor solto sem origem. Se a medição
+     já entra como REALIZADA, o projetado vira reconhecido na hora — o mesmo
+     gatilho que existe na virada PLANEJADO → REALIZADO. */
+  const avancos = {};
+  for (const [catId, perc] of Object.entries(patch.avancos || {})) {
+    const n = Number(perc);
+    if (Number.isFinite(n) && n > 0) avancos[catId] = Math.max(0, n);
+  }
+  const nova = {
     id: newId('liberacao'),
     data: patch.data || new Date().toISOString().slice(0, 10),
     valor: Number(patch.valor) || 0,
     status: patch.status === 'PLANEJADO' ? 'PLANEJADO' : 'REALIZADO',
     obs: patch.obs || '',
     ...(patch.tipo && patch.tipo !== 'liberacao' ? { tipo: patch.tipo } : {}),
-  });
+    ...(Object.keys(avancos).length ? { avancos } : {}),
+  };
+  STATE.liberacoesCaixa.push(nova);
+  if (nova.status === 'REALIZADO' && Object.keys(avancos).length) aplicarAvancoCaixaDaMedicao(nova);
+  registrarAlteracao('Liberação CAIXA', nova.obs || dateBR(nova.data), 'liberação criada', null, nova.valor);
   afterMutation();
+  return nova.id;
 }
 function updateLiberacaoCaixa(id, patch) {
   const l = (STATE.liberacoesCaixa || []).find((x) => x.id === id); if (!l) return;
@@ -9634,10 +9649,15 @@ function renderLancamentoQuinzenaPanel() {
   `;
   panel.appendChild(totals);
 
-  const montarCampo = (slot, chave, rotulo) => {
+  const montarCampo = (slot, chave, rotulo, calculado = 0) => {
     slot.innerHTML = '';
+    /* Sem nada digitado, o campo mostra A SUGESTÃO — não zero.
+       Mostrar 0,00 com a sugestão só no texto de baixo fazia o card parecer
+       vazio ("sumiu o valor do empreiteiro"), e quem não digitasse lançava
+       zerado. Agora o número que está à vista é o que vai ser lançado, e
+       digitar por cima assume o controle. */
     const inp = moneyInput({
-      value: manual[chave] ?? 0,
+      value: manual[chave] ?? round2(calculado),
       manual: manual[chave] !== null,
       onSave: (v) => { manual[chave] = round2(Number(v) || 0); recalcPreview(); },
     });
@@ -9733,8 +9753,8 @@ function renderLancamentoQuinzenaPanel() {
        segue a sugestão da fórmula. */
     manual.empCalculado = empreiteiro;
     manual.admCalculado = adm;
-    montarCampo(panel.querySelector('.lqEmpSlot'), 'emp', 'sugestão: ' + money(empreiteiro));
-    montarCampo(panel.querySelector('.lqAdmSlot'), 'adm', 'sugestão: ' + money(adm));
+    montarCampo(panel.querySelector('.lqEmpSlot'), 'emp', 'sugestão: ' + money(empreiteiro), empreiteiro);
+    montarCampo(panel.querySelector('.lqAdmSlot'), 'adm', 'sugestão: ' + money(adm), adm);
   }
   rows.forEach((r) => r.novoPercInput.addEventListener('input', recalcPreview));
   cartaoInput.addEventListener('input', recalcPreview);
@@ -9760,6 +9780,13 @@ function renderLancamentoQuinzenaPanel() {
       dataGeracaoCusto: periodoRow.querySelector('#lqDataCusto').value || null,
       status: periodoRow.querySelector('#lqStatus').value,
       obs: obsRow.querySelector('#lqObs').value,
+      /* O valor digitado nos cards de PIX tem de VIAJAR com o lançamento.
+         lancamentoQuinzena já sabia tratar empreiteiroManual/admManual, mas
+         esta tela nunca os enviava: quem digitava via o número ser ignorado e
+         a parcela sair pela fórmula — daí "os lançamentos estão saindo
+         manualmente" e a queixa de que a sugestão de ADM não era editável. */
+      empreiteiroManual: manual.emp,
+      admManual: manual.adm,
     });
     if (resultado.ok) {
       renderAll();
@@ -10511,15 +10538,124 @@ function openNovaLiberacaoCaixaModal() {
         <select name="tipo"><option value="liberacao" selected>Liberação CAIXA (conta no crédito liberado)</option><option value="estorno">Estorno / devolução (só saldo em conta)</option><option value="deposito">Outro depósito (só saldo em conta)</option></select>
       </label>
       <label style="grid-column: 1 / -1">Observação (ex.: "Medição 05")<input name="obs" /></label>
+      <div id="blocoCategorias" style="grid-column: 1 / -1"></div>
       <div style="grid-column: 1 / -1; display:flex; gap:8px; justify-content:flex-end;">
         <button type="button" class="btn" id="cancelBtn">Cancelar</button>
         <button type="submit" class="btn primary">Adicionar</button>
       </div>
     `;
+
+    /* Avanço por categoria já na criação.
+       ----------------------------------------------------------------------
+       Antes a liberação nascia como um valor digitado sem origem: dava para
+       ver que entraram R$ X, não em qual linha da medição esse X foi medido.
+       Aqui vão as mesmas categorias da aba de avanço, com o % que o banco já
+       reconheceu ao lado do % projetado desta medição. O valor é a soma do
+       que cada linha avança sobre o já reconhecido — o mesmo cálculo da
+       planilha de liberação por categoria. */
+    const avancos = {};
+    const bloco = form.querySelector('#blocoCategorias');
+    const cats = (VIEW.categorias || []).filter((c) => (Number(c.verbaCaixa) || 0) > 0);
+    const campoValor = form.querySelector('[name="valor"]');
+    const campoTipo = form.querySelector('[name="tipo"]');
+
+    const det = document.createElement('details');
+    det.open = true;
+    det.style.cssText = 'border:1px solid var(--linha, #2b3a52); border-radius:6px; padding:8px; margin-top:4px;';
+    det.innerHTML = `<summary style="cursor:pointer; font-weight:600">Avanço por categoria nesta medição <span class="muted" style="font-weight:400">— mostra em qual linha o avanço foi medido</span></summary>`;
+
+    const info = document.createElement('div');
+    info.className = 'muted';
+    info.style.cssText = 'font-size:12px; margin:6px 0 8px;';
+    info.textContent = 'Preencha o % projetado das linhas que esta medição leva ao banco. Deixe em branco as que não avançaram.';
+    det.appendChild(info);
+
+    const scroll = document.createElement('div');
+    scroll.className = 'table-scroll';
+    scroll.style.maxHeight = '260px';
+    const tab = document.createElement('table');
+    tab.className = 'data';
+    tab.innerHTML = `<thead><tr>
+      <th style="min-width:40px">Nº</th>
+      <th class="wrap" style="min-width:190px">Categoria</th>
+      <th class="num" style="min-width:118px">Verba CAIXA</th>
+      <th class="num" style="min-width:110px" title="O que o banco já reconheceu nesta linha.">% reconhecido</th>
+      <th class="num" style="min-width:110px" title="O que esta medição pretende levar ao banco.">% projetado</th>
+      <th class="num" style="min-width:120px">Avanço (R$)</th>
+    </tr></thead>`;
+    const tb = document.createElement('tbody');
+
+    const celulasValor = new Map();
+    const totalBox = document.createElement('div');
+    totalBox.style.cssText = 'display:flex; gap:10px; align-items:center; justify-content:flex-end; margin-top:8px; flex-wrap:wrap;';
+
+    function recalcular() {
+      let total = 0;
+      for (const c of cats) {
+        const ja = Number(c.percCaixaEfetivo) || 0;
+        const proj = avancos[c.id];
+        const delta = proj === undefined ? 0 : Math.max(0, Number(proj) - ja);
+        const v = round2((Number(c.verbaCaixa) || 0) * delta);
+        total += v;
+        const cel = celulasValor.get(c.id);
+        if (cel) cel.textContent = v > 0 ? money(v) : '—';
+      }
+      total = round2(total);
+      totalBox.querySelector('.totalTexto').textContent = `Soma das linhas: ${money(total)}`;
+      totalBox.querySelector('.btnUsar').disabled = !(total > 0);
+      return total;
+    }
+
+    for (const c of cats) {
+      const tr = document.createElement('tr');
+      tr.appendChild(td(`${c.numero}`));
+      tr.appendChild(td(`<span class="wrap">${esc(c.nome)}</span>`));
+      tr.appendChild(td(`<span class="num">${money(c.verbaCaixa)}</span>`));
+      tr.appendChild(td(`<span class="num muted">${pct(Number(c.percCaixaEfetivo) || 0)}</span>`));
+      const tdProj = document.createElement('td');
+      const inp = percentInput({
+        value: 0,
+        onSave: (v) => { if (v > 0) avancos[c.id] = v; else delete avancos[c.id]; recalcular(); },
+      });
+      inp.value = '';
+      inp.placeholder = '—';
+      tdProj.appendChild(inp);
+      tr.appendChild(tdProj);
+      const tdVal = document.createElement('td');
+      tdVal.className = 'num';
+      tdVal.textContent = '—';
+      celulasValor.set(c.id, tdVal);
+      tr.appendChild(tdVal);
+      tb.appendChild(tr);
+    }
+    tab.appendChild(tb);
+    scroll.appendChild(tab);
+    det.appendChild(scroll);
+
+    totalBox.innerHTML = `<strong class="totalTexto">Soma das linhas: ${money(0)}</strong>`;
+    const btnUsar = document.createElement('button');
+    btnUsar.type = 'button';
+    btnUsar.className = 'btn small primary btnUsar';
+    btnUsar.textContent = 'Usar esta soma como valor';
+    btnUsar.disabled = true;
+    btnUsar.title = 'Leva a soma das linhas para o campo Valor, em vez de digitar à mão.';
+    btnUsar.onclick = () => { campoValor.value = String(recalcular()); toast('Valor preenchido pela soma das categorias.'); };
+    totalBox.appendChild(btnUsar);
+    det.appendChild(totalBox);
+
+    bloco.appendChild(det);
+    if (!cats.length) { det.hidden = true; }
+
+    // Estorno e depósito não medem obra — a tabela de categorias não se aplica.
+    const ajustarVisibilidade = () => { det.hidden = !cats.length || campoTipo.value !== 'liberacao'; };
+    campoTipo.addEventListener('change', ajustarVisibilidade);
+    ajustarVisibilidade();
+
     form.querySelector('#cancelBtn').onclick = close;
     form.addEventListener('submit', (e) => {
       e.preventDefault();
       const payload = Object.fromEntries(new FormData(form).entries());
+      if (campoTipo.value === 'liberacao') payload.avancos = avancos;
       addLiberacaoCaixa(payload);
       close();
     });
@@ -10541,8 +10677,8 @@ function renderLiberacaoPorCategoria() {
     <div class="table-scroll"><table class="data"><thead><tr>
       <th style="min-width:44px">Nº</th><th class="wrap" style="min-width:200px">Categoria</th>
       <th class="num" style="min-width:120px">Verba CAIXA</th>
-      <th class="num" style="min-width:118px" title="Futuro: o que esta medição pretende levar ao banco.">% projetado<br><span class="muted" style="font-weight:400">a medir</span></th>
-      <th class="num" style="min-width:122px" title="Realizado: o que o banco já reconheceu e liberou.">% reconhecido<br><span class="muted" style="font-weight:400">já liberado</span></th>
+      <th class="num" style="min-width:118px" title="Futuro — o que esta medição pretende levar ao banco. Ainda não foi liberado.">% projetado</th>
+      <th class="num" style="min-width:122px" title="Realizado — o que o banco já reconheceu e liberou.">% reconhecido</th>
       <th class="num" style="min-width:130px">Liberado (auto)</th>
       <th class="num" style="min-width:140px">Liberado manual</th>
       <th class="num" style="min-width:120px">Saldo</th>
