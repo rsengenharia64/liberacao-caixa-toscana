@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T134939">
+<meta name="app-version" content="20260915T142339">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2853,6 +2853,32 @@ function movimentosConta() {
   };
 }
 
+/* Quanto de recurso próprio JÁ ENTROU na obra, de verdade.
+   --------------------------------------------------------------------------
+   Duas fontes medem isso e elas se separam: a lista digitada em Parâmetros
+   (que depende de alguém lançar) e a cascata da conta (que sabe, porque o
+   saldo ficou negativo). Quando a lista atrasa, qualquer tela que use só ela
+   mostra aporte menor e verba disponível maior do que existe.
+
+   Uma função só para as duas telas — card do saldo e card da viabilidade —,
+   senão elas divergem e o usuário encontra dois números para a mesma coisa,
+   que foi exatamente o que aconteceu. Itens lançados depois do marco são
+   descontados para não contar o mesmo dinheiro duas vezes. */
+function consumoProprioReal() {
+  const r = VIEW.resumo || {};
+  const registrado = round2(Number(r.totalConsumoRecursoProprio) || 0);
+  const marco = r.marcoSaldoConta || '';
+  const { entradasReal, saidasReal } = movimentosConta();
+  const daConta = round2(Math.max(0, saidasReal - entradasReal));
+  const registradoDepois = round2((STATE.consumosRecursoProprio || [])
+    .filter((c) => c.data && c.data >= marco)
+    .reduce((a, c) => a + (Number(c.valor) || 0), 0));
+  const naoRegistrado = round2(Math.max(0, daConta - registradoDepois));
+  const ultimoRegistro = (STATE.consumosRecursoProprio || [])
+    .map((c) => c.data).filter(Boolean).sort().slice(-1)[0] || null;
+  return { registrado, daConta, naoRegistrado, total: round2(registrado + naoRegistrado), ultimoRegistro };
+}
+
 // Saldo projetado numa data: tudo até ela, realizado ou planejado.
 function saldoProjetadoEm(movs, ateData) {
   let ultimo = 0;
@@ -3417,21 +3443,13 @@ function renderSaldoContaGrid() {
            ninguém registrou) e avisa a diferença, em vez de confiar só na
            lista. Itens lançados depois do marco são descontados para não
            contar o mesmo dinheiro duas vezes. */
-        const registradoTotal = Number(r.totalConsumoRecursoProprio) || 0;
-        const marcoConta = r.marcoSaldoConta || '';
-        const registradoDepoisDoMarco = round2((STATE.consumosRecursoProprio || [])
-          .filter((c) => (c.data || '') >= marcoConta && c.data)
-          .reduce((a, c) => a + (Number(c.valor) || 0), 0));
-        // O próprio já consumido pela conta é o saldo bruto negativo de hoje —
-        // vem de movimentosConta(), não do resumo (r.proprioRealizado não
-        // existe lá, e usá-lo fazia o aviso nunca aparecer).
-        const proprioDaConta = round2(Math.max(0, -saldoHojeBruto));
-        const naoRegistrado = round2(Math.max(0, proprioDaConta - registradoDepoisDoMarco));
-        const propConsumido = round2(registradoTotal + naoRegistrado);
+        const cp = consumoProprioReal();
+        const registradoTotal = cp.registrado;
+        const naoRegistrado = cp.naoRegistrado;
+        const propConsumido = cp.total;
+        const ultimoRegistro = cp.ultimoRegistro;
         const propSaldo = round2(propPlanejado - propConsumido);
         const propPerc = propPlanejado > 0 ? Math.min(1, Math.max(0, propConsumido / propPlanejado)) : 0;
-        const ultimoRegistro = (STATE.consumosRecursoProprio || [])
-          .map((c) => c.data).filter(Boolean).sort().slice(-1)[0] || null;
 
         const barra = (perc, cor) => `<div class="teto-barra"><span style="width:${(perc * 100).toFixed(1)}%; background:${cor}"></span></div>`;
         return `<div class="saldo-tetos">
@@ -7527,7 +7545,30 @@ function abrirExtratoViabilidade(secaoInicial = null) {
       card('Lucro líquido do empreendimento', money(v.lucroLiquido), 'após corretagem e IR', cls(v.lucroLiquido)),
       card('Margem líquida sobre VGV', pct(v.margemLiquidaSobreVgv), 'lucro líquido ÷ VGV', cls(v.lucroLiquido)),
       card('Retorno líquido sobre custo', pct(v.retornoLiquidoSobreCusto), 'lucro líquido ÷ custo econômico', cls(v.lucroLiquido)),
-      card('Capital próprio necessário', money(f.capitalProprioNecessario), `custo que o financiamento não banca · aportado ${money(f.capitalProprioAportado)} · falta ${money(f.capitalProprioAindaNecessario)}`),
+      /* Necessário × planejado — dois números diferentes, e a tela não dizia isso.
+         -------------------------------------------------------------------
+         "Planejado" (R$ 571.143,99) é quanto o dono decidiu reservar de
+         dinheiro próprio: é uma FONTE. "Necessário" (R$ 518.895,00) é a parte
+         do custo projetado que o financiamento não cobre: é uma CONTA, somada
+         rubrica a rubrica na DRE. A diferença entre os dois é folga — capital
+         de giro próprio. Mostrando só o "necessário", os dois pareciam ser a
+         mesma coisa com valores conflitantes.
+
+         O aportado também sai da função única, para não repetir aqui o número
+         defasado da lista de Parâmetros enquanto o card do saldo já mostra o
+         corrigido. */
+      (() => {
+        const cp = consumoProprioReal();
+        const planejado = round2(Number(f.capitalProprioPlanejado) || 0);
+        const necessario = round2(Number(f.capitalProprioNecessario) || 0);
+        const folga = round2(planejado - necessario);
+        const falta = round2(Math.max(0, necessario - cp.total));
+        return card(
+          'Capital próprio necessário',
+          money(necessario),
+          `parte do custo que o financiamento não banca — dos ${money(planejado)} planejados, ${folga >= 0 ? `sobram ${money(folga)} de folga` : `faltam ${money(-folga)}`} · já aportado ${money(cp.total)} · falta ${money(falta)}`,
+        );
+      })(),
       card('ROI líquido do investidor', pct(v.roiInvestidor), `resultado do investidor ${money(v.resultadoInvestidor)} ÷ capital próprio necessário`, cls(v.resultadoInvestidor)),
       card('Financiamento × capital próprio', `${pct(f.participacaoFinanciamento)} · ${pct(f.participacaoCapitalProprio)}`, `do custo econômico: CAIXA ${money(f.creditoAplicado)} · próprio ${money(f.capitalProprioNecessario)}`),
       // Card informativo: mostra o giro PLANEJADO. A folga real das fontes
