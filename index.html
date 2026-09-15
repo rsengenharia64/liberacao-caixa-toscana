@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260914T234008">
+<meta name="app-version" content="20260914T234935">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -5379,7 +5379,20 @@ function lancamentoQuinzena(b) {
   // Cartão sempre pago na 1ª quinzena — na 2ª, o gasto do cartão é sempre zero.
   const gastoCartao = quinzena === 2 ? 0 : round2(Number(b.gastoCartao) || 0);
   const taxaAdm = Number(STATE.parametros.taxaAdministracaoPercent) || 0;
-  const totalEmpreiteiroPixGerado = round2(Math.max(0, valorGeradoPeriodo - gastoCartao));
+
+  /* Os valores de PIX são SUGESTÃO, não sentença.
+     -----------------------------------------------------------------------
+     A conta automática (valor medido − cartão, e a administração como % disso)
+     acerta na maioria das quinzenas, mas não em todas: às vezes se paga um
+     valor combinado, arredondado, ou se adianta parte. Antes esses campos eram
+     só leitura e a única saída era lançar e corrigir depois em Contas a Pagar.
+     Agora, quando o usuário digita, o valor dele manda — e fica marcado como
+     override para que nenhum recálculo posterior o reescreva. */
+  const temEmpManual = b.empreiteiroManual !== undefined && b.empreiteiroManual !== null && b.empreiteiroManual !== '';
+  const temAdmManual = b.admManual !== undefined && b.admManual !== null && b.admManual !== '';
+  const totalEmpreiteiroPixGerado = temEmpManual
+    ? round2(Number(b.empreiteiroManual) || 0)
+    : round2(Math.max(0, valorGeradoPeriodo - gastoCartao));
   const obsAuto = `Avanço da quinzena (valor gerado: R$ ${valorGeradoPeriodo.toFixed(2)}) — ${detalhes.join('; ')}`;
   const label = monthQuinzenaLabel(mes, quinzena);
   const novoStatus = b.status || 'PLANEJADO';
@@ -5395,14 +5408,26 @@ function lancamentoQuinzena(b) {
   // parcela já REALIZADO — nesse caso cria uma nova, como antes.
   let parcela = STATE.parcelas.find((p) => p.vencPlanejado === vencPlanejado && p.status !== 'REALIZADO');
   if (parcela) {
-    parcela.totalEmpreiteiroPix = round2((Number(parcela.totalEmpreiteiroPix) || 0) + totalEmpreiteiroPixGerado);
+    parcela.overrides = parcela.overrides || {};
+    /* Valor digitado é o TOTAL da quinzena, não um incremento — quem informa
+       na mão está dizendo quanto vai sair, e somar ao que já existia daria um
+       número que ninguém pediu. */
+    parcela.totalEmpreiteiroPix = temEmpManual
+      ? totalEmpreiteiroPixGerado
+      : round2((Number(parcela.totalEmpreiteiroPix) || 0) + totalEmpreiteiroPixGerado);
+    if (temEmpManual) parcela.overrides.totalEmpreiteiroPix = true;
     parcela.gastoCartao = gastoCartao;
-    parcela.totalAdmPix = round2((parcela.totalEmpreiteiroPix + parcela.gastoCartao) * taxaAdm);
+    parcela.totalAdmPix = temAdmManual
+      ? round2(Number(b.admManual) || 0)
+      : round2((parcela.totalEmpreiteiroPix + parcela.gastoCartao) * taxaAdm);
+    if (temAdmManual) parcela.overrides.totalAdmPix = true;
     parcela.status = novoStatus === 'REALIZADO' ? 'REALIZADO' : parcela.status;
     parcela.vencimento = parcela.status === 'REALIZADO' ? (b.vencimento || parcela.vencimento || vencPlanejado) : parcela.vencimento;
     parcela.obs = parcela.obs ? `${parcela.obs}\n${novaObs}` : novaObs;
   } else {
-    const totalAdmPixGerado = round2((totalEmpreiteiroPixGerado + gastoCartao) * taxaAdm);
+    const totalAdmPixGerado = temAdmManual
+      ? round2(Number(b.admManual) || 0)
+      : round2((totalEmpreiteiroPixGerado + gastoCartao) * taxaAdm);
     parcela = {
       id: newId('parcela'), label,
       totalEmpreiteiroPix: totalEmpreiteiroPixGerado, totalAdmPix: totalAdmPixGerado, gastoCartao,
@@ -5414,7 +5439,12 @@ function lancamentoQuinzena(b) {
       vencPlanejado,
       status: novoStatus,
       obs: novaObs,
-      overrides: {},
+      // Valor informado à mão é travado, para o recálculo automático não
+      // reescrever o que a pessoa acabou de definir.
+      overrides: {
+        ...(temEmpManual ? { totalEmpreiteiroPix: true } : {}),
+        ...(temAdmManual ? { totalAdmPix: true } : {}),
+      },
     };
     STATE.parcelas.push(parcela);
   }
@@ -9549,15 +9579,54 @@ function renderLancamentoQuinzenaPanel() {
   }
   panel.appendChild(body);
 
+  /* Os dois valores de PIX são editáveis.
+     -----------------------------------------------------------------------
+     Eram só leitura: mostravam a sugestão e obrigavam a lançar primeiro e
+     corrigir depois em Contas a Pagar. Agora, digitar assume o controle da
+     célula — o número digitado vai para a parcela e fica travado contra
+     recálculo. O botão "voltar ao cálculo" devolve a célula à fórmula.
+
+     "Valor gerado na quinzena" continua calculado: ele é a soma dos avanços
+     da tabela acima, e deixá-lo editável criaria um total que não corresponde
+     a nenhum percentual lançado — o número mentiria sobre a medição. */
+  const manual = { emp: null, adm: null };
+
   const totals = document.createElement('div');
   totals.className = 'cards-grid';
   totals.style.marginTop = '4px';
   totals.innerHTML = `
-    <div class="card"><div class="card-label">Valor gerado na quinzena</div><div class="card-value" id="lqValorGerado">${money(0)}</div></div>
-    <div class="card"><div class="card-label">Sugestão empreiteiro (PIX)</div><div class="card-value" id="lqEmpreiteiro">${money(0)}</div></div>
-    <div class="card"><div class="card-label">Sugestão administração (PIX)</div><div class="card-value" id="lqAdm">${money(0)}</div></div>
+    <div class="card"><div class="card-label">Valor gerado na quinzena</div><div class="card-value" id="lqValorGerado">${money(0)}</div>
+      <div class="card-sub">soma dos avanços lançados acima</div></div>
+    <div class="card"><div class="card-label">Empreiteiro (PIX)</div><div class="lqEmpSlot"></div></div>
+    <div class="card"><div class="card-label">Administração (PIX)</div><div class="lqAdmSlot"></div></div>
   `;
   panel.appendChild(totals);
+
+  const montarCampo = (slot, chave, rotulo) => {
+    slot.innerHTML = '';
+    const inp = moneyInput({
+      value: manual[chave] ?? 0,
+      manual: manual[chave] !== null,
+      onSave: (v) => { manual[chave] = round2(Number(v) || 0); recalcPreview(); },
+    });
+    inp.title = `Valor sugerido pelo cálculo. Digite para definir outro — ele passa a mandar.`;
+    slot.appendChild(inp);
+    const nota = document.createElement('div');
+    nota.className = 'card-sub';
+    if (manual[chave] !== null) {
+      nota.innerHTML = `<span class="badge accent">informado</span> `;
+      const volta = document.createElement('button');
+      volta.type = 'button';
+      volta.className = 'btn small';
+      volta.textContent = 'voltar ao cálculo';
+      volta.onclick = () => { manual[chave] = null; recalcPreview(); };
+      nota.appendChild(volta);
+    } else {
+      nota.textContent = rotulo;
+    }
+    slot.appendChild(nota);
+    return inp;
+  };
 
   const obsRow = document.createElement('div');
   obsRow.className = 'form-grid';
@@ -9627,8 +9696,13 @@ function renderLancamentoQuinzenaPanel() {
     const empreiteiro = Math.max(0, valorGeradoPeriodo - gastoCartao);
     const adm = (empreiteiro + gastoCartao) * taxaAdm;
     panel.querySelector('#lqValorGerado').textContent = money(valorGeradoPeriodo);
-    panel.querySelector('#lqEmpreiteiro').textContent = money(empreiteiro);
-    panel.querySelector('#lqAdm').textContent = money(adm);
+    /* Quando o usuário digitou, o valor dele manda e o campo não é reescrito
+       pelo recálculo — senão digitar seria inútil. Sem digitação, o campo
+       segue a sugestão da fórmula. */
+    manual.empCalculado = empreiteiro;
+    manual.admCalculado = adm;
+    montarCampo(panel.querySelector('.lqEmpSlot'), 'emp', 'sugestão: ' + money(empreiteiro));
+    montarCampo(panel.querySelector('.lqAdmSlot'), 'adm', 'sugestão: ' + money(adm));
   }
   rows.forEach((r) => r.novoPercInput.addEventListener('input', recalcPreview));
   cartaoInput.addEventListener('input', recalcPreview);
@@ -10475,23 +10549,26 @@ function renderLiberacaoPorCategoria() {
        Enquanto a categoria nunca passou por uma medição, herda o avanço do
        contrato — daí o rótulo de origem ao lado. */
     const recTd = document.createElement('td');
-    recTd.appendChild(percentInput({
+    const inpRec = percentInput({
       value: c.percCaixaEfetivo,
       manual: c.origemPercCaixa === 'medicao',
       onSave: (v) => updateCategoria(c.id, { percCaixaRealizado: v }),
-    }));
-    if (c.origemPercCaixa !== 'medicao') {
-      const tag = document.createElement('span');
-      tag.className = 'badge gray';
-      tag.style.marginLeft = '4px';
-      tag.textContent = 'do contrato';
-      tag.title = 'Esta categoria ainda não passou por medição da CAIXA — enquanto isso, segue o % de avanço do contrato.';
-      recTd.appendChild(tag);
-    }
+    });
+    // A origem do percentual vira dica do campo, não etiqueta na célula: badge
+    // ao lado do número espremia as duas informações uma sobre a outra.
+    inpRec.title = c.origemPercCaixa === 'medicao'
+      ? 'Percentual reconhecido por medição da CAIXA.'
+      : 'Ainda sem medição da CAIXA — segue o % de avanço do contrato até a primeira medição.';
+    recTd.appendChild(inpRec);
     tr.appendChild(recTd);
-    /* Valor e origem em linhas separadas: lado a lado, o badge encostava no
-       número e as duas informações se sobrepunham na coluna estreita. */
-    tr.appendChild(td(`<span class="num" style="font-weight:700; white-space:nowrap">${money(c.caixaLiberadoCategoria)}</span><div class="muted cf-sub">${c.origemCaixaCategoria === 'manual' ? 'manual' : 'automático'}</div>`));
+    /* Um número por célula. Badge ao lado sobrepunha o valor; a mesma
+       informação embaixo poluía a coluna inteira. A origem vira dica ao passar
+       o mouse — quem precisa, consulta; quem não precisa, lê o número limpo. */
+    const libTd = td(`<span class="num" style="font-weight:700; white-space:nowrap">${money(c.caixaLiberadoCategoria)}</span>`);
+    libTd.title = c.origemCaixaCategoria === 'manual'
+      ? 'Valor informado à mão na coluna "Liberado manual".'
+      : 'Calculado: verba CAIXA × % reconhecido.';
+    tr.appendChild(libTd);
     const manualTd = document.createElement('td');
     const manualInput = numberInput({
       value: c.liberadoCaixaManual == null ? '' : c.liberadoCaixaManual,
