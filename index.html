@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T083937">
+<meta name="app-version" content="20260915T094751">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -5040,8 +5040,15 @@ function contaDaQuinzena(filtro) {
   const taxaAdm = Number(STATE.parametros.taxaAdministracaoPercent) || 0;
   const adm = round2((pix + cartao) * taxaAdm);
   const pixAtual = parcela ? round2(Number(parcela.totalEmpreiteiroPix) || 0) : null;
+  /* ADM: a sugestão (adm) e o que está lançado na parcela (admAtual) são
+     coisas distintas. A linha da tabela mostra o que vai ser pago — o lançado —
+     e avisa quando ele se afastou da sugestão, em vez de exibir só a fórmula e
+     esconder o número real. */
+  const admAtual = parcela ? round2(Number(parcela.totalAdmPix) || 0) : null;
   return {
-    filtro, avancos, medido, cartao, pix, adm, taxaAdm, totalTransferir: round2(pix + adm), parcela, pixAtual,
+    filtro, avancos, medido, cartao, pix, adm, admAtual, taxaAdm, totalTransferir: round2(pix + adm), parcela, pixAtual,
+    admManual: !!(parcela && parcela.overrides && parcela.overrides.totalAdmPix),
+    diferencaAdm: parcela ? round2(adm - admAtual) : null,
     diferenca: parcela ? round2(pix - pixAtual) : null,
     segue: parcelaSegueAvancos(parcela),
     vencPlanejado: dataQuinzena(filtro.mes, filtro.quinzena),
@@ -5306,14 +5313,71 @@ function renderContaQuinzenaPanel(filtro) {
         <tr class="conta-total"><td colspan="4">Total medido do empreiteiro na quinzena</td><td class="num"><strong>${money(c.medido)}</strong></td><td></td></tr>
         <tr><td colspan="4">(−) Cartão da quinzena, compras do proprietário no Detalhamento FC${c.cartao ? ` <button type="button" class="btn small filter-control" data-acao="cartao">ver compras</button>` : ''}</td><td class="num">− ${money(c.cartao)}</td><td></td></tr>
         <tr class="conta-total conta-pix"><td colspan="4">= Empreiteiro a receber (PIX líquido)</td><td class="num"><strong>${money(c.pix)}</strong></td><td>${situacao}</td></tr>
-        <tr><td colspan="4">(+) ADM RS Engenharia (${pct(c.taxaAdm)} sobre PIX + cartão)</td><td class="num">${money(c.adm)}</td><td></td></tr>
-        <tr class="conta-total"><td colspan="4">Total a transferir na quinzena (PIX + ADM)</td><td class="num"><strong>${money(c.totalTransferir)}</strong></td><td></td></tr>
+        <tr class="conta-adm"><td colspan="4">(+) ADM RS Engenharia <span class="muted">(sugestão: ${pct(c.taxaAdm)} sobre PIX + cartão = ${money(c.adm)})</span></td><td class="num admSlot"></td><td class="admSituacao"></td></tr>
+        <tr class="conta-total"><td colspan="4">Total a transferir na quinzena (PIX + ADM)</td><td class="num"><strong>${money(round2(c.pix + (c.parcela ? c.admAtual : c.adm)))}</strong></td><td></td></tr>
       </tfoot>
     </table></div>
     <div class="conta-acoes no-print"></div>`;
   const acoes = panel.querySelector('.conta-acoes');
   const btnCartao = panel.querySelector('button[data-acao="cartao"]');
   if (btnCartao) btnCartao.onclick = () => abrirComprasCartaoQuinzena(filtro);
+
+  /* Linha da ADM editável.
+     -----------------------------------------------------------------------
+     Era texto morto: mostrava só a fórmula (10% sobre PIX + cartão) e escondia
+     o valor realmente lançado na parcela. Quando a ADM paga era outra — valor
+     combinado, arredondado, adiantamento — não havia onde corrigir aqui, e a
+     conta da quinzena passava a contar uma história diferente de Contas a
+     Pagar. Agora a célula mostra o VALOR LANÇADO, aceita edição direta, e
+     avisa quando ele se afastou da sugestão, com um botão para voltar a ela. */
+  {
+    const slot = panel.querySelector('.admSlot');
+    const sit = panel.querySelector('.admSituacao');
+    if (slot) {
+      if (!c.parcela) {
+        slot.innerHTML = `<span>${money(c.adm)}</span>`;
+        if (sit) sit.innerHTML = `<span class="badge gray">sem parcela em Contas a Pagar</span>`;
+      } else if (READONLY) {
+        slot.innerHTML = `<span>${money(c.admAtual)}</span>`;
+      } else {
+        const inp = moneyInput({
+          value: c.admAtual,
+          manual: c.admManual,
+          onSave: (v) => {
+            updateParcela(c.parcela.id, { totalAdmPix: round2(Number(v) || 0) });
+            registrarAlteracao('Conta da quinzena', rotulo, 'ADM RS', money(c.admAtual), money(v));
+            toast(`ADM da quinzena ${rotulo} atualizada para ${money(v)}.`);
+          },
+        });
+        inp.title = 'Valor da ADM que vai ser pago nesta quinzena. Digite para definir outro — ele passa a mandar sobre a fórmula.';
+        slot.appendChild(inp);
+      }
+
+      if (sit && c.parcela) {
+        if (c.parcela.status === 'REALIZADO') {
+          sit.innerHTML = `<span class="badge green">parcela REALIZADO: valor pago</span>`;
+        } else if (Math.abs(c.diferencaAdm || 0) >= 0.01) {
+          sit.innerHTML = `<span class="badge red">sugestão é ${money(c.adm)}</span> `;
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'btn small primary';
+          b.textContent = 'Usar a sugestão';
+          b.title = `Lança ${money(c.adm)} como ADM desta quinzena.`;
+          b.disabled = READONLY;
+          b.onclick = () => {
+            updateParcela(c.parcela.id, { totalAdmPix: c.adm });
+            registrarAlteracao('Conta da quinzena', rotulo, 'ADM RS', money(c.admAtual), money(c.adm));
+            toast(`ADM da quinzena ${rotulo} ajustada para a sugestão: ${money(c.adm)}.`);
+          };
+          sit.appendChild(b);
+        } else if (c.admManual) {
+          sit.innerHTML = `<span class="badge accent">informado à mão</span>`;
+        } else {
+          sit.innerHTML = `<span class="badge green">segue a sugestão</span>`;
+        }
+      }
+    }
+  }
   const nota = document.createElement('div');
   nota.className = 'muted';
   if (c.parcela && c.parcela.status !== 'REALIZADO') {
