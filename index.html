@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T094751">
+<meta name="app-version" content="20260915T105556">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -5490,8 +5490,22 @@ function lancamentoQuinzena(b) {
   // quinzena, não um incremento). ADM/total a transferir/custo total são
   // recalculados ao vivo em recompute() a partir desses campos — exceto
   // quando há override manual, que é sempre preservado. Nunca funde numa
-  // parcela já REALIZADO — nesse caso cria uma nova, como antes.
+  // parcela já REALIZADO — reescrever um valor pago seria pior que duplicar.
   let parcela = STATE.parcelas.find((p) => p.vencPlanejado === vencPlanejado && p.status !== 'REALIZADO');
+
+  /* Se a quinzena já tem parcela REALIZADO, a linha abaixo vai criar uma
+     SEGUNDA parcela para o mesmo dia — e a quinzena passa a contar em dobro no
+     fluxo de caixa. Foi assim que cinco quinzenas duplicaram R$ 278 mil sem
+     ninguém perceber: a criação acontecia em silêncio. Continuar criando é o
+     comportamento certo (a parcela paga não pode ser reescrita), mas agora ela
+     nasce marcada e avisada, e o painel de duplicidade em Parâmetros mostra as
+     duas lado a lado para a escolha ser consciente. */
+  const jaRealizada = !parcela && STATE.parcelas.find((p) => p.vencPlanejado === vencPlanejado && p.status === 'REALIZADO');
+  if (jaRealizada) {
+    toast(`Atenção: ${label} já tem uma parcela REALIZADO de ${money(jaRealizada.custoTotal || 0)}. Este lançamento cria uma SEGUNDA parcela no mesmo dia — confira em Parâmetros › Parcelas duplicadas.`, true);
+    registrarAlteracao('Contas a Pagar', label, 'segunda parcela criada na mesma quinzena',
+      money(jaRealizada.custoTotal || 0), 'nova parcela');
+  }
   if (parcela) {
     parcela.overrides = parcela.overrides || {};
     /* Valor digitado é o TOTAL da quinzena, não um incremento — quem informa
@@ -15203,6 +15217,120 @@ const REFERENCIA_SETEMBRO = {
    Aqui as 20 categorias aparecem juntas, nas duas trilhas, editáveis, e a
    gravação é feita de uma vez só — com cada mudança registrada no log de
    alterações, para que nada mais suma sem deixar rastro. */
+/* Parcelas duplicadas na mesma quinzena.
+   --------------------------------------------------------------------------
+   Dia 10 e dia 25 existe UMA conta. Quando aparecem duas parcelas com o mesmo
+   vencimento, a quinzena inteira entra em dobro no fluxo de caixa — foi o que
+   aconteceu aqui: cinco quinzenas duplicadas somando R$ 278 mil a mais.
+
+   A origem: lançar avanço só funde numa parcela que ainda NÃO esteja
+   REALIZADO (uma parcela paga não pode ser reescrita — isso está certo). Só
+   que as parcelas que vieram da planilha já nascem REALIZADO, então cada
+   lançamento numa quinzena antiga criava uma gêmea em silêncio, em vez de
+   avisar. Aqui as duas ficam lado a lado para a escolha ser consciente. */
+function detectarParcelasDuplicadas() {
+  const porVenc = new Map();
+  for (const p of (STATE.parcelas || [])) {
+    const k = p.vencPlanejado || '(sem data)';
+    if (!porVenc.has(k)) porVenc.set(k, []);
+    porVenc.get(k).push(p);
+  }
+  const grupos = [];
+  for (const [venc, lista] of porVenc) {
+    if (lista.length < 2) continue;
+    grupos.push({ venc, lista: lista.slice().sort((a, b) => String(a.id).localeCompare(String(b.id))) });
+  }
+  grupos.sort((a, b) => String(a.venc).localeCompare(String(b.venc)));
+  return grupos;
+}
+
+function renderParcelasDuplicadasPanel() {
+  const grupos = detectarParcelasDuplicadas();
+  if (!grupos.length) return null;
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  const totalExcedente = round2(grupos.reduce((acc, g) => {
+    const custos = g.lista.map((p) => Number(p.custoTotal) || 0).sort((a, b) => b - a);
+    return acc + custos.slice(1).reduce((a, v) => a + v, 0);
+  }, 0));
+  panel.innerHTML = `
+    <div class="panel-header">
+      <div>
+        <h2>Parcelas duplicadas na mesma quinzena</h2>
+        <div class="muted">Cada dia 10 e dia 25 tem <strong>uma</strong> conta. Onde há duas parcelas com o mesmo vencimento, a quinzena entra em dobro no fluxo de caixa. Confira as duas e apague a que não vale — <strong>${grupos.length}</strong> quinzena(s) em duplicidade, somando <strong>${money(totalExcedente)}</strong> a mais no custo.</div>
+      </div>
+    </div>`;
+
+  for (const g of grupos) {
+    const bloco = document.createElement('div');
+    bloco.style.cssText = 'border:1px solid var(--border); border-radius:6px; padding:8px; margin-bottom:10px;';
+    bloco.innerHTML = `<div style="font-weight:600; margin-bottom:6px">Vencimento ${dateBR(g.venc)}</div>`;
+    const wrap = document.createElement('div');
+    wrap.className = 'table-scroll';
+    const t = document.createElement('table');
+    t.className = 'data';
+    t.innerHTML = `<thead><tr>
+      <th class="wrap" style="min-width:180px">Parcela</th>
+      <th style="min-width:100px">Status</th>
+      <th class="num" style="min-width:120px">Empreiteiro</th>
+      <th class="num" style="min-width:110px">ADM</th>
+      <th class="num" style="min-width:110px">Cartão</th>
+      <th class="num" style="min-width:125px">Custo total</th>
+      <th class="wrap" style="min-width:150px">Origem</th>
+      <th class="no-print"></th>
+    </tr></thead>`;
+    const tb = document.createElement('tbody');
+    for (const p of g.lista) {
+      // Parcela vinda da planilha tem id sequencial; a gerada por lançamento
+      // tem id com sufixo aleatório e traz a assinatura do avanço na obs.
+      const daPlanilha = /^parcela-\d+$/.test(String(p.id));
+      const tr = document.createElement('tr');
+      tr.appendChild(td(`<span class="wrap">${esc(p.label || '(sem rótulo)')}</span>`));
+      tr.appendChild(td(`<span class="badge ${p.status === 'REALIZADO' ? 'green' : 'gray'}">${p.status === 'REALIZADO' ? 'Realizado' : 'Planejado'}</span>`));
+      tr.appendChild(td(`<span class="num">${money(p.totalEmpreiteiroPix || 0)}</span>`));
+      tr.appendChild(td(`<span class="num">${money(p.totalAdmPix || 0)}</span>`));
+      tr.appendChild(td(`<span class="num">${money(p.gastoCartao || 0)}</span>`));
+      tr.appendChild(td(`<span class="num"><strong>${money(p.custoTotal || 0)}</strong></span>`));
+      tr.appendChild(td(`<span class="wrap muted">${daPlanilha ? 'veio da planilha' : 'gerada por lançamento de avanço'}</span>`));
+      const tdAcao = document.createElement('td');
+      tdAcao.className = 'no-print';
+      const bt = document.createElement('button');
+      bt.type = 'button';
+      bt.className = 'btn small danger';
+      bt.textContent = 'Apagar esta';
+      bt.disabled = READONLY;
+      bt.title = READONLY ? 'Entre para lançar para apagar parcelas.' : `Remove esta parcela e mantém a outra do dia ${dateBR(g.venc)}.`;
+      bt.onclick = async () => {
+        const ok = await confirmDialog(
+          `Apagar a parcela "${p.label}" de ${dateBR(g.venc)} (custo ${money(p.custoTotal || 0)})? A outra parcela desta quinzena continua.`,
+          { title: 'Apagar parcela duplicada' });
+        if (!ok) return;
+        registrarAlteracao('Contas a Pagar', p.label || dateBR(g.venc), 'parcela duplicada apagada', money(p.custoTotal || 0), null);
+        deleteParcela(p.id);
+        renderParametros();
+        toast('Parcela duplicada removida.');
+      };
+      tdAcao.appendChild(bt);
+      tr.appendChild(tdAcao);
+      tb.appendChild(tr);
+      if (p.obs) {
+        const trObs = document.createElement('tr');
+        const c = document.createElement('td');
+        c.colSpan = 8;
+        c.className = 'muted';
+        c.innerHTML = `<span class="wrap" style="font-size:11px">${esc(String(p.obs).slice(0, 320))}</span>`;
+        trObs.appendChild(c);
+        tb.appendChild(trObs);
+      }
+    }
+    t.appendChild(tb);
+    wrap.appendChild(t);
+    bloco.appendChild(wrap);
+    panel.appendChild(bloco);
+  }
+  return panel;
+}
+
 function renderAjusteEmMassa() {
   const panel = document.createElement('div');
   panel.className = 'panel';
@@ -15444,6 +15572,10 @@ function renderAuditoriaPanel() {
 function renderParametros() {
   const root = document.getElementById('tab-parametros');
   root.innerHTML = '';
+  // Duplicidade entra em cima de tudo: enquanto existir, todo número de fluxo
+  // de caixa está inflado e conferir qualquer outra coisa é perda de tempo.
+  const dup = renderParcelasDuplicadasPanel();
+  if (dup) root.appendChild(dup);
   root.appendChild(renderAjusteEmMassa());
 
   const obraPanel = document.createElement('div');
