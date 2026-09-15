@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T123808">
+<meta name="app-version" content="20260915T134600">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -3400,9 +3400,31 @@ function renderSaldoContaGrid() {
         const pciPerc = pciContratado > 0 ? Math.min(1, Math.max(0, pciLiberado / pciContratado)) : 0;
 
         const propPlanejado = Number(r.recursoProprioPlanejado) || 0;
-        const propConsumido = Number(r.totalConsumoRecursoProprio) || 0;
+        /* Duas medidas do mesmo recurso próprio, e elas se separam com o tempo.
+           -------------------------------------------------------------------
+           `totalConsumoRecursoProprio` é a LISTA DIGITADA em Parâmetros —
+           depende de alguém lembrar de lançar. A cascata da conta, por outro
+           lado, sabe exatamente quanto de próprio foi preciso: é o saldo
+           negativo. Quando a lista para de ser alimentada, o card passa a
+           mostrar um consumo menor do que o real e uma verba disponível maior
+           do que existe — que é o pior erro possível nesta tela.
+
+           Aqui o card mostra o consumo REAL (lista + o que a conta consumiu e
+           ninguém registrou) e avisa a diferença, em vez de confiar só na
+           lista. Itens lançados depois do marco são descontados para não
+           contar o mesmo dinheiro duas vezes. */
+        const registradoTotal = Number(r.totalConsumoRecursoProprio) || 0;
+        const marcoConta = r.marcoSaldoConta || '';
+        const registradoDepoisDoMarco = round2((STATE.consumosRecursoProprio || [])
+          .filter((c) => (c.data || '') >= marcoConta && c.data)
+          .reduce((a, c) => a + (Number(c.valor) || 0), 0));
+        const proprioDaConta = Number(r.proprioRealizado) || 0;
+        const naoRegistrado = round2(Math.max(0, proprioDaConta - registradoDepoisDoMarco));
+        const propConsumido = round2(registradoTotal + naoRegistrado);
         const propSaldo = round2(propPlanejado - propConsumido);
         const propPerc = propPlanejado > 0 ? Math.min(1, Math.max(0, propConsumido / propPlanejado)) : 0;
+        const ultimoRegistro = (STATE.consumosRecursoProprio || [])
+          .map((c) => c.data).filter(Boolean).sort().slice(-1)[0] || null;
 
         const barra = (perc, cor) => `<div class="teto-barra"><span style="width:${(perc * 100).toFixed(1)}%; background:${cor}"></span></div>`;
         return `<div class="saldo-tetos">
@@ -3421,6 +3443,8 @@ function renderSaldoContaGrid() {
             <div class="teto-linha"><span>Planejado</span><strong>${money(propPlanejado)}</strong></div>
             <div class="teto-linha"><span>Ainda disponível</span><strong style="color:${propSaldo > 0 ? 'var(--good)' : 'var(--danger)'}">${money(propSaldo)}</strong></div>
             <div class="teto-linha muted" style="font-size:11px"><span>${pct(propPerc)} da verba própria já usada${propSaldo < 0 ? ' — estourou o planejado' : ''}</span></div>
+            ${naoRegistrado > 0.004 ? `<div class="teto-linha" style="font-size:11px; color:var(--danger); margin-top:4px">
+              <span><strong>${money(naoRegistrado)} ainda não estão lançados</strong> em Parâmetros › Consumos de recurso próprio. A lista traz ${money(registradoTotal)}${ultimoRegistro ? ` e o último item é de ${dateBR(ultimoRegistro)}` : ''}; a conta da obra já consumiu mais que isso. O número acima já soma os dois — lance os itens que faltam para a lista bater.</span></div>` : ''}
           </div>
         </div>`;
       })()}
