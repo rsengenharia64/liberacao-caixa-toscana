@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T115144">
+<meta name="app-version" content="20260915T115314">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2960,6 +2960,13 @@ function fimDaQuinzena(p) {
   }
   return `${p.mes}-15`;
 }
+// "2026-09" → "Setembro/2026". mesParcelaLabel devolve o rótulo da PARCELA
+// ("SETEMBRO/1º PARCELA"), que não serve para nomear o mês inteiro.
+function nomeDoMes(mes) {
+  const [ano, m] = String(mes || '').split('-').map(Number);
+  if (!ano || !m || !MONTH_NAMES_PT[m - 1]) return String(mes || '');
+  return `${MONTH_NAMES_PT[m - 1]}/${ano}`;
+}
 function inicioDaQuinzena(p) {
   if (!p || !p.mes) return null;
   return Number(p.quinzena) === 2 ? `${p.mes}-16` : `${p.mes}-01`;
@@ -3102,7 +3109,7 @@ function renderSaldoContaGrid() {
           <div class="periodo-cabecalho">Resultado do período <span class="muted">— só o que cai dentro da janela: nada de antes, nada de depois</span></div>
           <div class="periodo-grid">
             ${caixa('Quinzena selecionada', `${dateBR(q.de)} a ${dateBR(q.ate)}`, q)}
-            ${caixa(`Mês de ${esc(mesParcelaLabel(`${proxima.mes}-01`) || proxima.mes)}`, `${dateBR(m.de)} a ${dateBR(m.ate)} · as duas quinzenas`, m)}
+            ${caixa(`Mês de ${esc(nomeDoMes(proxima.mes))}`, `${dateBR(m.de)} a ${dateBR(m.ate)} · as duas quinzenas`, m)}
           </div>
         </div>`;
       })()}
