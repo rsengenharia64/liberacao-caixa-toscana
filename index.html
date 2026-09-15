@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T002720">
+<meta name="app-version" content="20260915T082710">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2139,7 +2139,13 @@ window.addEventListener('beforeinstallprompt', (e) => {
 // esses arquivos, então cai no manifest em blob, que ainda dá "Adicionar à
 // tela de início" com nome e ícone certos.
 const PWA_REAL = !!document.querySelector('link[rel="manifest"][href$="manifest.webmanifest"]');
-const APP_VERSAO = '20260910T193649';
+// A versão vem SEMPRE da meta do <head>, que é o único ponto carimbado na
+// publicação. Antes existia uma constante escrita à mão aqui; ela ficou parada
+// em 10/09 enquanto a meta avançava, e o resultado era o app se anunciar como
+// "versão de 10/09" para sempre e a faixa "Atualizar agora" nunca sumir — ele
+// comparava a meta nova do servidor com a constante velha da memória. Lendo da
+// própria meta as duas não têm como divergir.
+const APP_VERSAO = (document.querySelector('meta[name="app-version"]') || {}).content || 'dev';
 
 /* Verificação de versão nova.
    --------------------------------------------------------------------------
@@ -15091,6 +15097,150 @@ function renderAjusteEmMassa() {
   return panel;
 }
 
+/* Acessos da equipe.
+   --------------------------------------------------------------------------
+   As funções adicionarAcessoEquipe/removerAcessoEquipe existiam desde que a
+   equipe passou a lançar, mas nenhuma tela chamava as duas — então nunca houve
+   um acesso cadastrado de fato. Quem tentava entrar caía na chave do
+   proprietário e batia na mesma parede: o USUÁRIO faz parte da chave, então a
+   senha certa com outro nome de usuário não entra. É esse o motivo de "ele não
+   está conseguindo".
+
+   A senha é digitada aqui, no navegador do proprietário, e vira hash antes de
+   encostar no STATE. O texto da senha não é guardado nem enviado a lugar
+   nenhum. Continua valendo o aviso do login: isto identifica quem lançou e
+   evita edição acidental — não é proteção de dado sigiloso, porque o app roda
+   inteiro no navegador. */
+function renderAcessosPanel() {
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  panel.innerHTML = `<div class="panel-header"><div><h2>Acessos da equipe</h2>
+    <div class="muted">Quem pode lançar no painel. Cada pessoa entra com <strong>o próprio usuário</strong> — é isso que faz o registro de alterações saber quem mexeu em quê. A senha vira código aqui mesmo, neste navegador, e não fica guardada em lugar nenhum.</div></div></div>`;
+
+  if (!ehDono()) {
+    const aviso = document.createElement('div');
+    aviso.className = 'muted';
+    aviso.textContent = SESSAO
+      ? 'Só a chave do proprietário cadastra e remove acessos.'
+      : 'Entre para lançar com a chave do proprietário para cadastrar acessos.';
+    panel.appendChild(aviso);
+    return panel;
+  }
+
+  const form = document.createElement('form');
+  form.className = 'form-grid';
+  form.autocomplete = 'off';
+  form.innerHTML = `
+    <label>Usuário<input name="usuario" type="text" autocomplete="off" placeholder="ex.: emanuel"></label>
+    <label>Senha<input name="senha" type="password" autocomplete="new-password"></label>
+    <label>Papel<select name="papel">
+      <option value="equipe">Equipe — lança e edita</option>
+      <option value="dono">Proprietário — lança, edita e gerencia acessos</option>
+    </select></label>`;
+  const acao = document.createElement('div');
+  acao.style.marginTop = '8px';
+  const bt = document.createElement('button');
+  bt.type = 'submit';
+  bt.className = 'btn primary';
+  bt.textContent = 'Cadastrar acesso';
+  acao.appendChild(bt);
+  form.appendChild(acao);
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const d = Object.fromEntries(new FormData(form).entries());
+    const r = await adicionarAcessoEquipe(d.usuario, d.senha, d.papel || 'equipe');
+    if (!r.ok) { toast(r.erro, true); return; }
+    toast(`Acesso de "${String(d.usuario).trim()}" cadastrado. Passe o usuário e a senha para a pessoa.`);
+    form.reset();
+    renderParametros();
+  });
+  panel.appendChild(form);
+
+  const lista = STATE.acessos || [];
+  const tabela = document.createElement('div');
+  tabela.className = 'table-scroll';
+  tabela.style.marginTop = '12px';
+  const t = document.createElement('table');
+  t.className = 'data';
+  t.innerHTML = `<thead><tr><th style="min-width:140px">Usuário</th><th style="min-width:120px">Papel</th><th style="min-width:130px">Criado em</th><th class="no-print"></th></tr></thead>`;
+  const tb = document.createElement('tbody');
+  if (!lista.length) {
+    tb.innerHTML = `<tr><td colspan="4" class="muted">Nenhum acesso de equipe cadastrado. Só a chave do proprietário entra.</td></tr>`;
+  }
+  for (const a of lista) {
+    const tr = document.createElement('tr');
+    tr.appendChild(td(esc(a.usuario)));
+    tr.appendChild(td(a.papel === 'dono' ? 'Proprietário' : 'Equipe'));
+    tr.appendChild(td(dateBR(a.criadoEm)));
+    const tdAcao = document.createElement('td');
+    tdAcao.className = 'no-print';
+    const rm = document.createElement('button');
+    rm.type = 'button';
+    rm.className = 'btn small danger';
+    rm.textContent = 'Remover';
+    rm.onclick = async () => {
+      if (await confirmDialog(`Remover o acesso de "${a.usuario}"? A pessoa deixa de conseguir lançar.`, { title: 'Remover acesso' })) {
+        removerAcessoEquipe(a.usuario);
+        renderParametros();
+      }
+    };
+    tdAcao.appendChild(rm);
+    tr.appendChild(tdAcao);
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb);
+  tabela.appendChild(t);
+  panel.appendChild(tabela);
+  return panel;
+}
+
+/* Registro de alterações: quem mudou o quê, de quanto para quanto. É a
+   contrapartida de abrir o painel para a equipe editar — a edição é livre, mas
+   fica rastreada. */
+function renderAuditoriaPanel() {
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  const regs = STATE.auditoria || [];
+  panel.innerHTML = `<div class="panel-header"><div><h2>Registro de alterações</h2>
+    <div class="muted">As últimas ${AUDITORIA_LIMITE} mudanças, com autor, campo e valores de antes e depois.</div></div></div>`;
+  if (!regs.length) {
+    const v = document.createElement('div');
+    v.className = 'muted';
+    v.textContent = 'Nenhuma alteração registrada ainda.';
+    panel.appendChild(v);
+    return panel;
+  }
+  const wrap = document.createElement('div');
+  wrap.className = 'table-scroll';
+  const t = document.createElement('table');
+  t.className = 'data';
+  t.innerHTML = `<thead><tr>
+    <th style="min-width:130px">Quando</th><th style="min-width:110px">Quem</th>
+    <th style="min-width:110px">Onde</th><th class="wrap" style="min-width:160px">Item</th>
+    <th class="wrap" style="min-width:140px">Campo</th>
+    <th class="num" style="min-width:110px">De</th><th class="num" style="min-width:110px">Para</th>
+  </tr></thead>`;
+  const tb = document.createElement('tbody');
+  const mostra = (v) => (v === null || v === undefined || v === '' ? '—' : esc(String(v)));
+  for (const r of regs.slice(0, 300)) {
+    const tr = document.createElement('tr');
+    const dt = r.em ? new Date(r.em) : null;
+    tr.appendChild(td(dt && !isNaN(dt) ? `${dateBR(r.em)} ${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}` : '—'));
+    tr.appendChild(td(mostra(r.quem)));
+    tr.appendChild(td(mostra(r.area)));
+    tr.appendChild(td(`<span class="wrap">${mostra(r.item)}</span>`));
+    tr.appendChild(td(`<span class="wrap">${mostra(r.campo)}</span>`));
+    tr.appendChild(td(`<span class="num">${mostra(r.de)}</span>`));
+    tr.appendChild(td(`<span class="num">${mostra(r.para)}</span>`));
+    tb.appendChild(tr);
+  }
+  t.appendChild(tb);
+  wrap.appendChild(t);
+  panel.appendChild(wrap);
+  return panel;
+}
+
 function renderParametros() {
   const root = document.getElementById('tab-parametros');
   root.innerHTML = '';
@@ -15233,6 +15383,10 @@ function renderParametros() {
   root.appendChild(renderConsumosRecursoProprioPanel());
 
   root.appendChild(renderRecebedoresPixPanel());
+
+  root.appendChild(renderAcessosPanel());
+
+  root.appendChild(renderAuditoriaPanel());
 
   root.appendChild(renderInstalarAppPanel());
 
