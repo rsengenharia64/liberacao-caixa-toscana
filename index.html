@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T001748">
+<meta name="app-version" content="20260915T002720">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -10535,8 +10535,8 @@ function renderLiberacaoPorCategoria() {
     <div class="table-scroll"><table class="data"><thead><tr>
       <th style="min-width:44px">Nº</th><th class="wrap" style="min-width:200px">Categoria</th>
       <th class="num" style="min-width:120px">Verba CAIXA</th>
-      <th class="num" style="min-width:108px">% projetado</th>
-      <th class="num" style="min-width:112px">% reconhecido</th>
+      <th class="num" style="min-width:118px" title="Futuro: o que esta medição pretende levar ao banco.">% projetado<br><span class="muted" style="font-weight:400">a medir</span></th>
+      <th class="num" style="min-width:122px" title="Realizado: o que o banco já reconheceu e liberou.">% reconhecido<br><span class="muted" style="font-weight:400">já liberado</span></th>
       <th class="num" style="min-width:130px">Liberado (auto)</th>
       <th class="num" style="min-width:140px">Liberado manual</th>
       <th class="num" style="min-width:120px">Saldo</th>
@@ -10581,17 +10581,24 @@ function renderLiberacaoPorCategoria() {
     /* % PROJETADO: o que se pretende medir nesta liberação. Fica guardado na
        medição, não na categoria — por isso muda quando você troca a medição no
        seletor acima. É ele que, ao virar realizado, alimenta o % reconhecido. */
+    /* PROJETADO é futuro: o que esta medição pretende levar ao banco. Fica em
+       branco enquanto nada foi projetado para a categoria — antes eu copiava
+       aqui o valor do reconhecido, e as duas colunas apareciam idênticas, o
+       que apagava justamente a diferença entre elas. Campo vazio diz a
+       verdade: nada projetado nesta medição ainda. */
     const projTd = document.createElement('td');
     if (medicao) {
       const projAtual = (medicao.avancos || {})[c.id];
+      const temProj = projAtual !== undefined;
       const inputProj = percentInput({
-        value: projAtual !== undefined ? Number(projAtual) : Number(c.percCaixaEfetivo) || 0,
-        manual: projAtual !== undefined,
+        value: temProj ? Number(projAtual) : 0,
+        manual: temProj,
         onSave: (v) => setAvancoProjetadoCaixa(medicao.id, c.id, v),
       });
+      if (!temProj) { inputProj.value = ''; inputProj.placeholder = '—'; }
       inputProj.title = medicao.status === 'PLANEJADO'
-        ? 'Percentual acumulado que esta medição pretende reconhecer nesta categoria.'
-        : 'Medição já realizada — este percentual já foi reconhecido.';
+        ? 'Futuro: percentual acumulado que esta medição pretende levar ao banco. Ao marcar a medição como REALIZADA, ele vira o reconhecido.'
+        : 'Medição já realizada — este percentual já virou reconhecido.';
       projTd.appendChild(inputProj);
     } else {
       projTd.innerHTML = '<span class="muted">sem medição</span>';

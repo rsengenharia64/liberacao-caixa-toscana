@@ -1,4 +1,4 @@
-/* Service worker do painel Liberação Caixa — versão 20260915T001748.
+/* Service worker do painel Liberação Caixa — versão 20260915T002720.
    -------------------------------------------------------------------------
    Estratégia: rede primeiro, sempre. O cache próprio existe só para abrir sem
    internet — nunca para decidir qual versão do app roda.
@@ -11,7 +11,7 @@
    instalar o service worker novo, e o novo APAGA TODOS os caches antigos —
    não só os de nome diferente. Uma publicação ruim deixa de virar pane
    permanente: basta publicar a correção. */
-const VERSAO = '20260915T001748';
+const VERSAO = '20260915T002720';
 const CACHE = 'liberacao-caixa-' + VERSAO;
 const ARQUIVOS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png', './icon-512-maskable.png'];
 
