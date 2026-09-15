@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T113943">
+<meta name="app-version" content="20260915T114625">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -2927,17 +2927,41 @@ function abrirExtratoConta() {
   }, { wide: true });
 }
 
+/* Último dia coberto por uma quinzena.
+   --------------------------------------------------------------------------
+   Quinzena tem DATA DE PAGAMENTO (dia 10 e dia 25) e tem PERÍODO. Cortar a
+   projeção na data de pagamento descarta tudo que acontece entre ela e o fim
+   do período — foi assim que a PLS de 30/09, que cai dentro da 2ª quinzena de
+   setembro, simplesmente não aparecia ao escolher "Setembro/2026 — 2ª
+   Parcela": 30/09 é maior que 25/09. Uma liberação some da projeção e o saldo
+   previsto mente sobre o que entra no período.
+
+   O período é o mês partido ao meio: 1ª quinzena vai até o dia 15, 2ª vai até
+   o último dia do mês — qualquer que seja ele, 28, 29, 30 ou 31. */
+function fimDaQuinzena(p) {
+  if (!p || !p.mes) return null;
+  const [ano, mes] = String(p.mes).split('-').map(Number);
+  if (!ano || !mes) return p.vencPlanejado || null;
+  if (Number(p.quinzena) === 2) {
+    const ultimoDia = new Date(Date.UTC(ano, mes, 0)).getUTCDate();
+    return `${p.mes}-${String(ultimoDia).padStart(2, '0')}`;
+  }
+  return `${p.mes}-15`;
+}
+
 function renderSaldoContaGrid() {
   const r = VIEW.resumo;
   const { movs, hoje, entradasReal, saidasReal, saldoHoje } = movimentosConta();
   const periodos = buildQuinzenaPeriods(VIEW.meta?.dataInicio, VIEW.meta?.previsaoTermino).filter((p) => p.vencPlanejado >= r.marcoSaldoConta);
   const proxima = FILTRO_SALDO_CONTA_ATE || proximaQuinzena(periodos, hoje);
-  const saldoProx = proxima ? saldoProjetadoEm(movs, proxima.vencPlanejado) : saldoHoje;
   /* A ponte do saldo previsto: o que já está na conta, mais o que o CAIXA
      ainda deve liberar via PLS até a quinzena escolhida, menos os custos
      previstos das quinzenas até lá. É a visão rápida que o cliente precisa —
-     principalmente o valor da liberação PLS, que é o que muda o sinal. */
-  const ateData = proxima ? proxima.vencPlanejado : hoje;
+     principalmente o valor da liberação PLS, que é o que muda o sinal.
+     O corte é o FIM do período da quinzena, não a data de pagamento — senão
+     uma liberação lançada depois do dia 25 fica invisível. */
+  const ateData = proxima ? (fimDaQuinzena(proxima) || proxima.vencPlanejado) : hoje;
+  const saldoProx = proxima ? saldoProjetadoEm(movs, ateData) : saldoHoje;
   const ate = movs.filter((m) => m.data <= ateData);
   const ponte = {
     realizadoAte: round2(ate.filter((m) => m.realizado).reduce((acc, m) => acc + (m.tipo === 'entrada' ? m.valor : -m.valor), 0)),
@@ -2983,6 +3007,7 @@ function renderSaldoContaGrid() {
       </div>
       <div class="saldo-bloco">
         <div class="card-label">Saldo previsto em <span class="saldo-prox-slot"></span> <span class="saldo-prox-info"></span></div>
+        ${proxima ? `<div class="card-sub" style="font-size:11px">conta tudo que cair até <strong>${dateBR(ateData)}</strong> — o período inteiro da quinzena, não só o dia do pagamento</div>` : ''}
         <div class="card-value" style="color:${proprioAte > 0 ? 'var(--danger)' : 'var(--good)'}">${money(saldoProx)}${proprioAte > 0 ? ' <span class="saldo-zerado-tag">conta CAIXA zerada</span>' : ''}</div>
         <div class="saldo-ponte">
           <div><span>Saldo realizado</span><strong>${money(ponte.realizadoAte)}</strong></div>
@@ -3062,7 +3087,7 @@ function renderSaldoContaGrid() {
   };
   panel.querySelector('.saldo-prox-slot').appendChild(sel);
   panel.querySelector('.saldo-prox-info').appendChild(makeInfoHost(
-    'Selecione o período: o sistema calcula o saldo previsto somando ao saldo realizado a liberação do CAIXA prevista via PLS até essa quinzena e descontando os custos previstos das quinzenas até lá. A liberação prevista vem das medições com status PLANEJADO na aba Liberação PCI; os custos, das quinzenas PLANEJADAS de Contas a Pagar.',
+    'Selecione o período: o sistema calcula o saldo previsto somando ao saldo realizado a liberação do CAIXA prevista via PLS até essa quinzena e descontando os custos previstos das quinzenas até lá. A liberação prevista vem das medições com status PLANEJADO na aba Liberação PCI; os custos, das quinzenas PLANEJADAS de Contas a Pagar. O corte é o FIM do período da quinzena — 1ª vai até o dia 15, 2ª até o último dia do mês —, então uma medição lançada para o dia 30 entra na 2ª quinzena daquele mês, e não fica de fora por ser depois do dia 25.',
   ));
 
   panel.querySelectorAll('[data-acao="extrato-conta"]').forEach((b) => { b.onclick = abrirExtratoConta; });
