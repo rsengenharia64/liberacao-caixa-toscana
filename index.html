@@ -1344,11 +1344,31 @@ function computeParcela(parcela) {
   const mesReferencia = monthKeyFromDateStr(dataOcorrencia);
   const quinzena = quinzenaFromDateStr(dataOcorrencia);
 
+  const totalATransferir = overrides.totalATransferir ? Number(parcela.totalATransferir) : autoTotalATransferir;
+  const custoTotal = overrides.custoTotal ? Number(parcela.custoTotal) : autoCustoTotal;
+
+  /* Previsto × realizado lado a lado. O previsto é a foto congelada do
+     planejamento (ver congelarPrevistoParcelas) e não muda quando o pagamento
+     é lançado; o desvio é o que de fato interessa acompanhar quinzena a
+     quinzena — positivo significa que saiu mais do que estava planejado. */
+  const prev = parcela.previsto || null;
+  const dv = (atual, campo) => (prev ? round2((Number(atual) || 0) - (Number(prev[campo]) || 0)) : null);
+  const desvio = prev ? {
+    totalEmpreiteiroPix: dv(parcela.totalEmpreiteiroPix, 'totalEmpreiteiroPix'),
+    totalAdmPix: dv(parcela.totalAdmPix, 'totalAdmPix'),
+    gastoCartao: dv(parcela.gastoCartao, 'gastoCartao'),
+    parcelaEvolucaoCaixa: dv(parcela.parcelaEvolucaoCaixa, 'parcelaEvolucaoCaixa'),
+    totalATransferir: dv(totalATransferir, 'totalATransferir'),
+    custoTotal: dv(custoTotal, 'custoTotal'),
+  } : null;
+
   return {
     ...parcela,
-    totalATransferir: overrides.totalATransferir ? Number(parcela.totalATransferir) : autoTotalATransferir,
-    custoTotal: overrides.custoTotal ? Number(parcela.custoTotal) : autoCustoTotal,
+    totalATransferir,
+    custoTotal,
     autoTotalATransferir, autoCustoTotal,
+    previsto: prev,
+    desvio,
     mesReferencia,
     quinzena,
     mesReferenciaLabel: mesReferencia ? monthQuinzenaLabel(mesReferencia, quinzena || 1) : null,
@@ -14806,11 +14826,51 @@ restoreViewState();
 prepararInstalacaoApp();
 // Toda carga de estado (semente, rascunho local, nuvem) passa pelas mesmas
 // normalizações e migrações, para que o cálculo não dependa da origem.
+/* Linha de base do PLANEJADO de cada quinzena.
+   -------------------------------------------------------------------------
+   O pagamento sai todo dia 10 e todo dia 25. O que estava previsto é lançado
+   como realizado quando o dinheiro sai — mas até aqui a parcela tinha UM
+   conjunto de valores e UM status, então o realizado escrevia por cima do
+   previsto e a referência desaparecia. Foi assim que a 1ª quinzena de setembro
+   perdeu empreiteiro e administração: soltou-se o travamento manual, a parcela
+   voltou a ser recalculada pelos avanços, e o número planejado não existia em
+   lugar nenhum para ser recuperado.
+
+   Agora cada parcela congela seu previsto UMA vez e nunca mais o perde. O
+   realizado passa a ser lançado por cima, e previsto × realizado × desvio
+   ficam lado a lado. Quando a semente original ainda tem a parcela, o previsto
+   vem dela — é o planejamento antes de qualquer sobrescrita. */
+function congelarPrevistoParcelas() {
+  const semente = new Map();
+  for (const p of ((typeof ORIGINAL_SEED !== 'undefined' && ORIGINAL_SEED.parcelas) || [])) semente.set(p.id, p);
+
+  for (const p of (STATE.parcelas || [])) {
+    if (p.previsto && p.previsto.congeladoEm) continue;
+    const base = semente.get(p.id) || p;
+    const emp = Number(base.totalEmpreiteiroPix) || 0;
+    const adm = Number(base.totalAdmPix) || 0;
+    const cartao = Number(base.gastoCartao) || 0;
+    const evol = Number(base.parcelaEvolucaoCaixa) || 0;
+    const transf = round2(emp + adm);
+    p.previsto = {
+      totalEmpreiteiroPix: emp,
+      totalAdmPix: adm,
+      gastoCartao: cartao,
+      parcelaEvolucaoCaixa: evol,
+      totalATransferir: transf,
+      custoTotal: round2(transf + cartao + evol),
+      congeladoEm: new Date().toISOString(),
+      origem: semente.has(p.id) ? 'semente' : 'estado-atual',
+    };
+  }
+}
+
 function normalizarEstadoCarregado() {
   normalizarParametros();
   migrarMesFaturaDaPlanilha();
   migrarItensCartaoSemVinculo();
   migrarBaseAdm();
+  congelarPrevistoParcelas();
 }
 normalizarEstadoCarregado();
 SESSAO = lerSessao();
