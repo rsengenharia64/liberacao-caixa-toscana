@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260914T234935">
+<meta name="app-version" content="20260915T000531">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -14899,9 +14899,142 @@ function renderRegrasCalculoPanel() {
   return panel;
 }
 
+/* Referência da planilha de planejamento (Fluxo de Caixa), somando as colunas
+   de 11/05 a 25/09/2026. Linha NEWTON = consumido pelo empreiteiro sobre o
+   contrato; linha CAIXA = liberado via PCI sobre a verba. As duas divergem de
+   propósito: é gestão de distribuição, não erro. */
+const REFERENCIA_SETEMBRO = {
+  1: { emp: 1, caixa: 1 },
+  2: { emp: 1, caixa: 1 },
+  3: { emp: 1, caixa: 0.85 },
+  4: { emp: 0.8938, caixa: 0.80 },
+  5: { emp: 0, caixa: 0 },
+  6: { emp: 0, caixa: 0 },
+  7: { emp: 0.30, caixa: 0 },
+  8: { emp: 0.50, caixa: 0.40 },
+  9: { emp: 0.50, caixa: 0.20 },
+  10: { emp: 0, caixa: 0 },
+  11: { emp: 0, caixa: 0 },
+  12: { emp: 0, caixa: 0 },
+  13: { emp: 0.10, caixa: 0.1001 },
+  14: { emp: 0, caixa: 0 },
+  15: { emp: 0, caixa: 0 },
+  16: { emp: 0.20, caixa: 0.20 },
+  17: { emp: 0, caixa: 0 },
+  18: { emp: 0, caixa: 0 },
+  19: { emp: 0, caixa: 0 },
+  20: { emp: 0.7261, caixa: 0.83 },
+};
+
+/* Ajuste em massa dos percentuais.
+   -------------------------------------------------------------------------
+   Faltava um caminho de correção. Quando um percentual ficava errado, a única
+   ferramenta era "usar % dos itens", que limpa o override e joga a categoria
+   no cálculo dos itens do Detalhamento FC — que hoje dá 100% em quase tudo,
+   porque os itens foram lançados com valor de contrato, não de pagamento. Sem
+   saída, alguém apagou lançamentos para destravar, e dado sumiu.
+
+   Aqui as 20 categorias aparecem juntas, nas duas trilhas, editáveis, e a
+   gravação é feita de uma vez só — com cada mudança registrada no log de
+   alterações, para que nada mais suma sem deixar rastro. */
+function renderAjusteEmMassa() {
+  const panel = document.createElement('div');
+  panel.className = 'panel';
+  panel.innerHTML = `
+    <div class="panel-header">
+      <div>
+        <h2>Ajuste em massa dos percentuais</h2>
+        <div class="muted">As duas trilhas lado a lado: <strong>% avanço</strong> mede o contrato do empreiteiro, <strong>% CAIXA</strong> mede a verba do banco. Elas divergem de propósito — é a distribuição entre o que foi executado e o que foi medido pelo banco. Revise e aplique tudo de uma vez.</div>
+      </div>
+      <div class="painel-acoes">
+        <button type="button" class="btn small filter-control" data-acao="referencia">Carregar valores da planilha (até 25/09)</button>
+      </div>
+    </div>
+    <div class="table-scroll"><table class="data"><thead><tr>
+      <th style="min-width:44px">Nº</th><th class="wrap" style="min-width:220px">Categoria</th>
+      <th class="num" style="min-width:120px">% avanço</th>
+      <th class="num" style="min-width:120px">% CAIXA</th>
+    </tr></thead><tbody></tbody></table></div>
+  `;
+
+  const tbody = panel.querySelector('tbody');
+  const campos = [];
+  for (const c of VIEW.categorias) {
+    const tr = document.createElement('tr');
+    tr.appendChild(td(`${c.numero}`));
+    tr.appendChild(td(`<span class="wrap">${esc(c.nome)}</span>`));
+    const ref = { id: c.id, numero: c.numero, emp: Number(c.percAvancoEfetivo) || 0, caixa: Number(c.percCaixaEfetivo) || 0 };
+    const tdEmp = document.createElement('td');
+    const inpEmp = percentInput({ value: ref.emp, onSave: (v) => { ref.emp = v; } });
+    tdEmp.appendChild(inpEmp); tr.appendChild(tdEmp);
+    const tdCx = document.createElement('td');
+    const inpCx = percentInput({ value: ref.caixa, onSave: (v) => { ref.caixa = v; } });
+    tdCx.appendChild(inpCx); tr.appendChild(tdCx);
+    ref.inpEmp = inpEmp; ref.inpCx = inpCx;
+    campos.push(ref);
+    tbody.appendChild(tr);
+  }
+
+  panel.querySelector('[data-acao="referencia"]').onclick = () => {
+    let n = 0;
+    for (const f of campos) {
+      const r = REFERENCIA_SETEMBRO[f.numero];
+      if (!r) continue;
+      f.emp = r.emp; f.caixa = r.caixa;
+      f.inpEmp.value = pct(r.emp);
+      f.inpCx.value = pct(r.caixa);
+      n += 1;
+    }
+    toast(`${n} categorias preenchidas com a planilha. Confira e clique em Aplicar.`);
+  };
+
+  const acoes = document.createElement('div');
+  acoes.style.cssText = 'display:flex; gap:8px; justify-content:flex-end; margin-top:10px;';
+  const btn = document.createElement('button');
+  btn.className = 'btn primary';
+  btn.textContent = 'Aplicar a todas as categorias';
+  btn.onclick = async () => {
+    if (!(await confirmDialog('Aplicar os percentuais das duas trilhas em todas as categorias?', { title: 'Ajuste em massa', okLabel: 'Aplicar', danger: false }))) return;
+    let mudou = 0;
+    for (const f of campos) {
+      const cat = STATE.categorias.find((c) => c.id === f.id);
+      if (!cat) continue;
+      const antesEmp = Number(computeCategoria(cat).percAvancoEfetivo) || 0;
+      const antesCx = Number(computeCategoria(cat).percCaixaEfetivo) || 0;
+      if (Math.abs(antesEmp - f.emp) > 0.00005) {
+        registrarAlteracao('Ajuste em massa', `${cat.numero} · ${cat.nome}`, '% avanço', antesEmp, f.emp);
+        cat.percAvancoManual = f.emp;
+        cat.dataUltimoAvanco = new Date().toISOString().slice(0, 10);
+        mudou += 1;
+      }
+      if (Math.abs(antesCx - f.caixa) > 0.00005) {
+        registrarAlteracao('Ajuste em massa', `${cat.numero} · ${cat.nome}`, '% CAIXA', antesCx, f.caixa);
+        cat.percCaixaRealizado = f.caixa;
+        mudou += 1;
+      }
+    }
+    afterMutation();
+    renderAll();
+    toast(mudou ? `${mudou} percentuais atualizados e registrados.` : 'Nada mudou — os valores já estavam assim.', 'ok');
+  };
+  acoes.appendChild(btn);
+  panel.appendChild(acoes);
+
+  if (READONLY) {
+    panel.querySelectorAll('input, button').forEach((el) => { if (!el.classList.contains('filter-control')) el.disabled = true; });
+    const aviso = document.createElement('div');
+    aviso.className = 'muted';
+    aviso.style.cssText = 'margin-top:8px; padding:6px 10px; border-left:3px solid var(--warn); background:rgba(200,150,40,.08);';
+    aviso.innerHTML = '<strong>Somente leitura.</strong> Entre com a sessão de lançamento para aplicar ajustes.';
+    panel.appendChild(aviso);
+  }
+  return panel;
+}
+
 function renderParametros() {
   const root = document.getElementById('tab-parametros');
   root.innerHTML = '';
+  root.appendChild(renderAjusteEmMassa());
 
   const obraPanel = document.createElement('div');
   obraPanel.className = 'panel';
