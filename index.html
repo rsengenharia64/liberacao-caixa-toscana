@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260915T151025">
+<meta name="app-version" content="20260922T150943">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -391,6 +391,9 @@
   .mk-val { fill: var(--ink); font-size: 11px; font-weight: 700; }
   .mk-val-forte { fill: var(--accent-ink); font-size: 12px; font-weight: 800; }
   .mk-rot { fill: var(--muted); font-size: 10.5px; }
+  /* Segunda linha sob o rótulo da barra (ex.: metragem média do lote): menor
+     e mais apagada, para não competir com o nome do condomínio. */
+  .mk-rot.mk-rot-sub { font-size: 9.5px; opacity: .78; font-family: "IBM Plex Mono", monospace; }
   .mk-line { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
   .mk-line-0 { stroke: var(--accent); } .mk-line-1 { stroke: var(--good); } .mk-line-2 { stroke: var(--ink-soft); }
   .mk-dot { stroke: var(--surface); stroke-width: 1.5; }
@@ -1135,6 +1138,36 @@
   /* Celular estreito: uma coluna de cards, para o valor nunca truncar. */
 
 
+  /* ---------- Capa de acesso rápido (aba Início) ---------- */
+  .capa-hero { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 18px; }
+  .capa-kicker { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+  .capa-titulo { margin: 4px 0 0; font-size: clamp(20px, 3.4vw, 30px); line-height: 1.15; letter-spacing: -.01em; }
+  .capa-sub { margin-top: 6px; color: var(--muted); font-size: 13px; }
+  .capa-numeros { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; border-top: 1px solid var(--border); padding-top: 16px; }
+  .capa-num { display: flex; flex-direction: column; gap: 2px; }
+  .capa-num-rot { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+  .capa-num-val { font-family: "IBM Plex Mono", monospace; font-size: clamp(17px, 2.2vw, 22px); font-weight: 600; letter-spacing: -.01em; }
+  .capa-num-sub { font-size: 11.5px; color: var(--muted); }
+  .capa-grupo { display: flex; flex-direction: column; gap: 10px; }
+  .capa-grupo-cab { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .capa-grupo-cab h2 { margin: 0; font-size: 14px; letter-spacing: -.01em; }
+  .capa-grupo-cab .muted { font-size: 12px; }
+  .capa-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+  .capa-card { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; text-align: left; width: 100%;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 15px; cursor: pointer;
+    font: inherit; color: var(--ink); transition: border-color .12s ease, transform .12s ease, box-shadow .12s ease; }
+  .capa-card:hover, .capa-card:focus-visible { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(15, 33, 55, .08); outline: none; }
+  .capa-card-nome { font-weight: 650; font-size: 14px; letter-spacing: -.01em; }
+  .capa-card-desc { font-size: 12.2px; color: var(--muted); line-height: 1.45; }
+  .capa-card-num { margin-top: 3px; font-family: "IBM Plex Mono", monospace; font-size: 11.5px; font-weight: 600;
+    color: var(--accent-ink); background: var(--surface-2); border-radius: 999px; padding: 2px 9px; }
+  .capa-rodape { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 14px; }
+  .capa-rodape .muted { font-size: 12px; }
+  @media (max-width: 640px) {
+    .capa-hero { padding: 16px; }
+    .capa-grade { grid-template-columns: 1fr; }
+  }
+
   /* Toque: alvos maiores nos controles de linha das tabelas. */
   @media (pointer: coarse) {
     button.icon-btn { padding: 6px 10px; font-size: 15px; }
@@ -1153,7 +1186,8 @@
     <div class="titleblock-acoes"><span class="status-chip saved" id="statusChip"><span class="dot"></span><span id="statusChipText">Sincronizado</span></span><button type="button" class="btn-sessao" id="btnSessao">Entrar para lançar</button></div>
   </div>
   <nav class="tabs" id="tabs">
-    <button class="tab-btn active" data-tab="painel">Dashboard Executivo</button>
+    <button class="tab-btn active" data-tab="capa">Início</button>
+    <button class="tab-btn" data-tab="painel">Dashboard Executivo</button>
     <button class="tab-btn" data-tab="dashboard">Demonstrativo Financeiro</button>
     <button class="tab-btn" data-tab="avancos">Lançar Avanços</button>
     <button class="tab-btn" data-tab="cronograma">Cronograma de Obra</button>
@@ -1173,7 +1207,8 @@
 
 <main id="app">
   <div class="modo-banner" id="modoBanner" hidden=""></div>
-  <section id="tab-painel" class="tab-panel"></section>
+  <section id="tab-capa" class="tab-panel"></section>
+  <section id="tab-painel" class="tab-panel" hidden=""></section>
   <section id="tab-dashboard" class="tab-panel" hidden=""></section>
   <section id="tab-avancos" class="tab-panel" hidden=""></section>
   <section id="tab-cronograma" class="tab-panel" hidden=""></section>
@@ -2347,7 +2382,28 @@ async function baixarIconeApp() {
    Estado de visualização, persistência (self-publish) e utilidades
    ========================================================================== */
 let VIEW = recompute(STATE);
-let ACTIVE_TAB = 'painel';
+// O app abre na capa (aba "Início"), não numa tela cheia de número: a capa é
+// um índice com um cartão por aba, para escolher para onde ir. A última aba
+// aberta ainda volta ao recarregar dentro da mesma sessão do navegador
+// (lc_viewState), o que evita perder o lugar quando o app se atualiza sozinho.
+let ACTIVE_TAB = 'capa';
+
+/* Ocultar o nome do cliente.
+   -------------------------------------------------------------------------
+   Duas camadas, de propósito. `parametros.ocultarCliente` é o padrão do
+   projeto, gravado na nuvem e valendo para todo mundo que abrir o app, mas
+   só quem tem sessão de lançamento consegue mudar. `lc_ocultarCliente` no
+   localStorage é a escolha DESTE aparelho, que vence o padrão e funciona sem
+   senha: serve para ligar a discrição na hora de projetar a tela numa
+   reunião, sem alterar nada para os outros usuários.
+   A capa nunca usa o nome do cliente, esteja o interruptor ligado ou não. */
+const CHAVE_OCULTAR_CLIENTE = 'lc_ocultarCliente';
+let OCULTAR_CLIENTE_LOCAL = (() => {
+  try {
+    const v = localStorage.getItem(CHAVE_OCULTAR_CLIENTE);
+    return v === null ? null : v === '1';
+  } catch (e) { return null; }
+})();
 let PAINEL_CATEGORIA_SELECIONADA = null;
 const OPEN_CATEGORIES = new Set();
 // Filtro de quinzena selecionado em cada aba (persiste entre re-renders,
@@ -6207,18 +6263,73 @@ function setupTabs() {
     ACTIVE_TAB = btn.dataset.tab;
     document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b === btn));
     document.querySelectorAll('.tab-panel').forEach((p) => { p.hidden = p.id !== `tab-${ACTIVE_TAB}`; });
+    // Entrar ou sair da capa muda o que o cabeçalho mostra (ver atualizarCabecalho).
+    atualizarCabecalho();
     // A aba que acabou de aparecer só agora tem largura medível — é aqui que
     // dá para calcular as colunas dos cards dela.
     requestAnimationFrame(ajustarGrids);
   });
 }
 
-function renderAll() {
-  document.getElementById('obraNome').textContent = VIEW.meta?.obra || 'Obra';
+/* Nome da obra e do cliente — ponto único de decisão.
+   -------------------------------------------------------------------------
+   Todo lugar que escreve o nome da obra (cabeçalho, relatórios, PDF, Excel,
+   Controle Mensal) passa por `nomeObra()`; o nome do proprietário passa por
+   `nomeProprietario()`. Assim ligar "ocultar nome do cliente" some com o
+   nome em todas as saídas de uma vez, em vez de depender de lembrar de cada
+   tela. Note que `clienteControleKey()` NÃO usa isto: ela é a chave de
+   gravação do Controle Mensal e mudaria de endereço os dados já salvos. */
+function metaObra() { return (typeof VIEW !== 'undefined' && VIEW.meta) || STATE.meta || {}; }
+
+function clienteOculto() {
+  if (OCULTAR_CLIENTE_LOCAL !== null) return OCULTAR_CLIENTE_LOCAL;
+  const p = (typeof VIEW !== 'undefined' && VIEW.parametros) || STATE.parametros || {};
+  return !!p.ocultarCliente;
+}
+
+// Nome neutro da obra: o que o usuário escrever em Parâmetros ("Nome público
+// da obra"). Sem isso, corta o trecho antes do travessão do nome completo —
+// em "Casa Newton — Gran Park Toscana" sobra o condomínio, que é o que
+// identifica a obra sem identificar a pessoa.
+function nomeObraPublico() {
+  const m = metaObra();
+  const escolhido = String(m.obraPublica || '').trim();
+  if (escolhido) return escolhido;
+  const completo = String(m.obra || '').trim();
+  const partes = completo.split(/\s+[—–-]\s+/);
+  const lugar = partes.length > 1 ? partes[partes.length - 1].trim() : '';
+  return lugar ? `Obra residencial, ${lugar}` : 'Obra residencial';
+}
+
+function nomeObra() { return clienteOculto() ? nomeObraPublico() : (metaObra().obra || 'Obra'); }
+function nomeProprietario() { return clienteOculto() ? '' : (metaObra().proprietario || ''); }
+
+function definirOcultarCliente(on, { gravarNoProjeto = false } = {}) {
+  OCULTAR_CLIENTE_LOCAL = !!on;
+  try { localStorage.setItem(CHAVE_OCULTAR_CLIENTE, on ? '1' : '0'); } catch (e) { /* navegador sem storage */ }
+  if (gravarNoProjeto && !READONLY) updateParametros({ ocultarCliente: !!on });
+  else renderAll();
+}
+
+/* Cabeçalho do app.
+   -------------------------------------------------------------------------
+   Na aba Início o cabeçalho usa SEMPRE o nome público e some com a linha do
+   proprietário, mesmo com o interruptor de discrição desligado: a capa é a
+   tela que fica aberta quando o app é projetado numa reunião ou mostrado no
+   celular para alguém, e não adiantaria limpar a capa deixando o nome logo
+   acima dela. Nas outras abas o cabeçalho segue o interruptor.
+   Chamada tanto pelo renderAll quanto pela troca de aba, que não redesenha
+   o resto da tela. */
+function atualizarCabecalho() {
+  const naCapa = ACTIVE_TAB === 'capa';
+  const esconder = naCapa || clienteOculto();
+  const nomeEl = document.getElementById('obraNome');
+  nomeEl.textContent = esconder ? nomeObraPublico() : (metaObra().obra || 'Obra');
   const metaEl = document.getElementById('obraMeta');
+  const proprietario = esconder ? '' : (metaObra().proprietario || '');
   metaEl.innerHTML = [
     VIEW.meta?.endereco ? `<span>${esc(VIEW.meta.endereco)}</span>` : '',
-    VIEW.meta?.proprietario ? `<span><strong>Proprietário:</strong> ${esc(VIEW.meta.proprietario)}</span>` : '',
+    proprietario ? `<span><strong>Proprietário:</strong> ${esc(proprietario)}</span>` : '',
     VIEW.meta?.incorporador ? `<span><strong>Incorporador:</strong> ${esc(VIEW.meta.incorporador)}</span>` : '',
     VIEW.meta?.responsavelTecnico ? `<span><strong>Resp. técnico:</strong> ${esc(VIEW.meta.responsavelTecnico)}</span>` : '',
     VIEW.meta?.areaM2 ? `<span><strong>Área:</strong> ${VIEW.meta.areaM2} m²</span>` : '',
@@ -6226,15 +6337,18 @@ function renderAll() {
 
   // A mesma ficha da obra fica disponível pelo "i" ao lado do nome — é ela
   // que aparece no celular, onde a linha de meta some para poupar tela.
-  const nomeEl = document.getElementById('obraNome');
   nomeEl.querySelectorAll('.info-host').forEach((h) => h.remove());
   if (metaEl.innerHTML) {
     nomeEl.appendChild(makeInfoHost(null, `<strong>Ficha da obra</strong><br><br>${metaEl.innerHTML.replace(/<\/span>/g, '</span><br>')}`));
   }
+}
 
+function renderAll() {
+  atualizarCabecalho();
   document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === ACTIVE_TAB));
   document.querySelectorAll('.tab-panel').forEach((p) => { p.hidden = p.id !== `tab-${ACTIVE_TAB}`; });
 
+  renderCapa();
   renderPainel();
   renderDashboard();
   renderAvancos();
@@ -7124,7 +7238,7 @@ function abrirMovimentoDinheiro() {
       body.appendChild(raiz);
       const cab = document.createElement('div');
       cab.className = 'rel-cabecalho';
-      cab.innerHTML = `<div><div class="rel-obra">${esc(VIEW.meta?.obra || 'Obra')}</div>
+      cab.innerHTML = `<div><div class="rel-obra">${esc(nomeObra())}</div>
         <div class="muted">Gasto total da obra separado por conta contábil: o que passou pela conta da obra (CAIXA / banco) e o que saiu do bolso do proprietário (recurso próprio), cada conta com suas entradas e saídas. Lê as mesmas telas que alimentam o app (Liberação PCI, Contas a Pagar, Detalhamento FC, Parâmetros) e recalcula a cada lançamento.</div>
         ${modoMes ? `<div class="mov-modo-mes">Conta do período: <strong>${esc(nomePeriodo())}</strong>. Mostra o que já aconteceu no período e a <strong>provisão</strong> (despesas planejadas: empreiteiro, administração, fatura do cartão, evolução CAIXA), para a conta fechar.</div>` : ''}
         <div class="muted rel-periodo">Posição em ${dateBR(new Date().toISOString().slice(0, 10))}${m.dataPrimeiraLib ? ` · primeira liberação CAIXA em ${dateBR(m.dataPrimeiraLib)}: o que foi pago antes é recurso próprio, o que veio depois saiu da conta da obra` : ''}</div>
@@ -9000,6 +9114,177 @@ function renderAvisoRascunho() {
   return wrap;
 }
 
+/* ==========================================================================
+   TAB — Início (capa de acesso rápido)
+   ==========================================================================
+   Antes o app abria direto no Dashboard Executivo: quinze abas na barra e uma
+   tela cheia de número antes de o usuário decidir o que queria ver. A capa é
+   um índice: quatro números de cabeceira e um cartão por aba, agrupados pelo
+   que a pessoa vai FAZER (acompanhar, lançar, documentar, conferir), com uma
+   linha dizendo o que tem lá dentro.
+
+   A capa nunca escreve o nome do cliente, com ou sem o interruptor de
+   discrição ligado — ela é a tela que fica aberta quando se projeta o app
+   numa reunião ou se mostra o celular para alguém. */
+const CAPA_GRUPOS = [
+  {
+    titulo: 'Acompanhar a obra',
+    nota: 'Onde a obra está hoje, em físico e em dinheiro.',
+    itens: [
+      { tab: 'painel', nome: 'Dashboard Executivo', desc: 'Custo total, crédito CAIXA, saldo em conta e avanço, numa tela só.' },
+      { tab: 'dashboard', nome: 'Demonstrativo Financeiro', desc: 'Contas a pagar quinzena a quinzena: PIX do empreiteiro, ADM e cartão.' },
+      { tab: 'cronograma', nome: 'Cronograma de Obra', desc: 'Previsto contra realizado por categoria, com a linha do tempo da obra.' },
+      { tab: 'fluxo', nome: 'Fluxo de Caixa', desc: 'Entradas e saídas mês a mês e o extrato por conta contábil.' },
+    ],
+  },
+  {
+    titulo: 'Lançar e liberar',
+    nota: 'O que muda o número: medição, custo e liberação do banco.',
+    itens: [
+      { tab: 'avancos', nome: 'Lançar Avanços', desc: 'Medição da quinzena e correção do % acumulado de cada categoria.' },
+      { tab: 'pci', nome: 'Liberação PCI', desc: 'Medições do CAIXA, verba por categoria e quanto ainda há para liberar.' },
+      { tab: 'detalhamento', nome: 'Detalhamento FC', desc: 'Itens de cada categoria: material, mão de obra e compras no cartão.' },
+      { tab: 'controle-caixa', nome: 'Controle Mensal CAIXA', desc: 'Área do cliente: conferência mês a mês, aberta sem senha.' },
+    ],
+  },
+  {
+    titulo: 'Documentar',
+    nota: 'O lastro de cada lançamento e o que sai para fora do app.',
+    itens: [
+      { tab: 'comprovantes', nome: 'Comprovantes', desc: 'Notas e recibos por disciplina, cruzados com o que está lançado.' },
+      { tab: 'rdo', nome: 'RDO', desc: 'Relatórios diários de obra, organizados por ano e mês.' },
+      { tab: 'relatorios', nome: 'Relatórios', desc: 'Exportação em PDF e Excel, com filtro de período.' },
+    ],
+  },
+  {
+    titulo: 'Conferir e decidir',
+    nota: 'Onde checar se o número fecha e para onde a operação vai.',
+    itens: [
+      { tab: 'analise', nome: 'Análise', desc: 'Apontamentos automáticos e memorial de cálculo dos totais.' },
+      { tab: 'rastreabilidade', nome: 'Rastreabilidade', desc: 'De onde vem cada número do app, tela por tela.' },
+      { tab: 'mercado', nome: 'Estudo de Mercado', desc: 'Preço de casas e lotes na região e o VGV desta obra.' },
+      { tab: 'parametros', nome: 'Parâmetros', desc: 'Taxas, regras de cálculo e dados cadastrais da obra.' },
+    ],
+  },
+];
+
+function capaNumeroDaAba(tab, r) {
+  if (tab === 'painel') return `${pct(r.percObraGeral || 0)} executado`;
+  if (tab === 'cronograma') return `${pct(r.percPrevistoGeral || 0)} previsto`;
+  if (tab === 'pci') {
+    const c = typeof medicaoCalculadaPorCategoria === 'function' ? medicaoCalculadaPorCategoria() : null;
+    if (c && c.aLancar > 0) return `${money(c.aLancar)} a medir`;
+    return `${money(r.caixaLiberadaAcumulada || 0)} liberado`;
+  }
+  if (tab === 'fluxo') return `${money(capaVerbaDisponivel())} disponível`;
+  if (tab === 'analise') {
+    try {
+      const abertos = gerarApontamentos().filter((a) => !analiseVerificados()[a.id]).length;
+      return abertos ? `${abertos} a verificar` : 'tudo verificado';
+    } catch (e) { return ''; }
+  }
+  return '';
+}
+
+// Mesmo número do card "Custo total realizado" do Dashboard Executivo
+// (movimentoDinheiro().custoTotal = saídas brutas menos estornos). Vai por uma
+// função para a capa nunca divergir daquela tela.
+// "Verba total disponível" do Dashboard Executivo: PCI ainda a liberar mais o
+// saldo de recurso próprio. Substituiu "saldo em conta" na capa porque, desde
+// a revisão da cascata do extrato, `saldoContaRealizado` deixou de ser o
+// número que o painel mostra (hoje vem zerado no estado real).
+function capaVerbaDisponivel() {
+  const r = VIEW.resumo || {};
+  return round2(Number(r.verbaDisponivelFutura) || 0);
+}
+
+function capaCustoTotal() {
+  try { return Number(movimentoDinheiro().custoTotal) || 0; } catch (e) { return 0; }
+}
+
+function renderCapa() {
+  const root = document.getElementById('tab-capa');
+  if (!root) return;
+  root.innerHTML = '';
+  const r = VIEW.resumo || {};
+
+  const hero = document.createElement('section');
+  hero.className = 'capa-hero';
+  const m = VIEW.meta || {};
+  hero.innerHTML = `
+    <div class="capa-hero-topo">
+      <div>
+        <div class="capa-kicker">Painel de gestão da obra</div>
+        <h1 class="capa-titulo">${esc(nomeObraPublico())}</h1>
+        <div class="capa-sub">${[
+    m.areaM2 ? `${m.areaM2} m² de área construída` : '',
+    m.dataInicio ? `início em ${dateBR(m.dataInicio)}` : '',
+    m.previsaoTermino ? `término previsto ${dateBR(m.previsaoTermino)}` : '',
+  ].filter(Boolean).map(esc).join(' · ')}</div>
+      </div>
+    </div>
+    <div class="capa-numeros">
+      <div class="capa-num"><span class="capa-num-rot">Avanço físico</span><span class="capa-num-val">${pct(r.percObraGeral || 0)}</span><span class="capa-num-sub">previsto ${pct(r.percPrevistoGeral || 0)}</span></div>
+      <div class="capa-num"><span class="capa-num-rot">Custo total realizado</span><span class="capa-num-val">${money(capaCustoTotal())}</span><span class="capa-num-sub">com o lote e os preliminares</span></div>
+      <div class="capa-num"><span class="capa-num-rot">Crédito CAIXA liberado</span><span class="capa-num-val">${money(r.caixaLiberadaAcumulada || 0)}</span><span class="capa-num-sub">de ${money(r.creditoCaixaTotalPCI || 0)} contratados</span></div>
+      <div class="capa-num"><span class="capa-num-rot">Verba total disponível</span><span class="capa-num-val">${money(capaVerbaDisponivel())}</span><span class="capa-num-sub">PCI a liberar mais recurso próprio</span></div>
+    </div>`;
+  root.appendChild(hero);
+
+  for (const g of CAPA_GRUPOS) {
+    const bloco = document.createElement('section');
+    bloco.className = 'capa-grupo';
+    bloco.innerHTML = `<div class="capa-grupo-cab"><h2>${esc(g.titulo)}</h2><span class="muted">${esc(g.nota)}</span></div>`;
+    const grade = document.createElement('div');
+    grade.className = 'capa-grade';
+    for (const it of g.itens) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'capa-card filter-control';
+      const num = capaNumeroDaAba(it.tab, r);
+      b.innerHTML = `
+        <span class="capa-card-nome">${esc(it.nome)}</span>
+        <span class="capa-card-desc">${esc(it.desc)}</span>
+        ${num ? `<span class="capa-card-num">${esc(num)}</span>` : ''}`;
+      b.onclick = () => irParaAba(it.tab);
+      grade.appendChild(b);
+    }
+    bloco.appendChild(grade);
+    root.appendChild(bloco);
+  }
+
+  const rodape = document.createElement('div');
+  rodape.className = 'capa-rodape';
+  const lab = document.createElement('label');
+  lab.className = 'auto-switch';
+  lab.title = 'Some com o nome do cliente no cabeçalho, nos relatórios e no Controle Mensal. A capa nunca mostra o nome, mesmo com o interruptor desligado.';
+  const chk = document.createElement('input');
+  chk.type = 'checkbox';
+  chk.className = 'filter-control';
+  chk.checked = clienteOculto();
+  const trilho = document.createElement('span');
+  trilho.className = 'trilho';
+  const txt = document.createElement('span');
+  txt.textContent = 'Ocultar nome do cliente';
+  lab.append(chk, trilho, txt);
+  chk.addEventListener('change', () => {
+    // Sem sessão a escolha vale só neste aparelho (serve para apresentar);
+    // com sessão aberta ela também vira o padrão do projeto, na nuvem.
+    definirOcultarCliente(chk.checked, { gravarNoProjeto: !READONLY });
+    toast(chk.checked
+      ? (READONLY ? 'Nome do cliente oculto neste aparelho.' : 'Nome do cliente oculto para todos que abrirem o app.')
+      : (READONLY ? 'Nome do cliente visível neste aparelho.' : 'Nome do cliente visível novamente.'));
+  });
+  rodape.appendChild(lab);
+  const nota = document.createElement('span');
+  nota.className = 'muted';
+  nota.textContent = clienteOculto()
+    ? `Todas as telas e relatórios estão exibindo "${nomeObraPublico()}" no lugar do nome completo. O texto é editável em Parâmetros › Dados da obra.`
+    : `Esta capa já é neutra: enquanto ela estiver aberta o cabeçalho mostra "${nomeObraPublico()}" e esconde o proprietário. Ligue o interruptor para valer também nas outras abas e nos relatórios.`;
+  rodape.appendChild(nota);
+  root.appendChild(rodape);
+}
+
 function renderPainel() {
   const root = document.getElementById('tab-painel');
   root.innerHTML = '';
@@ -10826,11 +11111,14 @@ function renderControleCaixa() {
   };
   const clienteEl = document.createElement('div');
   clienteEl.className = 'controle-fixo';
-  clienteEl.textContent = cliente;
+  // Com "ocultar nome do cliente" ligado, a tela mostra um rótulo neutro; o
+  // nome real continua sendo a chave de gravação (clienteControleKey), então
+  // os lançamentos já feitos continuam no mesmo lugar.
+  clienteEl.textContent = clienteOculto() ? 'Cliente da obra' : cliente;
   ident.appendChild(campo('Cliente', clienteEl));
   const obraEl = document.createElement('div');
   obraEl.className = 'controle-fixo';
-  obraEl.textContent = (STATE.meta && STATE.meta.obra) || '—';
+  obraEl.textContent = nomeObra() || '—';
   ident.appendChild(campo('Empreendimento / imóvel', obraEl));
   ident.appendChild(campo('Contrato CAIXA', textInput({ value: reg.contratoCaixa || '', onSave: (v) => updateControleCliente(cliente, { contratoCaixa: v }) })));
   // Responsável pelo controle: o incorporador (não o responsável técnico da obra).
@@ -12637,7 +12925,7 @@ function xlsxAbaBlocos(opts) {
 }
 
 function xlsxDoRelatorio(rel, linhas, totais) {
-  const obra = (typeof VIEW !== 'undefined' && VIEW.meta && VIEW.meta.obra) || 'Obra';
+  const obra = nomeObra();
   const hoje = new Date().toISOString().slice(0, 10);
   const per = (typeof RELATORIO_PERIODO !== 'undefined' && (RELATORIO_PERIODO.de || RELATORIO_PERIODO.ate))
     ? `período ${RELATORIO_PERIODO.de ? dateBR(RELATORIO_PERIODO.de) : 'início'} a ${RELATORIO_PERIODO.ate ? dateBR(RELATORIO_PERIODO.ate) : 'hoje'}`
@@ -12671,7 +12959,7 @@ function csvDoRelatorio(rel, linhas, totais) {
   const esc2 = (x) => `"${String(x === null || x === undefined ? '' : x).replace(/"/g, '""')}"`;
   const numeroBr = (v) => String(round2(Number(v) || 0)).replace('.', ',');
   const out = [];
-  out.push(esc2(`${VIEW.meta?.obra || 'Obra'} — ${rel.nome}`));
+  out.push(esc2(`${nomeObra()} — ${rel.nome}`));
   out.push(esc2(`Gerado em ${dateBR(new Date().toISOString().slice(0, 10))}${RELATORIO_PERIODO.de || RELATORIO_PERIODO.ate ? ` · período ${RELATORIO_PERIODO.de ? dateBR(RELATORIO_PERIODO.de) : 'início'} a ${RELATORIO_PERIODO.ate ? dateBR(RELATORIO_PERIODO.ate) : 'hoje'}` : ' · período completo'}`));
   out.push('');
   const header = 3; // linha 1-based onde começa o cabeçalho
@@ -12729,7 +13017,7 @@ function abrirRelatorio(id) {
     const cab = document.createElement('div');
     cab.className = 'rel-cabecalho';
     cab.innerHTML = `<div>
-        <div class="rel-obra">${esc(VIEW.meta?.obra || 'Obra')}</div>
+        <div class="rel-obra">${esc(nomeObra())}</div>
         <div class="muted">${esc(rel.descricao)}</div>
         <div class="muted rel-periodo">${rel.semPeriodo ? 'Posição atual' : (RELATORIO_PERIODO.de || RELATORIO_PERIODO.ate
           ? `Período: ${RELATORIO_PERIODO.de ? dateBR(RELATORIO_PERIODO.de) : 'início'} a ${RELATORIO_PERIODO.ate ? dateBR(RELATORIO_PERIODO.ate) : 'hoje'}`
@@ -12903,7 +13191,7 @@ function abrirAnaliseAlavancagem() {
 
     const cab = document.createElement('div');
     cab.className = 'rel-cabecalho';
-    cab.innerHTML = `<div><div class="rel-obra">${esc(VIEW.meta?.obra || 'Obra')}</div>
+    cab.innerHTML = `<div><div class="rel-obra">${esc(nomeObra())}</div>
       <div class="muted">O financiamento não cria despesa do nada: ele troca <strong>desembolso</strong> por <strong>custo</strong>. Em vez de imobilizar ${money(a.custoSemCredito)} do próprio bolso, a operação imobiliza ${money(a.capitalProprio)} e paga ${money(a.custoCredito)} de juros, seguro e tarifas pelo resto.</div>
       <div class="muted rel-periodo">Prazo considerado: ${a.prazo} meses · emitido em ${dateBR(new Date().toISOString().slice(0, 10))}</div></div>`;
     body.appendChild(cab);
@@ -13986,7 +14274,17 @@ function resumoMercado() {
     porCond[k] = porCond[k] || { cond: k, cidade: l.cidade, tipo: l.tipo, n: 0, m2s: [], precos: [], areas: [] };
     porCond[k].n += 1; porCond[k].m2s.push(l.m2); porCond[k].precos.push(l.preco); porCond[k].areas.push(l.area);
   }
-  const condominios = Object.values(porCond).map((c) => ({ ...c, m2: mediana(c.m2s), preco: mediana(c.precos), area: mediana(c.areas) })).sort((a, b) => b.m2 - a.m2);
+  // `area` é a mediana (área típica, resistente a um lote gigante no meio da
+  // amostra) e `areaMedia` é a média simples. As duas convivem porque dizem
+  // coisas diferentes: em Lagoa Santa, onde os lotes vão de 500 a 1.200 m², a
+  // média puxa para cima e a mediana mostra o lote que realmente se repete.
+  const condominios = Object.values(porCond).map((c) => ({
+    ...c,
+    m2: mediana(c.m2s),
+    preco: mediana(c.precos),
+    area: mediana(c.areas),
+    areaMedia: c.areas.length ? c.areas.reduce((a, x) => a + x, 0) / c.areas.length : 0,
+  })).sort((a, b) => b.m2 - a.m2);
   const toscana = condominios.find((c) => /toscana/i.test(c.cond) && !/lançamento/i.test(c.cond));
   // VGV de referência (R$/m² de casa) por condomínio: anúncios do próprio
   // condomínio quando existem; no Complexo Gran Park, a mediana do Toscana;
@@ -14058,7 +14356,10 @@ function simularEstrategia(m) {
 
 /* ---------------- Gráficos SVG (sem biblioteca) ---------------- */
 function svgBarras({ itens, largura = 640, altura = 220, formato = (v) => money(v), destaque = null, cores = null }) {
-  const pad = { t: 22, r: 12, b: 46, l: 12 };
+  // `b` (rodapé) cresce quando algum item traz uma segunda informação por
+  // baixo do nome (item.sub), para o texto não encostar na borda do SVG.
+  const temSub = itens.some((i) => i.sub);
+  const pad = { t: 22, r: 12, b: temSub ? 62 : 46, l: 12 };
   const max = Math.max(...itens.map((i) => i.valor), 1);
   const w = largura - pad.l - pad.r;
   const h = altura - pad.t - pad.b;
@@ -14078,9 +14379,25 @@ function svgBarras({ itens, largura = 640, altura = 220, formato = (v) => money(
     const fill = cores && cores[i] ? ` style="fill:${cores[i]}"` : '';
     s += `<rect x="${x}" y="${y}" width="${bw}" height="${bh}" rx="4" class="${cls}"${fill}/>`;
     s += `<text x="${x + bw / 2}" y="${y - 6}" text-anchor="middle" class="mk-val">${esc(formato(it.valor))}</text>`;
+    // Quebra do rótulo pela largura REAL disponível (a coluna do item), não
+    // por um corte fixo de 16 caracteres — era isso que fazia nomes vizinhos
+    // se sobreporem ("Aeronautas (LS)Gran Park Douro"). Máximo de duas linhas;
+    // o que não couber vira reticências, e o nome inteiro fica no <title>.
     const rot = String(it.nome);
-    const linhas = rot.length > 16 ? [rot.slice(0, rot.lastIndexOf(' ', 16) > 0 ? rot.lastIndexOf(' ', 16) : 16), rot.slice(rot.lastIndexOf(' ', 16) > 0 ? rot.lastIndexOf(' ', 16) + 1 : 16)] : [rot];
+    const maxCh = Math.max(8, Math.floor(gap / 5.9));
+    const linhas = [];
+    let resto = rot;
+    while (resto && linhas.length < 2) {
+      if (resto.length <= maxCh) { linhas.push(resto); resto = ''; break; }
+      let corte = resto.lastIndexOf(' ', maxCh);
+      if (corte <= 0) corte = maxCh;
+      linhas.push(resto.slice(0, corte));
+      resto = resto.slice(corte).trim();
+    }
+    if (resto) linhas[1] = `${linhas[1].slice(0, Math.max(1, maxCh - 1))}…`;
     linhas.forEach((l, k) => { s += `<text x="${x + bw / 2}" y="${pad.t + h + 14 + k * 12}" text-anchor="middle" class="mk-rot">${esc(l)}</text>`; });
+    if (it.sub) s += `<text x="${x + bw / 2}" y="${pad.t + h + 14 + linhas.length * 12}" text-anchor="middle" class="mk-rot mk-rot-sub">${esc(it.sub)}</text>`;
+    s += `<title>${esc(rot)}${it.sub ? ` \u00b7 ${esc(it.sub)}` : ''}</title></g>`;
   });
   return s + '</svg>';
 }
@@ -14365,17 +14682,22 @@ function renderMercadoLotes(root, m) {
   ].join('');
   root.appendChild(cards);
 
-  const p1 = mkPanel('Mapa de oportunidades: R$/m² de lote por condomínio', 'Mediana dos anúncios de cada condomínio. Verde = loteamento novo ou em fase de vendas (preço de entrada); azul = consolidado. O Toscana é a referência de para onde o preço vai quando o condomínio amadurece.');
+  const p1 = mkPanel('Mapa de oportunidades: R$/m² de lote por condomínio', 'Mediana dos anúncios de cada condomínio, com a metragem média do lote embaixo de cada barra (importante para ler o preço: em Lagoa Santa o R$/m² é mais baixo, mas o lote é o dobro do tamanho, então o cheque total não cai na mesma proporção). Verde = loteamento novo ou em fase de vendas (preço de entrada); azul = consolidado. O Toscana é a referência de para onde o preço vai quando o condomínio amadurece.');
   p1.insertAdjacentHTML('beforeend', svgBarras({
-    itens: m.condominios.map((c) => ({ nome: `${c.cond}${/lagoa/i.test(c.cidade) ? ' (LS)' : ''}`, valor: c.m2, classe: c.tipo === 'novo' ? 'mk-bar-novo' : (/toscana/i.test(c.cond) ? 'mk-bar-destaque' : 'mk-bar-mercado') })),
+    itens: m.condominios.map((c) => ({
+      nome: `${c.cond}${/lagoa/i.test(c.cidade) ? ' (LS)' : ''}`,
+      valor: c.m2,
+      sub: c.areaMedia ? `${fmtNum.format(Math.round(c.areaMedia))} m² méd.` : '',
+      classe: c.tipo === 'novo' ? 'mk-bar-novo' : (/toscana/i.test(c.cond) ? 'mk-bar-destaque' : 'mk-bar-mercado'),
+    })),
     formato: (v) => `R$ ${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 }).format(v)}`,
-    altura: 260, largura: Math.max(640, m.condominios.length * 78),
+    altura: 280, largura: Math.max(680, m.condominios.length * 92),
   }));
   root.appendChild(p1);
 
-  const p2 = mkPanel('Condomínios comparados', 'Vespasiano (Complexo Gran Park) e Lagoa Santa. Área e preço são medianas dos anúncios coletados.');
-  p2.insertAdjacentHTML('beforeend', `<div class="table-scroll"><table class="extrato-table rel-table"><thead><tr><th>Condomínio</th><th>Cidade</th><th>Fase</th><th class="num">Anúncios</th><th class="num">Área típica</th><th class="num">Preço típico</th><th class="num">R$/m²</th><th class="num">vs. Toscana</th><th class="num">VGV ref. casa (R$/m²)</th></tr></thead><tbody>
-    ${m.condominios.map((c) => `<tr class="${/toscana/i.test(c.cond) ? 'extrato-residuo' : ''}"><td><strong>${esc(c.cond)}</strong></td><td>${esc(c.cidade)}</td><td><span class="badge ${c.tipo === 'novo' ? 'green' : 'gray'}">${c.tipo === 'novo' ? 'novo / em vendas' : 'consolidado'}</span></td><td class="num">${c.n}</td><td class="num">${fmtNum.format(c.area)} m²</td><td class="num">${money(c.preco)}</td><td class="num"><strong>${money(c.m2)}</strong></td><td class="num">${tos ? (c.m2 < tos.m2 ? '− ' : '+ ') + pct(Math.abs(c.m2 / tos.m2 - 1)) : 'n/d'}</td><td class="num" title="${esc(c.vgvFonte || '')}">${money(c.vgvM2)}${c.vgvOrigem === 'proprio' ? '' : ' <span class="muted">(ref.)</span>'}</td></tr>`).join('')}
+  const p2 = mkPanel('Condomínios comparados', 'Vespasiano (Complexo Gran Park) e Lagoa Santa. "Área típica" é a mediana dos lotes anunciados (o tamanho que mais se repete) e "Área média" é a média simples da amostra; quando as duas se afastam muito, o condomínio tem lotes de tamanhos bem diferentes. Preço é a mediana dos anúncios coletados.');
+  p2.insertAdjacentHTML('beforeend', `<div class="table-scroll"><table class="extrato-table rel-table"><thead><tr><th>Condomínio</th><th>Cidade</th><th>Fase</th><th class="num">Anúncios</th><th class="num">Área típica</th><th class="num">Área média</th><th class="num">Preço típico</th><th class="num">R$/m²</th><th class="num">vs. Toscana</th><th class="num">VGV ref. casa (R$/m²)</th></tr></thead><tbody>
+    ${m.condominios.map((c) => `<tr class="${/toscana/i.test(c.cond) ? 'extrato-residuo' : ''}"><td><strong>${esc(c.cond)}</strong></td><td>${esc(c.cidade)}</td><td><span class="badge ${c.tipo === 'novo' ? 'green' : 'gray'}">${c.tipo === 'novo' ? 'novo / em vendas' : 'consolidado'}</span></td><td class="num">${c.n}</td><td class="num">${fmtNum.format(c.area)} m²</td><td class="num">${c.areaMedia ? fmtNum.format(Math.round(c.areaMedia)) + ' m²' : '—'}</td><td class="num">${money(c.preco)}</td><td class="num"><strong>${money(c.m2)}</strong></td><td class="num">${tos ? (c.m2 < tos.m2 ? '− ' : '+ ') + pct(Math.abs(c.m2 / tos.m2 - 1)) : 'n/d'}</td><td class="num" title="${esc(c.vgvFonte || '')}">${money(c.vgvM2)}${c.vgvOrigem === 'proprio' ? '' : ' <span class="muted">(ref.)</span>'}</td></tr>`).join('')}
   </tbody></table></div>
   <div class="mk-texto"><p><strong>Como ler.</strong> O lote novo do <em>${al ? al.cond : 'Gran Park Douro'}</em> custa ${al ? money(al.m2) : 'n/d'}/m² dentro do mesmo complexo em que o Toscana já vale ${tos ? money(tos.m2) : 'n/d'}/m². É a mesma tese do Toscana cinco anos atrás: entrar no lançamento, construir financiado e vender no condomínio maduro. Lagoa Santa oferece lotes maiores por m² mais baixo, mas com custo de construção e público diferentes, vale para casa de campo, não para o produto de ${m.area} m² em lote de 400.</p></div>`);
   root.appendChild(p2);
@@ -14550,7 +14872,7 @@ function renderMercadoFontes(root, m) {
 /* Apresentação completa: todas as sub-abas numa tela só, em tela cheia,
    pronta para imprimir/PDF e mostrar a investidor. */
 function xlsxDoEstudoMercado(m) {
-  const obra = VIEW.meta?.obra || 'Obra';
+  const obra = nomeObra();
   const hoje = new Date().toISOString().slice(0, 10);
   const sub = `Gerado em ${dateBR(hoje)} · base ${dateBR(m.e.atualizadoEm || hoje)} · preços de anúncio (pedidos, não fechados)`;
   const o = m.obra || {};
@@ -14576,7 +14898,7 @@ function xlsxDoEstudoMercado(m) {
       colunas: [{ t: 'Condomínio', k: 'cond', tipo: 'texto' }, { t: 'Cidade', k: 'cidade', tipo: 'texto' }, { t: 'Fase', k: 'tipo', tipo: 'texto' }, { t: 'Área (m²)', k: 'area', tipo: 'num' }, { t: 'Preço (R$)', k: 'preco', tipo: 'money', total: true }, { t: 'R$/m²', k: 'm2', tipo: 'money' }, { t: 'Fonte', k: 'fonte', tipo: 'texto' }, { t: 'Data', k: 'data', tipo: 'texto' }, { t: 'Obs.', k: 'obs', tipo: 'texto' }],
       linhas: m.lotes, rodape: `${obra} · Estudo de Mercado` }),
     xlsxAbaTabela({ nome: 'Condomínios', titulo: `${obra} · R$/m² de lote por condomínio (mediana)`, subtitulo: sub,
-      colunas: [{ t: 'Condomínio', k: 'cond', tipo: 'texto' }, { t: 'Cidade', k: 'cidade', tipo: 'texto' }, { t: 'Fase', k: 'tipo', tipo: 'texto' }, { t: 'Anúncios', k: 'n', tipo: 'num' }, { t: 'Área típica (m²)', k: 'area', tipo: 'num' }, { t: 'Preço típico (R$)', k: 'preco', tipo: 'money' }, { t: 'R$/m²', k: 'm2', tipo: 'money' }, { t: 'vs. Toscana', k: 'vsToscana', tipo: 'pct' }, { t: 'VGV ref. casa (R$/m²)', k: 'vgvM2', tipo: 'money' }, { t: 'Base do VGV', k: 'vgvFonte', tipo: 'texto' }],
+      colunas: [{ t: 'Condomínio', k: 'cond', tipo: 'texto' }, { t: 'Cidade', k: 'cidade', tipo: 'texto' }, { t: 'Fase', k: 'tipo', tipo: 'texto' }, { t: 'Anúncios', k: 'n', tipo: 'num' }, { t: 'Área típica (m²)', k: 'area', tipo: 'num' }, { t: 'Área média (m²)', k: 'areaMedia', tipo: 'num' }, { t: 'Preço típico (R$)', k: 'preco', tipo: 'money' }, { t: 'R$/m²', k: 'm2', tipo: 'money' }, { t: 'vs. Toscana', k: 'vsToscana', tipo: 'pct' }, { t: 'VGV ref. casa (R$/m²)', k: 'vgvM2', tipo: 'money' }, { t: 'Base do VGV', k: 'vgvFonte', tipo: 'texto' }],
       linhas: m.condominios.map((c) => ({ ...c, vsToscana: m.toscana ? c.m2 / m.toscana.m2 - 1 : null })), rotuloTotal: 'Fim da lista', rodape: `${obra} · Estudo de Mercado` }),
     xlsxAbaTabela({ nome: 'Premissas', titulo: `${obra} · premissas da estratégia financiada`, subtitulo: sub,
       colunas: [{ t: 'Premissa', k: 'k', tipo: 'texto' }, { t: 'Valor', k: 'v', tipo: 'texto' }],
@@ -14593,7 +14915,7 @@ function abrirApresentacaoMercado() {
   openModal('Estudo de Mercado: apresentação para investidores', (body) => {
     const cab = document.createElement('div');
     cab.className = 'rel-cabecalho';
-    cab.innerHTML = `<div><div class="rel-obra">${esc(VIEW.meta?.obra || 'Obra')}</div><div class="muted">Estudo de mercado · Gran Park Toscana, Complexo Gran Park (Vespasiano) e condomínios de Lagoa Santa · base ${dateBR(m.e.atualizadoEm || '2026-09-03')}</div><div class="muted rel-periodo">Emitido em ${dateBR(new Date().toISOString().slice(0, 10))} · ${esc(VIEW.meta?.incorporador ? 'Incorporador: ' + VIEW.meta.incorporador : '')}</div></div>`;
+    cab.innerHTML = `<div><div class="rel-obra">${esc(nomeObra())}</div><div class="muted">Estudo de mercado · Gran Park Toscana, Complexo Gran Park (Vespasiano) e condomínios de Lagoa Santa · base ${dateBR(m.e.atualizadoEm || '2026-09-03')}</div><div class="muted rel-periodo">Emitido em ${dateBR(new Date().toISOString().slice(0, 10))} · ${esc(VIEW.meta?.incorporador ? 'Incorporador: ' + VIEW.meta.incorporador : '')}</div></div>`;
     body.appendChild(cab);
     const acoes = document.createElement('div');
     acoes.className = 'rel-acoes no-print';
@@ -16194,7 +16516,8 @@ function renderParametros() {
   const obraForm = document.createElement('div');
   obraForm.className = 'form-grid';
   const metaFields = [
-    ['obra', 'Nome da obra'], ['endereco', 'Endereço'], ['proprietario', 'Proprietário'],
+    ['obra', 'Nome da obra'], ['obraPublica', 'Nome público (usado quando o cliente está oculto)'],
+    ['endereco', 'Endereço'], ['proprietario', 'Proprietário'],
     ['incorporador', 'Incorporador'],
     ['responsavelTecnico', 'Responsável técnico'], ['areaM2', 'Área (m²)'],
     ['dataInicio', 'Data de início'], ['previsaoTermino', 'Previsão de término'],
@@ -16211,6 +16534,30 @@ function renderParametros() {
     obraForm.appendChild(wrap);
   }
   obraPanel.appendChild(obraForm);
+
+  // Interruptor de discrição, no mesmo painel em que se edita o nome — é onde
+  // a pessoa está quando pensa no assunto. O mesmo interruptor aparece no pé
+  // da capa, para ligar na hora de apresentar sem ir até Parâmetros.
+  const discricao = document.createElement('div');
+  discricao.className = 'capa-rodape';
+  const labOc = document.createElement('label');
+  labOc.className = 'auto-switch';
+  const chkOc = document.createElement('input');
+  chkOc.type = 'checkbox';
+  chkOc.checked = clienteOculto();
+  const trilhoOc = document.createElement('span');
+  trilhoOc.className = 'trilho';
+  const txtOc = document.createElement('span');
+  txtOc.textContent = 'Ocultar nome do cliente';
+  labOc.append(chkOc, trilhoOc, txtOc);
+  chkOc.addEventListener('change', () => definirOcultarCliente(chkOc.checked, { gravarNoProjeto: !READONLY }));
+  discricao.appendChild(labOc);
+  const notaOc = document.createElement('span');
+  notaOc.className = 'muted';
+  notaOc.textContent = `Ligado, o cabeçalho, os relatórios e o Controle Mensal passam a escrever "${nomeObraPublico()}" e param de mostrar o proprietário. A capa (aba Início) nunca mostra o nome, com o interruptor ligado ou não.`;
+  discricao.appendChild(notaOc);
+  obraPanel.appendChild(discricao);
+
   root.appendChild(obraPanel);
 
   const paramPanel = document.createElement('div');
