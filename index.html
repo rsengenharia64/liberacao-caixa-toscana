@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro da obra Casa Newton — Gran Park Toscana.">
-<meta name="app-version" content="20260922T150943">
+<meta name="app-version" content="20260922T154001">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1139,33 +1139,102 @@
 
 
   /* ---------- Capa de acesso rápido (aba Início) ---------- */
-  .capa-hero { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; display: flex; flex-direction: column; gap: 18px; }
-  .capa-kicker { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
-  .capa-titulo { margin: 4px 0 0; font-size: clamp(20px, 3.4vw, 30px); line-height: 1.15; letter-spacing: -.01em; }
-  .capa-sub { margin-top: 6px; color: var(--muted); font-size: 13px; }
-  .capa-numeros { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; border-top: 1px solid var(--border); padding-top: 16px; }
-  .capa-num { display: flex; flex-direction: column; gap: 2px; }
-  .capa-num-rot { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
-  .capa-num-val { font-family: "IBM Plex Mono", monospace; font-size: clamp(17px, 2.2vw, 22px); font-weight: 600; letter-spacing: -.01em; }
-  .capa-num-sub { font-size: 11.5px; color: var(--muted); }
-  .capa-grupo { display: flex; flex-direction: column; gap: 10px; }
-  .capa-grupo-cab { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .capa-grupo-cab h2 { margin: 0; font-size: 14px; letter-spacing: -.01em; }
-  .capa-grupo-cab .muted { font-size: 12px; }
-  .capa-grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
-  .capa-card { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; text-align: left; width: 100%;
-    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 15px; cursor: pointer;
-    font: inherit; color: var(--ink); transition: border-color .12s ease, transform .12s ease, box-shadow .12s ease; }
-  .capa-card:hover, .capa-card:focus-visible { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 4px 14px rgba(15, 33, 55, .08); outline: none; }
+  /* A capa abre o app, então ela carrega a hierarquia: um bloco de cabeçalho
+     com os quatro números que resumem a obra, e abaixo quatro grupos de
+     cartões numerados. O cabeçalho do app já é azul-escuro, por isso a capa
+     fica clara e usa a faixa laranja no topo como ligação de marca, em vez de
+     empilhar dois blocos escuros. */
+  .capa-hero { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+    padding: 22px 24px 20px; box-shadow: var(--shadow); overflow: hidden; }
+  .capa-hero::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px;
+    background: linear-gradient(90deg, var(--accent), #e0a668 60%, transparent); }
+  .capa-hero-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .capa-kicker { font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em; color: var(--accent-ink); font-weight: 700; }
+  .capa-titulo { margin: 6px 0 0; font-size: clamp(21px, 3.2vw, 31px); line-height: 1.12; letter-spacing: -.02em; font-weight: 700; }
+  .capa-sub { margin-top: 7px; color: var(--muted); font-size: 12.5px; }
+  .capa-selo { align-self: center; font-size: 11.5px; font-weight: 600; border-radius: 999px; padding: 5px 12px; white-space: nowrap; }
+  .capa-selo.ok { background: var(--good-soft); color: var(--good); }
+  .capa-selo.atencao { background: var(--warn-soft); color: var(--warn); }
+
+  .capa-kpis { margin-top: 18px; display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .capa-kpi { display: flex; flex-direction: column; gap: 3px; padding: 14px 16px; border-left: 1px solid var(--border); }
+  .capa-kpi:first-child { border-left: 0; }
+  .capa-kpi-rot { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+  .capa-kpi-val { font-family: "IBM Plex Mono", monospace; font-size: clamp(16px, 2vw, 20px); font-weight: 600; letter-spacing: -.02em; color: var(--ink); }
+  .capa-kpi.destaque .capa-kpi-val { color: var(--accent-ink); }
+  .capa-kpi-sub { font-size: 11px; color: var(--muted); }
+  /* Barra do KPI: `i` é o realizado; `b` é o risquinho do previsto, para dar
+     a comparação sem precisar de uma segunda barra. */
+  .capa-kpi-barra { position: relative; display: block; height: 5px; border-radius: 999px; background: var(--grid-line); margin: 4px 0 2px; }
+  .capa-kpi-barra i { position: absolute; inset: 0 auto 0 0; display: block; border-radius: 999px; background: var(--accent); }
+  .capa-kpi-barra b { position: absolute; top: -2px; width: 2px; height: 9px; border-radius: 1px; background: var(--ink-soft); opacity: .55; }
+
+  .capa-grupo { display: flex; flex-direction: column; gap: 11px; }
+  .capa-grupo-cab { display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  .capa-grupo-num { font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; color: var(--accent-ink);
+    background: var(--accent-soft); border-radius: 6px; padding: 3px 7px; letter-spacing: .02em; }
+  .capa-grupo-cab h2 { margin: 0; font-size: 14.5px; letter-spacing: -.01em; }
+  .capa-grupo-nota { font-size: 12px; color: var(--muted); }
+
+  /* auto-fill (e não auto-fit): num grupo de três cartões as colunas mantêm a
+     largura das outras linhas em vez de esticar para preencher a faixa. */
+  .capa-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(252px, 1fr)); gap: 12px; }
+  .capa-card { display: flex; flex-direction: column; align-items: stretch; text-align: left; width: 100%;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 15px 12px; cursor: pointer;
+    font: inherit; color: var(--ink); box-shadow: var(--shadow);
+    transition: border-color .13s ease, transform .13s ease, box-shadow .13s ease; }
+  .capa-card:hover, .capa-card:focus-visible { border-color: var(--accent); transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(15, 33, 55, .10); outline: none; }
+  .capa-card-icone { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px;
+    border-radius: 9px; background: var(--accent-soft); color: var(--accent-ink); margin-bottom: 11px; }
+  .capa-card-icone svg { width: 19px; height: 19px; }
+  .capa-card:hover .capa-card-icone { background: var(--accent); color: #fff; }
   .capa-card-nome { font-weight: 650; font-size: 14px; letter-spacing: -.01em; }
-  .capa-card-desc { font-size: 12.2px; color: var(--muted); line-height: 1.45; }
-  .capa-card-num { margin-top: 3px; font-family: "IBM Plex Mono", monospace; font-size: 11.5px; font-weight: 600;
-    color: var(--accent-ink); background: var(--surface-2); border-radius: 999px; padding: 2px 9px; }
-  .capa-rodape { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 14px; }
-  .capa-rodape .muted { font-size: 12px; }
-  @media (max-width: 640px) {
-    .capa-hero { padding: 16px; }
+  .capa-card-desc { margin-top: 4px; font-size: 12.2px; color: var(--muted); line-height: 1.45; flex: 1 1 auto; }
+  /* O pé sempre existe (mesmo sem número) para todos os cartões terminarem na
+     mesma altura e a grade não ficar serrilhada. */
+  .capa-card-pe { display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    margin-top: 11px; padding-top: 9px; border-top: 1px solid var(--grid-line); min-height: 21px; }
+  .capa-card-num { font-family: "IBM Plex Mono", monospace; font-size: 11px; font-weight: 600; white-space: nowrap;
+    color: var(--accent-ink); background: var(--accent-soft); border-radius: 999px; padding: 2px 9px; }
+  .capa-card-abrir { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600;
+    color: var(--muted); opacity: .75; transition: color .13s ease, opacity .13s ease, gap .13s ease; }
+  .capa-card-abrir svg { width: 13px; height: 13px; }
+  .capa-card:hover .capa-card-abrir { color: var(--accent-ink); opacity: 1; gap: 7px; }
+
+  .capa-rodape { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; }
+  .capa-rodape-nota { font-size: 12px; color: var(--muted); }
+  /* No celular a capa vira duas colunas, não uma: com quinze cartões, uma
+     coluna só virava uma rolagem de quatro telas e a capa perdia a graça de
+     ser um índice. Os cartões encolhem (ícone, corpo e o "Abrir", que fica só
+     com a seta) para caberem lado a lado sem apertar o texto. */
+  @media (max-width: 720px) {
+    .capa-hero { padding: 16px 16px 14px; }
+    .capa-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .capa-kpi { border-left: 0; border-top: 1px solid var(--border); padding: 11px 12px; }
+    .capa-kpi:nth-child(-n+2) { border-top: 0; }
+    .capa-kpi:nth-child(2n) { border-left: 1px solid var(--border); }
+    .capa-grupo-cab { padding-bottom: 7px; }
+    .capa-grupo-nota { flex: 1 1 100%; }
+    .capa-grade { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
+    .capa-card { padding: 12px 12px 10px; border-radius: 11px; }
+    .capa-card-icone { width: 29px; height: 29px; border-radius: 8px; margin-bottom: 9px; }
+    .capa-card-icone svg { width: 17px; height: 17px; }
+    .capa-card-nome { font-size: 12.8px; }
+    .capa-card-desc { font-size: 11.3px; line-height: 1.4; }
+    .capa-card-pe { margin-top: 9px; padding-top: 8px; }
+    .capa-card-num { font-size: 9.8px; padding: 2px 7px; }
+    .capa-card-abrir { font-size: 0; gap: 0; }
+    .capa-card-abrir svg { width: 15px; height: 15px; }
+  }
+  @media (max-width: 360px) {
     .capa-grade { grid-template-columns: 1fr; }
+    .capa-kpis { grid-template-columns: 1fr; }
+    .capa-kpi { border-left: 0 !important; border-top: 1px solid var(--border); }
+    .capa-kpi:first-child { border-top: 0; }
   }
 
   /* Toque: alvos maiores nos controles de linha das tabelas. */
@@ -9128,16 +9197,18 @@ function renderAvisoRascunho() {
    numa reunião ou se mostra o celular para alguém. */
 const CAPA_GRUPOS = [
   {
+    n: '01',
     titulo: 'Acompanhar a obra',
     nota: 'Onde a obra está hoje, em físico e em dinheiro.',
     itens: [
-      { tab: 'painel', nome: 'Dashboard Executivo', desc: 'Custo total, crédito CAIXA, saldo em conta e avanço, numa tela só.' },
+      { tab: 'painel', nome: 'Dashboard Executivo', desc: 'Custo total, crédito CAIXA, verba disponível e avanço, numa tela só.' },
       { tab: 'dashboard', nome: 'Demonstrativo Financeiro', desc: 'Contas a pagar quinzena a quinzena: PIX do empreiteiro, ADM e cartão.' },
-      { tab: 'cronograma', nome: 'Cronograma de Obra', desc: 'Previsto contra realizado por categoria, com a linha do tempo da obra.' },
+      { tab: 'cronograma', nome: 'Cronograma de Obra', desc: 'Previsto contra realizado por categoria, com a linha do tempo.' },
       { tab: 'fluxo', nome: 'Fluxo de Caixa', desc: 'Entradas e saídas mês a mês e o extrato por conta contábil.' },
     ],
   },
   {
+    n: '02',
     titulo: 'Lançar e liberar',
     nota: 'O que muda o número: medição, custo e liberação do banco.',
     itens: [
@@ -9148,6 +9219,7 @@ const CAPA_GRUPOS = [
     ],
   },
   {
+    n: '03',
     titulo: 'Documentar',
     nota: 'O lastro de cada lançamento e o que sai para fora do app.',
     itens: [
@@ -9157,6 +9229,7 @@ const CAPA_GRUPOS = [
     ],
   },
   {
+    n: '04',
     titulo: 'Conferir e decidir',
     nota: 'Onde checar se o número fecha e para onde a operação vai.',
     itens: [
@@ -9168,15 +9241,64 @@ const CAPA_GRUPOS = [
   },
 ];
 
+/* Ícones da capa: SVG de traço, 24×24, herdando a cor do quadrinho. Desenho
+   de linha (não preenchido) para não competir com o texto do cartão e para
+   funcionar igual no tema claro e no escuro. */
+const CAPA_ICONES = {
+  painel: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  dashboard: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  avancos: '<path d="M3 17l5.5-5.5 3.5 3.5L21 6"/><path d="M15 6h6v6"/>',
+  cronograma: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
+  detalhamento: '<path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/>',
+  fluxo: '<path d="M3 8h13l-3-3M21 16H8l3 3"/>',
+  pci: '<path d="M3 21h18M5 21V10M9.5 21V10M14.5 21V10M19 21V10M12 3l9 5H3l9-5z"/>',
+  'controle-caixa': '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 12.5l2.5 2.5L16 9.5"/>',
+  relatorios: '<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
+  mercado: '<path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/>',
+  comprovantes: '<path d="M6 2h9l4 4v14a1 1 0 0 1-1.5.9L15 19l-2.5 2-2.5-2-2.5 2L6 19.9A1 1 0 0 1 5 19V3a1 1 0 0 1 1-1z"/><path d="M9 8h6M9 12h6"/>',
+  rdo: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2.5h6v3H9z"/><path d="M9 11h6M9 15h4"/>',
+  analise: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4M11 7.5v4M11 14.5h.01"/>',
+  rastreabilidade: '<circle cx="5.5" cy="6" r="2.5"/><circle cx="18.5" cy="18" r="2.5"/><circle cx="12" cy="12" r="2.5"/><path d="M7.6 7.6l2.3 2.6M14.1 13.8l2.5 2.6"/>',
+  parametros: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h10M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="16" cy="18" r="2"/>',
+};
+
+function capaIcone(tab) {
+  const d = CAPA_ICONES[tab] || '<circle cx="12" cy="12" r="8"/>';
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
+}
+
+// "Verba total disponível" do Dashboard Executivo: PCI ainda a liberar mais o
+// saldo de recurso próprio. Está na capa no lugar de "saldo em conta" porque,
+// desde a revisão da cascata do extrato, `saldoContaRealizado` deixou de ser o
+// número que o painel mostra (hoje vem zerado no estado real).
+function capaVerbaDisponivel() {
+  const r = VIEW.resumo || {};
+  return round2(Number(r.verbaDisponivelFutura) || 0);
+}
+
+// Mesmo número do card "Custo total realizado" do Dashboard Executivo
+// (movimentoDinheiro().custoTotal = saídas brutas menos estornos). Vai por uma
+// função para a capa nunca divergir daquela tela.
+function capaCustoTotal() {
+  try { return Number(movimentoDinheiro().custoTotal) || 0; } catch (e) { return 0; }
+}
+
 function capaNumeroDaAba(tab, r) {
   if (tab === 'painel') return `${pct(r.percObraGeral || 0)} executado`;
   if (tab === 'cronograma') return `${pct(r.percPrevistoGeral || 0)} previsto`;
-  if (tab === 'pci') {
-    const c = typeof medicaoCalculadaPorCategoria === 'function' ? medicaoCalculadaPorCategoria() : null;
-    if (c && c.aLancar > 0) return `${money(c.aLancar)} a medir`;
-    return `${money(r.caixaLiberadaAcumulada || 0)} liberado`;
+  // Valores em forma curta (moneyCurto) porque o selo do cartão é estreito:
+  // no celular, "R$ 1.000.096,60 disponível" quebrava em duas linhas e
+  // desalinhava a grade.
+  if (tab === 'pci') return `${moneyCurto(r.caixaLiberadaAcumulada || 0)} liberado`;
+  if (tab === 'fluxo') return `${moneyCurto(capaVerbaDisponivel())} disponível`;
+  if (tab === 'dashboard') {
+    const p = (VIEW.parcelas || []).filter((x) => x.status !== 'REALIZADO');
+    return p.length ? `${p.length} a pagar` : 'nada em aberto';
   }
-  if (tab === 'fluxo') return `${money(capaVerbaDisponivel())} disponível`;
+  if (tab === 'avancos') {
+    const c = (VIEW.categorias || []).filter((x) => (x.percAvancoEfetivo || 0) > 0 && (x.percAvancoEfetivo || 0) < 1).length;
+    return c ? `${c} em curso` : '';
+  }
   if (tab === 'analise') {
     try {
       const abertos = gerarApontamentos().filter((a) => !analiseVerificados()[a.id]).length;
@@ -9186,33 +9308,23 @@ function capaNumeroDaAba(tab, r) {
   return '';
 }
 
-// Mesmo número do card "Custo total realizado" do Dashboard Executivo
-// (movimentoDinheiro().custoTotal = saídas brutas menos estornos). Vai por uma
-// função para a capa nunca divergir daquela tela.
-// "Verba total disponível" do Dashboard Executivo: PCI ainda a liberar mais o
-// saldo de recurso próprio. Substituiu "saldo em conta" na capa porque, desde
-// a revisão da cascata do extrato, `saldoContaRealizado` deixou de ser o
-// número que o painel mostra (hoje vem zerado no estado real).
-function capaVerbaDisponivel() {
-  const r = VIEW.resumo || {};
-  return round2(Number(r.verbaDisponivelFutura) || 0);
-}
-
-function capaCustoTotal() {
-  try { return Number(movimentoDinheiro().custoTotal) || 0; } catch (e) { return 0; }
-}
-
 function renderCapa() {
   const root = document.getElementById('tab-capa');
   if (!root) return;
   root.innerHTML = '';
   const r = VIEW.resumo || {};
+  const m = VIEW.meta || {};
 
   const hero = document.createElement('section');
   hero.className = 'capa-hero';
-  const m = VIEW.meta || {};
+  const perc = Math.max(0, Math.min(100, (r.percObraGeral || 0) * 100));
+  const percPrev = Math.max(0, Math.min(100, (r.percPrevistoGeral || 0) * 100));
+  const adiantada = (r.percObraGeral || 0) + 0.0001 >= (r.percPrevistoGeral || 0);
+  const liberado = Number(r.caixaLiberadaAcumulada) || 0;
+  const totalPci = Number(r.creditoCaixaTotalPCI) || 0;
+  const percPci = totalPci > 0 ? Math.max(0, Math.min(100, (liberado / totalPci) * 100)) : 0;
   hero.innerHTML = `
-    <div class="capa-hero-topo">
+    <div class="capa-hero-cab">
       <div>
         <div class="capa-kicker">Painel de gestão da obra</div>
         <h1 class="capa-titulo">${esc(nomeObraPublico())}</h1>
@@ -9222,19 +9334,42 @@ function renderCapa() {
     m.previsaoTermino ? `término previsto ${dateBR(m.previsaoTermino)}` : '',
   ].filter(Boolean).map(esc).join(' · ')}</div>
       </div>
+      <span class="capa-selo ${adiantada ? 'ok' : 'atencao'}">${adiantada ? 'No prazo ou adiantada' : `Atrasada ${pct((r.percPrevistoGeral || 0) - (r.percObraGeral || 0))} vs. planejado`}</span>
     </div>
-    <div class="capa-numeros">
-      <div class="capa-num"><span class="capa-num-rot">Avanço físico</span><span class="capa-num-val">${pct(r.percObraGeral || 0)}</span><span class="capa-num-sub">previsto ${pct(r.percPrevistoGeral || 0)}</span></div>
-      <div class="capa-num"><span class="capa-num-rot">Custo total realizado</span><span class="capa-num-val">${money(capaCustoTotal())}</span><span class="capa-num-sub">com o lote e os preliminares</span></div>
-      <div class="capa-num"><span class="capa-num-rot">Crédito CAIXA liberado</span><span class="capa-num-val">${money(r.caixaLiberadaAcumulada || 0)}</span><span class="capa-num-sub">de ${money(r.creditoCaixaTotalPCI || 0)} contratados</span></div>
-      <div class="capa-num"><span class="capa-num-rot">Verba total disponível</span><span class="capa-num-val">${money(capaVerbaDisponivel())}</span><span class="capa-num-sub">PCI a liberar mais recurso próprio</span></div>
+    <div class="capa-kpis">
+      <div class="capa-kpi destaque">
+        <span class="capa-kpi-rot">Avanço físico</span>
+        <span class="capa-kpi-val">${pct(r.percObraGeral || 0)}</span>
+        <span class="capa-kpi-barra"><i style="width:${perc}%"></i><b style="left:${percPrev}%"></b></span>
+        <span class="capa-kpi-sub">previsto ${pct(r.percPrevistoGeral || 0)}</span>
+      </div>
+      <div class="capa-kpi">
+        <span class="capa-kpi-rot">Custo total realizado</span>
+        <span class="capa-kpi-val">${money(capaCustoTotal())}</span>
+        <span class="capa-kpi-sub">com o lote e os serviços preliminares</span>
+      </div>
+      <div class="capa-kpi">
+        <span class="capa-kpi-rot">Crédito CAIXA liberado</span>
+        <span class="capa-kpi-val">${money(liberado)}</span>
+        <span class="capa-kpi-barra"><i style="width:${percPci}%"></i></span>
+        <span class="capa-kpi-sub">${pct(totalPci > 0 ? liberado / totalPci : 0)} de ${money(totalPci)}</span>
+      </div>
+      <div class="capa-kpi">
+        <span class="capa-kpi-rot">Verba total disponível</span>
+        <span class="capa-kpi-val">${money(capaVerbaDisponivel())}</span>
+        <span class="capa-kpi-sub">PCI a liberar mais recurso próprio</span>
+      </div>
     </div>`;
   root.appendChild(hero);
 
   for (const g of CAPA_GRUPOS) {
     const bloco = document.createElement('section');
     bloco.className = 'capa-grupo';
-    bloco.innerHTML = `<div class="capa-grupo-cab"><h2>${esc(g.titulo)}</h2><span class="muted">${esc(g.nota)}</span></div>`;
+    bloco.innerHTML = `<div class="capa-grupo-cab">
+      <span class="capa-grupo-num">${g.n}</span>
+      <h2>${esc(g.titulo)}</h2>
+      <span class="capa-grupo-nota">${esc(g.nota)}</span>
+    </div>`;
     const grade = document.createElement('div');
     grade.className = 'capa-grade';
     for (const it of g.itens) {
@@ -9243,9 +9378,13 @@ function renderCapa() {
       b.className = 'capa-card filter-control';
       const num = capaNumeroDaAba(it.tab, r);
       b.innerHTML = `
+        <span class="capa-card-icone">${capaIcone(it.tab)}</span>
         <span class="capa-card-nome">${esc(it.nome)}</span>
         <span class="capa-card-desc">${esc(it.desc)}</span>
-        ${num ? `<span class="capa-card-num">${esc(num)}</span>` : ''}`;
+        <span class="capa-card-pe">
+          ${num ? `<span class="capa-card-num">${esc(num)}</span>` : '<span></span>'}
+          <span class="capa-card-abrir">Abrir<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg></span>
+        </span>`;
       b.onclick = () => irParaAba(it.tab);
       grade.appendChild(b);
     }
@@ -9257,7 +9396,7 @@ function renderCapa() {
   rodape.className = 'capa-rodape';
   const lab = document.createElement('label');
   lab.className = 'auto-switch';
-  lab.title = 'Some com o nome do cliente no cabeçalho, nos relatórios e no Controle Mensal. A capa nunca mostra o nome, mesmo com o interruptor desligado.';
+  lab.title = 'Some com o nome do cliente no cabeçalho, nos relatórios e no Controle Mensal. Esta capa nunca mostra o nome, mesmo com o interruptor desligado.';
   const chk = document.createElement('input');
   chk.type = 'checkbox';
   chk.className = 'filter-control';
@@ -9277,10 +9416,10 @@ function renderCapa() {
   });
   rodape.appendChild(lab);
   const nota = document.createElement('span');
-  nota.className = 'muted';
+  nota.className = 'capa-rodape-nota';
   nota.textContent = clienteOculto()
-    ? `Todas as telas e relatórios estão exibindo "${nomeObraPublico()}" no lugar do nome completo. O texto é editável em Parâmetros › Dados da obra.`
-    : `Esta capa já é neutra: enquanto ela estiver aberta o cabeçalho mostra "${nomeObraPublico()}" e esconde o proprietário. Ligue o interruptor para valer também nas outras abas e nos relatórios.`;
+    ? `Exibindo "${nomeObraPublico()}" em todas as telas e relatórios.`
+    : 'Vale para as outras abas e os relatórios; esta capa já é neutra.';
   rodape.appendChild(nota);
   root.appendChild(rodape);
 }
