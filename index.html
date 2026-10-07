@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro de obra residencial no Gran Park Toscana.">
-<meta name="app-version" content="20261007T014624">
+<meta name="app-version" content="20261007T043951">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -4444,7 +4444,7 @@ function restoreViewState() {
    --------------------------------------------------------------------------
    No site publicado (GitHub Pages) o estado da obra deixa de morar só no
    navegador de quem lançou: ele fica numa linha da tabela `obras` no
-   Supabase (projeto casa-newton-toscana, região São Paulo). Quem abre o app
+   Supabase (região São Paulo). Quem abre o app
    recebe a versão da nuvem; quem lança (sessão aberta) grava lá; quem está
    com o app aberto recebe a mudança na hora (websocket do Realtime, com
    consulta periódica de segurança).
@@ -15078,7 +15078,7 @@ function painelNuvemHtml() {
   const estado = NUVEM.conectada ? `<span class="badge green">conectado</span> versão ${NUVEM.versao}${NUVEM.atualizadoEm ? ` · última gravação ${esc(nuvemQuandoPor())}` : ''}`
     : (NUVEM.habilitada ? `<span class="badge amber">${esc(NUVEM.erro || 'conectando')}</span>` : '<span class="badge gray">não se aplica nesta cópia</span>');
   return `<div class="panel"><div class="panel-header"><div><h2>Onde os dados moram</h2>
-    <div class="muted">No site publicado, o estado da obra fica na nuvem (Supabase, tabela <code>obras</code>, projeto casa-newton-toscana, São Paulo). Quem entra para lançar grava lá; quem está com o app aberto recebe a mudança na hora. Sem sessão, só o Controle Mensal CAIXA grava. Cada gravação guarda uma versão em <code>obras_historico</code> (últimas 300), com quem gravou e quando. Dentro do Claude o app continua publicando no próprio artifact.</div></div></div>
+    <div class="muted">No site publicado, o estado da obra fica na nuvem (Supabase, tabela <code>obras</code>, região de São Paulo). Quem entra para lançar grava lá; quem está com o app aberto recebe a mudança na hora. Sem sessão, só o Controle Mensal CAIXA grava. Cada gravação guarda uma versão em <code>obras_historico</code> (últimas 300), com quem gravou e quando. Dentro do Claude o app continua publicando no próprio artifact.</div></div></div>
     <div class="mk-texto">Situação agora: ${estado}.</div></div>`;
 }
 
