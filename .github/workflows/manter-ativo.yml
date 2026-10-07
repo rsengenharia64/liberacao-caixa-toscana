@@ -1,0 +1,59 @@
+---
+# Mantém o projeto Supabase fora da pausa automática.
+#
+# O plano gratuito pausa o projeto depois de 7 dias com pouca atividade no
+# banco, e foi isso que derrubou o app em outubro/2026: ninguém abriu por uma
+# semana. Quando pausa, o subdomínio do projeto some do DNS, o app perde a
+# sincronização e só volta com um "Restore" no painel.
+#
+# Este fluxo faz uma leitura mínima no banco em dias alternados. A chave anon
+# é lida do próprio index.html publicado, em vez de ficar duplicada aqui: se
+# ela for trocada, isto continua funcionando sozinho.
+#
+# Observação do GitHub: em repositório público, um agendamento é desativado
+# após 60 dias sem nenhuma atividade no repositório. Como aqui há publicações
+# frequentes, não deve acontecer; se acontecer, basta reativar na aba Actions.
+
+name: Manter Supabase ativo
+
+on:
+  schedule:
+    # 11:10 UTC (08:10 em Brasília) a cada dois dias.
+    - cron: '10 11 */2 * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ler a configuração da nuvem no app publicado
+        id: cfg
+        run: |
+          set -euo pipefail
+          html=$(curl -fsS "https://rsengenharia64.github.io/liberacao-caixa-toscana/index.html?cb=${RANDOM}")
+          url=$(printf '%s' "$html" | grep -o "url: *'https://[a-z0-9]*\.supabase\.co'" | head -1 | grep -o 'https://[a-z0-9]*\.supabase\.co')
+          obra=$(printf '%s' "$html" | grep -o "obraId: *'[^']*'" | head -1 | sed "s/.*'\(.*\)'/\1/")
+          chave=$(printf '%s' "$html" | grep -o "chave: *'[^']*'" | head -1 | sed "s/.*'\(.*\)'/\1/")
+          test -n "$url" && test -n "$obra" && test -n "$chave"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+          echo "obra=$obra" >> "$GITHUB_OUTPUT"
+          echo "::add-mask::$chave"
+          echo "chave=$chave" >> "$GITHUB_OUTPUT"
+          echo "Projeto: $url · obra: $obra"
+
+      - name: Ler uma linha da obra (conta como atividade no banco)
+        run: |
+          set -euo pipefail
+          codigo=$(curl -sS -o /tmp/resposta.txt -w '%{http_code}' \
+            -H "apikey: ${{ steps.cfg.outputs.chave }}" \
+            -H "Authorization: Bearer ${{ steps.cfg.outputs.chave }}" \
+            "${{ steps.cfg.outputs.url }}/rest/v1/obras?id=eq.${{ steps.cfg.outputs.obra }}&select=versao,atualizado_em")
+          echo "HTTP $codigo"
+          cat /tmp/resposta.txt
+          # 2xx = projeto ativo. Qualquer outra coisa (inclusive falha de DNS,
+          # que é como a pausa se manifesta) derruba o job, e o GitHub avisa
+          # por e-mail — que é exatamente o alerta que faltou desta vez.
+          case "$codigo" in 2*) exit 0 ;; *) echo "Projeto fora do ar ou pausado."; exit 1 ;; esac
