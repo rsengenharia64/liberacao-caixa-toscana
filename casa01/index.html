@@ -371,6 +371,7 @@ footer.site b{color:#fff}
   <p class="lead">A mobília é opcional. Escolha um pacote pronto ou monte o seu item a item, dentro do limite de verba adicional de <b data-t="limiteTxt"></b>. Valores de referência para o padrão da casa, editáveis na negociação.</p>
   <div class="pkgs" id="pkgs"></div>
   <div class="limit"><div class="lbar"><i id="limBar"></i></div><div class="ltxt" id="limTxt"></div></div>
+  <div class="panel" style="margin-top:22px"><h3>Estruturação completa: casa, armários e mobília</h3><div id="compMatrix"></div><div class="note">Valores da fase de obra, mantidos até 31/01/2027 e sujeitos a correção pelo INCC. Casa e armários entram no plano de entrada, obra e CAIXA; a mobília é paga à construtora, fora do financiamento.</div></div>
   <div class="cols2" style="grid-template-columns:1.45fr 1fr;margin-top:22px">
     <div class="panel">
       <div id="extrasTbl"></div>
@@ -898,6 +899,11 @@ const Extras = {
     $("#exNomePk").textContent=(PACOTES.find(p=>p.id===P.pacoteSel)||{}).n||"";
     $("#exQtd").textContent=pk.itens; $("#exBruto").textContent=brl2(pk.bruto); $("#exDesc").textContent=pk.desc?"- "+brl2(pk.desc):"R$ 0,00"; $("#exLiq").textContent=brl(pk.liquido);
     const sp=$("#simPkSel"); if(sp) sp.value=P.pacoteSel;
+    const casa=P.precoObraSem, arm=P.precoObraCom-P.precoObraSem, mx=casa+arm+Math.max(...PACOTES.filter(p=>p.k).map(p=>pkTotal(p.id)));
+    const segs=(c,a,m)=>{ const sc=v=>v/(mx-3000000)*100; return `<div style="display:flex;height:30px;border-radius:8px;overflow:hidden;font-size:11px;font-weight:700"><div style="width:${sc(c-3000000)}%;background:#26282C;color:#fff;display:flex;align-items:center;justify-content:center">Casa</div>${a?`<div style="width:${sc(a)}%;background:#A9784C;color:#fff;display:flex;align-items:center;justify-content:center">Armários</div>`:""}${m?`<div style="width:${sc(m)}%;background:#D9B26C;display:flex;align-items:center;justify-content:center">Mobília</div>`:""}</div>`; };
+    const opts=[["Sem mobília",0,"nenhum"]].concat(PACOTES.filter(p=>p.k).map(p=>[p.n,pkTotal(p.id),p.id]));
+    $("#compMatrix").innerHTML = `<table><thead><tr><th>Mobília</th><th style="width:38%">Composição (com armários)</th><th>Sem armários</th><th>Com armários planejados (+ ${brl(arm)})</th></tr></thead><tbody>`+opts.map(([n,v,id])=>`<tr class="click${P.pacoteSel===id?" sel":""}" data-id="${id}"><td><b>${n}</b>${v?` · ${brl(v)}`:""}</td><td>${segs(casa,arm,v)}</td><td>${brl(casa+v)}</td><td><b>${brl(casa+arm+v)}</b></td></tr>`).join("")+`</tbody></table>`;
+    $$("#compMatrix tr.click").forEach(tr=>tr.onclick=()=>this.choose(tr.dataset.id));
     if(!first) Sim.render();
   },
   add(){ const n=$("#exNome").value.trim(), v=parseBR($("#exValor").value); if(!n||!isFinite(v)){ toast("Informe o nome e o valor do item"); return; }
