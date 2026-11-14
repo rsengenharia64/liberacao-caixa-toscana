@@ -336,7 +336,7 @@ footer.site b{color:#fff}
     <div class="seg" id="planSeg"><button class="on" data-f="t">Térreo</button><button data-f="s">Pavimento superior</button></div>
   </div>
   <div class="plan-wrap">
-    <div class="plan"><div id="planSvg"></div><div class="note">Planta humanizada ilustrativa, sem escala. Medidas e layout conforme projeto aprovado.</div></div>
+    <div class="plan"><div id="planSvg"></div><div class="note">Planta humanizada a partir do projeto arquitetônico, sem escala. Medidas e layout conforme projeto aprovado.</div></div>
     <div class="panel"><h3 id="planLegendTitle">Térreo</h3><ul class="legend" id="planLegend"></ul></div>
   </div>
 </div></section>
@@ -672,41 +672,57 @@ const LB = {
 };
 
 /* ---------- planta (esquemática) ---------- */
+const LOT_T = "M100 350 L205 105 L1062 368 L1065 640 Q1060 790 905 820 L100 820 Z";
 const PLAN = {
- t:{title:"Térreo", rooms:[
-  {id:"lazer",img:"piscina",n:"Piscina com sauna",x:70,y:150,w:110,h:270,c:"#9cc3de"},
-  {id:"lazer",img:"gourmet",n:"Deck",x:180,y:150,w:70,h:270,c:"#d9b48f"},
-  {id:"lazer",img:"gourmet",n:"Área gourmet",x:250,y:255,w:120,h:165,c:"#efe7da"},
-  {id:"social",img:"coz_jantar",n:"Cozinha e jantar",x:300,y:110,w:240,h:145,c:"#f3efe8"},
-  {id:"social",img:"sala_int",n:"Sala de estar (pé-direito duplo)",x:370,y:255,w:170,h:165,c:"#f3efe8"},
-  {id:"terreo",img:"banho_social1",n:"Despensa e lavanderia",s:"Desp. lav.",x:250,y:110,w:50,h:145,c:"#e7e2da"},
-  {id:"terreo",img:"banho_social1",n:"Banho social",x:540,y:110,w:60,h:90,c:"#dcd8d2"},
-  {id:"terreo",img:"escritorio",n:"Escritório",x:600,y:160,w:70,h:95,c:"#ece6dc"},
-  {id:"terreo",img:"hospedes",n:"Quarto de hóspedes",x:670,y:160,w:110,h:95,c:"#ece6dc"},
-  {id:"fachada",img:"fach_esquina",n:"Garagem 3 carros",x:560,y:275,w:220,h:145,c:"#d7d5d1"},
-  {id:"fachada",img:"fach_frente",n:"Acesso e jardim frontal",x:70,y:420,w:710,h:70,c:"#cfdcc2"}
- ], extra:`<rect x="250" y="70" width="290" height="40" fill="#cfdcc2"/><g fill="#5b7a43">${[300,345,390,435].map(x=>`<circle cx="${x}" cy="90" r="10"/>`).join("")}</g><rect x="540" y="255" width="20" height="165" fill="#bdb6ab"/><text x="550" y="340" font-size="10" fill="#555" transform="rotate(-90 550 340)" text-anchor="middle">escada</text>`},
- s:{title:"Pavimento superior", rooms:[
-  {id:"semi",img:"semi1",n:"Semi-suíte 1",x:250,y:110,w:95,h:115,c:"#efe7da"},
-  {id:"semi",img:"banho_social2",n:"Banho das semi-suítes",x:345,y:110,w:55,h:115,c:"#dcd8d2"},
-  {id:"semi",img:"semi2",n:"Semi-suíte 2",x:400,y:110,w:95,h:115,c:"#efe7da"},
-  {id:"suite",img:"suite",n:"Suíte",x:495,y:110,w:95,h:115,c:"#efe7da"},
-  {id:"suite",img:"suite_banho",n:"Banho da suíte",x:590,y:110,w:50,h:115,c:"#dcd8d2"},
-  {id:"master",img:"master",n:"Suíte master",x:520,y:250,w:150,h:130,c:"#f1e4d4"},
-  {id:"master",img:"closet",n:"Closet",x:670,y:190,w:70,h:95,c:"#e7ddcf"},
-  {id:"master",img:"banho_master",n:"Banho master com banheira",x:670,y:285,w:70,h:95,c:"#dcd8d2"},
-  {id:"social",img:"pe_direito",n:"Vazio da sala (pé-direito duplo)",x:330,y:250,w:160,h:150,c:"#ffffff"},
-  {id:"fachada",img:"fach_esquina",n:"Varanda coberta",x:520,y:380,w:220,h:55,c:"#d9b48f"},
-  {id:"lazer",img:"gourmet",n:"Laje / varanda descoberta",x:250,y:250,w:80,h:185,c:"#e4e9dd"}
- ], extra:`<rect x="490" y="250" width="30" height="150" fill="#bdb6ab"/><path d="M330 250 L490 400 M490 250 L330 400" stroke="#cfc8bd" stroke-dasharray="5 5"/><rect x="250" y="225" width="490" height="25" fill="#f0ece6"/><text x="420" y="242" font-size="10" fill="#777" text-anchor="middle">circulação / mezanino</text>`}
+ t:{title:"Pavimento térreo", lot:LOT_T, rooms:[
+  {id:"lazer",img:"piscina",n:"Piscina",x:140,y:395,w:105,h:295,c:"#8fc3e6"},
+  {id:"lazer",img:"piscina",n:"Prainha",s:"Prainha",x:245,y:600,w:55,h:90,c:"#b9dcf0"},
+  {id:"lazer",img:"gourmet",n:"Sauna",x:145,y:360,w:100,h:35,c:"#e9e3da"},
+  {id:"lazer",img:"gourmet",n:"Deck",x:245,y:355,w:100,h:245,c:"#e3b48d"},
+  {id:"lazer",img:"gourmet",n:"Espaço de convívio externo",s:"Convívio",x:185,y:220,w:125,h:105,c:"#f1ece4"},
+  {id:"social",img:"coz_jantar",n:"Cozinha e jantar",x:390,y:360,w:275,h:145,c:"#f6f2ea"},
+  {id:"terreo",img:"banho_social1",n:"Despensa e lavanderia",s:"Desp.",x:355,y:360,w:35,h:150,c:"#e7e2da"},
+  {id:"terreo",img:"banho_social1",n:"Lavabo e apoio",s:"WC",x:665,y:360,w:50,h:155,c:"#dcd8d2"},
+  {id:"lazer",img:"gourmet",n:"Área gourmet",x:350,y:515,w:125,h:200,c:"#efe7da"},
+  {id:"social",img:"sala_int",n:"Sala de estar (pé-direito duplo)",s:"Sala de estar",x:475,y:505,w:150,h:180,c:"#f6f2ea"},
+  {id:"social",img:"sala_escada",n:"Escada",s:" ",x:625,y:515,w:40,h:170,c:"#cfc8bd"},
+  {id:"terreo",img:"escritorio",n:"Escritório",x:725,y:435,w:50,h:90,c:"#ece6dc"},
+  {id:"terreo",img:"banho_social1",n:"Banho social",s:"Banho",x:775,y:435,w:45,h:90,c:"#dcd8d2"},
+  {id:"terreo",img:"hospedes",n:"Quarto de hóspedes",s:"Hóspedes",x:820,y:435,w:85,h:115,c:"#ece6dc"},
+  {id:"fachada",img:"fach_esquina",n:"Garagem 3 carros",x:680,y:560,w:225,h:155,c:"#dedcd8"},
+  {id:"fachada",img:"fach_frente",n:"Acesso social",s:" ",x:480,y:690,w:50,h:115,c:"#e6e1d8"},
+  {id:"fachada",img:"fach_frente",n:"Afastamento frontal (jardim)",s:"Jardim frontal",x:100,y:730,w:370,h:85,c:"#d4e2c8"},
+  {id:"fachada",img:"fach_detalhe",n:"Afastamento lateral",s:"Jardim",x:680,y:730,w:200,h:85,c:"#d4e2c8"}
+ ], extra:`<g fill="#5b8a3c">${[375,445,515,585].map(x=>`<circle cx="${x}" cy="285" r="20"/><circle cx="${x}" cy="285" r="8" fill="#7fb35a"/>`).join("")}</g>
+  <g fill="#6aa04a">${[0,1,2,3,4,5,6,7,8].map(i=>`<circle cx="112" cy="${420+i*32}" r="9"/>`).join("")}${[0,1,2,3,4,5].map(i=>`<circle cx="${135+i*35}" cy="705" r="9"/>`).join("")}</g>
+  <path d="M915 400 L1060 375 L1062 640 Q1058 760 930 805 Z" fill="none" stroke="#9aa08f" stroke-dasharray="4 6"/><text x="990" y="600" font-size="13" fill="#6f7466" text-anchor="middle" transform="rotate(-80 990 600)">rampa de acesso</text>
+  <text x="530" y="860" font-size="14" font-weight="600" fill="#6a6c71" text-anchor="middle" letter-spacing="3">RUA</text>`,
+  post:`<g stroke="#26282C" stroke-width="2" fill="none" opacity=".55">${[700,775,850].map(x=>`<rect x="${x}" y="600" width="44" height="100" rx="13" pointer-events="none"/>`).join("")}</g><g stroke="#8c8a85" stroke-width="1.5">${[0,1,2,3,4,5,6,7,8,9].map(i=>`<line x1="627" x2="663" y1="${525+i*16}" y2="${525+i*16}"/>`).join("")}${[0,1,2,3,4,5].map(i=>`<line x1="482" x2="528" y1="${700+i*18}" y2="${700+i*18}"/>`).join("")}</g>`},
+ s:{title:"Pavimento superior", lot:LOT_T, rooms:[
+  {id:"semi",img:"semi1",n:"Semi-suíte 1",x:350,y:400,w:85,h:110,c:"#f1e4d4"},
+  {id:"semi",img:"banho_social2",n:"Banho das semi-suítes",s:"Banho",x:435,y:400,w:50,h:110,c:"#dcd8d2"},
+  {id:"semi",img:"semi2",n:"Semi-suíte 2",x:485,y:400,w:95,h:110,c:"#f1e4d4"},
+  {id:"suite",img:"suite",n:"Suíte",x:580,y:400,w:105,h:110,c:"#f1e4d4"},
+  {id:"suite",img:"suite_banho",n:"Banho da suíte",s:"Banho",x:685,y:410,w:45,h:100,c:"#dcd8d2"},
+  {id:"social",img:"pe_direito",n:"Circulação e mezanino",s:"Circulação",x:350,y:510,w:385,h:35,c:"#f6f2ea"},
+  {id:"master",img:"banho_master",n:"Banho master com banheira",s:"Banho master",x:735,y:470,w:125,h:75,c:"#dcd8d2"},
+  {id:"master",img:"master",n:"Suíte master",x:640,y:545,w:150,h:115,c:"#ecdcc6"},
+  {id:"master",img:"closet",n:"Closet",x:790,y:545,w:70,h:115,c:"#e7ddcf"},
+  {id:"social",img:"sala_escada",n:"Escada",s:" ",x:612,y:545,w:28,h:155,c:"#cfc8bd"},
+  {id:"social",img:"pe_direito",n:"Vazio da sala (pé-direito duplo)",s:"Vazio da sala",x:465,y:545,w:147,h:160,c:"#ffffff"},
+  {id:"lazer",img:"gourmet",n:"Laje sobre a área gourmet",s:"Laje",x:350,y:545,w:115,h:200,c:"#eef0ea"},
+  {id:"master",img:"master2",n:"Varanda da suíte master",s:"Varanda",x:640,y:665,w:245,h:80,c:"#e3b48d"}
+ ], extra:`<rect x="150" y="400" width="150" height="305" fill="none" stroke="#9fb7cc" stroke-width="2" stroke-dasharray="8 6"/><text x="225" y="560" font-size="12" fill="#6f8aa3" text-anchor="middle">projeção da piscina</text>
+  <text x="530" y="860" font-size="14" font-weight="600" fill="#6a6c71" text-anchor="middle" letter-spacing="3">RUA</text>`,
+  post:`<path d="M465 545 L612 705 M612 545 L465 705" stroke="#bdb6ab" stroke-dasharray="6 6" pointer-events="none"/><g stroke="#8c8a85" stroke-width="1.5">${[0,1,2,3,4,5,6,7,8].map(i=>`<line x1="614" x2="638" y1="${555+i*17}" y2="${555+i*17}"/>`).join("")}</g>`}
 };
 const Plan = {
   f:"t",
   set(f){ this.f=f; $$("#planSeg button").forEach(b=>b.classList.toggle("on",b.dataset.f===f)); this.render(); },
   render(){ const p=PLAN[this.f];
     const rooms = p.rooms.map((r,k)=>`<g class="rm" data-k="${k}" data-id="${r.id}"><rect x="${r.x}" y="${r.y}" width="${r.w}" height="${r.h}" fill="${r.c}" stroke="#26282C" stroke-width="2.5"/>${this.label(r)}</g>`).join("");
-    const lotT = this.f==="t" ? `<path d="M40 470 L40 120 L120 40 L860 160 L860 470 Q860 520 810 520 L40 520 Z" fill="#eef1ea" stroke="#9aa08f" stroke-dasharray="6 6"/>` : `<path d="M40 470 L40 120 L120 40 L860 160 L860 470 Q860 520 810 520 L40 520 Z" fill="#f6f5f2" stroke="#c9c6bf" stroke-dasharray="6 6"/>`;
-    $("#planSvg").innerHTML = `<svg viewBox="20 20 860 520" xmlns="http://www.w3.org/2000/svg">${lotT}${p.extra}${rooms}<text x="40" y="540" font-size="11" fill="#888">RUA</text><g transform="translate(830,60)"><circle r="16" fill="none" stroke="#999"/><path d="M0 -12 L5 4 L0 0 L-5 4Z" fill="#26282C"/><text y="-20" font-size="10" text-anchor="middle" fill="#666">N</text></g></svg>`;
+    const lotT = `<path d="${p.lot}" fill="${this.f==="t"?"#eef3ea":"#f6f5f2"}" stroke="#9aa08f" stroke-width="2" stroke-dasharray="8 6"/>`;
+    $("#planSvg").innerHTML = `<svg viewBox="80 80 1000 800" xmlns="http://www.w3.org/2000/svg">${lotT}${p.extra}${rooms}<g pointer-events="none">${p.post||""}</g><g transform="translate(1020,170)"><circle r="18" fill="#fff" stroke="#999"/><path d="M0 -13 L6 5 L0 1 L-6 5Z" fill="#26282C"/><text y="-24" font-size="12" text-anchor="middle" fill="#666">N</text></g></svg>`;
     $("#planLegendTitle").textContent=p.title;
     $("#planLegend").innerHTML = p.rooms.map((r,k)=>`<li data-k="${k}"><span>${r.n}</span><small style="white-space:nowrap">abrir ›</small></li>`).join("");
     const all=[...$$("#planSvg .rm"),...$$("#planLegend li")];
@@ -714,10 +730,10 @@ const Plan = {
       el.onmouseenter=()=>this.hlK(k); el.onmouseleave=()=>this.hlK(-1);
       el.onclick=()=>Amb.open(r.id,r.img); });
   },
-  label(r){ const words=(r.s||r.n).split(" "); const lines=[]; let cur=""; const max=Math.max(8,Math.floor(r.w/7.2));
+  label(r){ const words=(r.s||r.n).split(" "); const lines=[]; let cur=""; const fs=r.w<60||r.h<45?10.5:12.5; const max=Math.max(6,Math.floor(r.w/(fs*0.6)));
     words.forEach(w=>{ if((cur+" "+w).trim().length>max){ lines.push(cur.trim()); cur=w; } else cur+=" "+w; }); lines.push(cur.trim());
     const cx=r.x+r.w/2, cy=r.y+r.h/2-(lines.length-1)*7;
-    return lines.map((l,i)=>`<text x="${cx}" y="${cy+i*14+4}" font-size="11.5" font-weight="600" fill="#26282C" text-anchor="middle">${l}</text>`).join(""); },
+    return lines.map((l,i)=>`<text x="${cx}" y="${cy+i*(fs+3)+4}" font-size="${fs}" font-weight="600" fill="#26282C" text-anchor="middle">${l}</text>`).join(""); },
   hlK(k){ $$("#planSvg .rm").forEach(g=>g.classList.toggle("hl",+g.dataset.k===k)); $$("#planLegend li").forEach(l=>l.classList.toggle("hl",+l.dataset.k===k)); },
   hl(id){ $$("#planSvg .rm").forEach(g=>g.classList.toggle("hl",g.dataset.id===id)); $$("#planLegend li").forEach(l=>l.classList.toggle("hl",PLAN[this.f].rooms[+l.dataset.k].id===id)); }
 };
