@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro de obra residencial no Gran Park Toscana.">
-<meta name="app-version" content="20261118T220059">
+<meta name="app-version" content="20261118T234445">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -6768,6 +6768,7 @@ const IMPORT_DESTINOS = {
   },
 };
 
+function nomeDoPerfil(p) { return p === 'master' ? 'RS&E' : (p === 'gestor' ? 'Gestor' : (p === 'cliente' ? 'Cliente' : p)); }
 function impNormaliza(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
 function impNumero(v) {
   if (v === null || v === undefined || v === '') return 0;
@@ -7140,7 +7141,7 @@ function renderCadastroObras() {
     <div class="table-scroll"><table class="extrato-table">
       <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Obras liberadas</th><th>Situação</th><th class="no-print"></th></tr></thead>
       <tbody>${(CADASTRO.usuarios || []).map((u) => `<tr>
-        <td>${esc(u.nome)}</td><td class="mono">${esc(u.usuario)}</td><td>${esc(u.perfil)}</td>
+        <td>${esc(u.nome)}</td><td class="mono">${esc(u.usuario)}</td><td>${esc(nomeDoPerfil(u.perfil))}</td>
         <td>${u.perfil === 'master' ? '<span class="muted">todas</span>' : ((u.obras || []).map((id) => esc((CADASTRO.obras.find((o) => o.id === id) || {}).nome || id)).join(', ') || '<span class="muted">nenhuma</span>')}</td>
         <td class="${u.ativo ? 'st-ok' : 'muted'}">${u.ativo ? 'ativo' : 'desativado'}</td>
         <td class="no-print"><button type="button" class="btn small" data-user="${esc(u.usuario)}">editar</button></td>
@@ -7346,7 +7347,7 @@ function abrirEdicaoUsuario(usuario) {
         <label>Perfil<select name="perfil">
           <option value="gestor"${usuario && usuario.perfil === 'gestor' ? ' selected' : ''}>Gestor (lança nas obras liberadas)</option>
           <option value="cliente"${usuario && usuario.perfil === 'cliente' ? ' selected' : ''}>Cliente (acompanha a obra dele)</option>
-          <option value="master"${usuario && usuario.perfil === 'master' ? ' selected' : ''}>Master (vê todas e cadastra)</option>
+          <option value="master"${usuario && usuario.perfil === 'master' ? ' selected' : ''}>RS&amp;E (vê todas as obras e cadastra)</option>
         </select></label>
       </div>
       <label>Obras liberadas
@@ -10342,7 +10343,7 @@ function renderBarraAcesso() {
   } else {
     const quem = document.createElement('span');
     quem.className = 'capa-acesso-rot';
-    quem.textContent = `${SESSAO.usuario}${SESSAO.perfil === 'master' ? ' · administrador' : ''}`;
+    quem.textContent = `${SESSAO.usuario}${SESSAO.perfil === 'master' ? ' · RS&E' : ''}`;
     dir.appendChild(quem);
     if (ehMaster()) {
       const b = document.createElement('button');
