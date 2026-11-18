@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro de obra residencial no Gran Park Toscana.">
-<meta name="app-version" content="20261118T152933">
+<meta name="app-version" content="20261118T171439">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -1220,6 +1220,16 @@
   .capa-rodape { display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
     background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; }
   .capa-rodape-nota { font-size: 12px; color: var(--muted); }
+  /* Barra de obra e acesso, no topo da capa. Antes o caminho para entrar e
+     para trocar de obra existia só no botão do cabeçalho, e ninguém achava. */
+  .capa-acesso { display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent);
+    border-radius: 12px; padding: 11px 15px; margin-bottom: 12px; }
+  .capa-acesso-rot { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .capa-acesso-obra { font-size: 15px; font-weight: 700; }
+  .capa-acesso-dir { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .capa-acesso select { font: inherit; font-size: 13px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--ink); max-width: 260px; }
+  .capa-acesso-nota { font-size: 11.5px; color: var(--muted); flex: 1 1 100%; }
   /* No celular a capa vira duas colunas, não uma: com quinze cartões, uma
      coluna só virava uma rolagem de quatro telas e a capa perdia a graça de
      ser um índice. Os cartões encolhem (ícone, corpo e o "Abrir", que fica só
@@ -4118,7 +4128,7 @@ function aplicarModo() {
   const btn = document.getElementById('btnSessao');
   if (btn) {
     // Sem o nome na tela: quem olha por cima do ombro vê só que há uma sessão aberta.
-    btn.textContent = SESSAO ? 'Lançamento ativo · sair' : 'Entrar para lançar';
+    btn.textContent = SESSAO ? 'Lançamento ativo · sair' : 'Entrar no sistema';
     btn.classList.toggle('ativo', !!SESSAO);
     btn.title = SESSAO ? 'Encerrar a sessão de lançamento' : 'Entrar para inserir e editar lançamentos';
   }
@@ -9716,12 +9726,84 @@ function capaNumeroDaAba(tab, r) {
   return '';
 }
 
+/* Barra de obra e acesso.
+   -------------------------------------------------------------------------
+   Diz, sem precisar procurar, três coisas: qual obra está aberta, como entrar
+   e (para quem administra) onde ficam o cadastro de obras e de usuários. Sem
+   sessão ela é o convite para entrar; com sessão vira o seletor de obra. */
+function renderBarraAcesso() {
+  const barra = document.createElement('div');
+  barra.className = 'capa-acesso no-print';
+  const obras = (SESSAO && SESSAO.obras) || [];
+  const atual = obras.find((o) => o.id === NUVEM_CFG.obraId);
+  const nomeAtual = (atual && atual.nome) || nomeObraPublico();
+
+  const esq = document.createElement('div');
+  esq.innerHTML = `<div class="capa-acesso-rot">Obra aberta</div><div class="capa-acesso-obra">${esc(nomeAtual)}</div>`;
+  barra.appendChild(esq);
+
+  const dir = document.createElement('div');
+  dir.className = 'capa-acesso-dir';
+
+  if (obras.length > 1) {
+    const rot = document.createElement('span');
+    rot.className = 'capa-acesso-rot';
+    rot.textContent = 'Trocar de obra';
+    const sel = document.createElement('select');
+    sel.className = 'filter-control';
+    for (const o of obras) {
+      const op = document.createElement('option');
+      op.value = o.id;
+      op.textContent = o.nome || o.id;
+      if (o.id === NUVEM_CFG.obraId) op.selected = true;
+      sel.appendChild(op);
+    }
+    sel.onchange = () => trocarDeObra(sel.value);
+    dir.append(rot, sel);
+  }
+
+  if (!SESSAO) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn primary filter-control';
+    b.textContent = 'Entrar no sistema';
+    b.onclick = abrirLogin;
+    dir.appendChild(b);
+  } else {
+    const quem = document.createElement('span');
+    quem.className = 'capa-acesso-rot';
+    quem.textContent = `${SESSAO.usuario}${SESSAO.perfil === 'master' ? ' · administrador' : ''}`;
+    dir.appendChild(quem);
+    if (ehMaster()) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn primary filter-control';
+      b.textContent = 'Obras e usuários';
+      b.onclick = () => irParaAba('obras');
+      dir.appendChild(b);
+    }
+  }
+  barra.appendChild(dir);
+
+  const nota = document.createElement('div');
+  nota.className = 'capa-acesso-nota';
+  nota.textContent = !SESSAO
+    ? 'Sem entrar, o painel fica em somente leitura (o Controle Mensal CAIXA continua aberto). Entre para lançar, para trocar de obra e, se você administra, para cadastrar obras e usuários.'
+    : (obras.length > 1
+      ? `Você tem ${obras.length} obras liberadas. Cada obra tem lançamentos, comprovantes e RDO próprios.`
+      : 'Uma obra liberada para o seu usuário.');
+  barra.appendChild(nota);
+  return barra;
+}
+
 function renderCapa() {
   const root = document.getElementById('tab-capa');
   if (!root) return;
   root.innerHTML = '';
   const r = VIEW.resumo || {};
   const m = VIEW.meta || {};
+
+  root.appendChild(renderBarraAcesso());
 
   const hero = document.createElement('section');
   hero.className = 'capa-hero';
