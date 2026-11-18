@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro de obra residencial no Gran Park Toscana.">
-<meta name="app-version" content="20261118T234830">
+<meta name="app-version" content="20261118T235210">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -10343,7 +10343,11 @@ function renderBarraAcesso() {
   } else {
     const quem = document.createElement('span');
     quem.className = 'capa-acesso-rot';
-    quem.textContent = `${SESSAO.usuario}${SESSAO.perfil === 'master' ? ' · RS&E' : ''}`;
+    // Só o perfil, nunca o nome de quem está logado: é a mesma regra do botão
+    // de sessão no cabeçalho, para quem olha a tela por cima do ombro ver que
+    // há uma sessão aberta, e não quem a abriu.
+    quem.textContent = nomeDoPerfil(SESSAO.perfil);
+    quem.title = 'Perfil desta sessão';
     dir.appendChild(quem);
     if (ehMaster()) {
       const b = document.createElement('button');
