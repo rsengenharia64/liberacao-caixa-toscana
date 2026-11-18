@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro de obra residencial no Gran Park Toscana.">
-<meta name="app-version" content="20261118T171439">
+<meta name="app-version" content="20261118T220059">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -714,6 +714,16 @@
   .cad-form input, .cad-form select { font: inherit; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--ink); }
   .cad-obras-check { display: flex; flex-direction: column; gap: 4px; max-height: 170px; overflow: auto; border: 1px solid var(--border); border-radius: 7px; padding: 7px 9px; }
   .cad-obras-check label { flex-direction: row; align-items: center; gap: 7px; font-weight: 400; }
+  .imp-passo { border: 1px solid var(--border); border-radius: 10px; padding: 11px 13px; margin-bottom: 10px; background: var(--surface-2); }
+  .imp-passo-titulo { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin-bottom: 7px; }
+  .imp-map { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 8px 14px; }
+  .imp-map label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+  .imp-map select { font: inherit; font-size: 12.5px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--ink); }
+  .imp-map select.faltando { border-color: var(--danger); }
+  .imp-previa { max-height: 240px; overflow: auto; }
+  .imp-previa table { font-size: 11.5px; }
+  .imp-resumo { font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; }
+  .imp-resumo strong { font-family: "IBM Plex Mono", monospace; }
   .comp-barra { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 4px 0 10px; }
   .comp-barra label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
   .comp-barra input { min-width: 260px; border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 5px 8px; }
@@ -6590,6 +6600,485 @@ async function cadastroCarregar() {
    guardado na sessão desta aba só para as chamadas de cadastro. */
 function tokenSenhaSessao() { return (SESSAO && SESSAO.hash) || tokenObraAtual(); }
 
+/* ==========================================================================
+   LEITURA DE PLANILHA (.xlsx e .csv) — sem biblioteca externa
+   --------------------------------------------------------------------------
+   O app é um arquivo só e não carrega script de fora, então o .xlsx é aberto
+   aqui mesmo: ele é um ZIP, e o navegador sabe descompactar (DecompressionStream
+   'deflate-raw'). Lemos o catálogo do ZIP, tiramos as partes que interessam
+   (nomes das abas, textos compartilhados e as células de cada aba) e
+   devolvemos uma matriz de linhas, igual ao que um CSV daria. Nada do arquivo
+   sai do navegador de quem está importando.
+   ========================================================================== */
+function zipCatalogo(buf) {
+  const dv = new DataView(buf);
+  const u8 = new Uint8Array(buf);
+  let fim = -1;
+  for (let i = u8.length - 22; i >= 0 && i > u8.length - 66000; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { fim = i; break; }
+  }
+  if (fim < 0) throw new Error('arquivo não parece um .xlsx');
+  const qtd = dv.getUint16(fim + 10, true);
+  let p = dv.getUint32(fim + 16, true);
+  const entradas = new Map();
+  const dec = new TextDecoder();
+  for (let i = 0; i < qtd; i++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    const metodo = dv.getUint16(p + 10, true);
+    const compSize = dv.getUint32(p + 20, true);
+    const size = dv.getUint32(p + 24, true);
+    const nLen = dv.getUint16(p + 28, true);
+    const eLen = dv.getUint16(p + 30, true);
+    const cLen = dv.getUint16(p + 32, true);
+    const local = dv.getUint32(p + 42, true);
+    const nome = dec.decode(u8.subarray(p + 46, p + 46 + nLen));
+    entradas.set(nome, { metodo, compSize, size, local });
+    p += 46 + nLen + eLen + cLen;
+  }
+  return entradas;
+}
+async function zipTexto(buf, entrada) {
+  if (!entrada) return '';
+  const dv = new DataView(buf);
+  const u8 = new Uint8Array(buf);
+  const nLen = dv.getUint16(entrada.local + 26, true);
+  const eLen = dv.getUint16(entrada.local + 28, true);
+  const ini = entrada.local + 30 + nLen + eLen;
+  const bruto = u8.subarray(ini, ini + (entrada.metodo === 0 ? entrada.size : entrada.compSize));
+  if (entrada.metodo === 0) return new TextDecoder().decode(bruto);
+  if (typeof DecompressionStream !== 'function') throw new Error('este navegador não descompacta .xlsx; salve a planilha como .csv');
+  const ds = new DecompressionStream('deflate-raw');
+  const stream = new Blob([bruto]).stream().pipeThrough(ds);
+  return new Response(stream).text();
+}
+function colunaDaRef(ref) {
+  const m = /^([A-Z]+)/.exec(ref || '');
+  if (!m) return 0;
+  let n = 0;
+  for (const ch of m[1]) n = n * 26 + (ch.charCodeAt(0) - 64);
+  return n - 1;
+}
+// Data do Excel vem como número de dias desde 30/12/1899.
+function serialParaData(n) {
+  const ms = Date.UTC(1899, 11, 30) + Math.round(n) * 86400000;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+async function xlsxParaAbas(buf) {
+  const ent = zipCatalogo(buf);
+  const dp = new DOMParser();
+  const wb = dp.parseFromString(await zipTexto(buf, ent.get('xl/workbook.xml')), 'application/xml');
+  const rels = dp.parseFromString(await zipTexto(buf, ent.get('xl/_rels/workbook.xml.rels')), 'application/xml');
+  const alvoPorId = new Map([...rels.getElementsByTagName('Relationship')].map((r) => [r.getAttribute('Id'), r.getAttribute('Target')]));
+  const compart = [];
+  const ss = ent.get('xl/sharedStrings.xml');
+  if (ss) {
+    const doc = dp.parseFromString(await zipTexto(buf, ss), 'application/xml');
+    for (const si of doc.getElementsByTagName('si')) {
+      compart.push([...si.getElementsByTagName('t')].map((t) => t.textContent).join(''));
+    }
+  }
+  const abas = [];
+  for (const sh of wb.getElementsByTagName('sheet')) {
+    const id = sh.getAttribute('r:id') || sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id');
+    let alvo = alvoPorId.get(id) || '';
+    alvo = alvo.replace(/^\/xl\//, '').replace(/^\//, '');
+    const chave = alvo.startsWith('worksheets/') ? `xl/${alvo}` : `xl/${alvo}`;
+    const entrada = ent.get(chave) || ent.get(`xl/${alvo.replace(/^xl\//, '')}`);
+    if (!entrada) continue;
+    const doc = dp.parseFromString(await zipTexto(buf, entrada), 'application/xml');
+    const linhas = [];
+    for (const row of doc.getElementsByTagName('row')) {
+      const linha = [];
+      for (const c of row.getElementsByTagName('c')) {
+        const col = colunaDaRef(c.getAttribute('r'));
+        const t = c.getAttribute('t');
+        let v = '';
+        if (t === 'inlineStr') v = [...c.getElementsByTagName('t')].map((x) => x.textContent).join('');
+        else {
+          const vn = c.getElementsByTagName('v')[0];
+          const cru = vn ? vn.textContent : '';
+          v = t === 's' ? (compart[Number(cru)] || '') : cru;
+        }
+        linha[col] = v;
+      }
+      linhas.push(linha);
+    }
+    abas.push({ nome: sh.getAttribute('name') || `Planilha ${abas.length + 1}`, linhas });
+  }
+  return abas;
+}
+function csvParaLinhas(texto) {
+  const sep = (texto.split('\n')[0].match(/;/g) || []).length >= (texto.split('\n')[0].match(/,/g) || []).length ? ';' : ',';
+  const linhas = [];
+  let campo = '';
+  let linha = [];
+  let aspas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const ch = texto[i];
+    if (aspas) {
+      if (ch === '"') { if (texto[i + 1] === '"') { campo += '"'; i++; } else aspas = false; }
+      else campo += ch;
+    } else if (ch === '"') aspas = true;
+    else if (ch === sep) { linha.push(campo); campo = ''; }
+    else if (ch === '\n') { linha.push(campo); linhas.push(linha); linha = []; campo = ''; }
+    else if (ch !== '\r') campo += ch;
+  }
+  if (campo || linha.length) { linha.push(campo); linhas.push(linha); }
+  return linhas;
+}
+async function planilhaLerArquivo(file) {
+  const nome = String(file.name || '').toLowerCase();
+  if (nome.endsWith('.csv') || nome.endsWith('.txt')) {
+    const txt = await file.text();
+    return [{ nome: file.name, linhas: csvParaLinhas(txt) }];
+  }
+  return xlsxParaAbas(await file.arrayBuffer());
+}
+
+/* ==========================================================================
+   IMPORTAR PLANILHA — PCI e estrutura de custo
+   --------------------------------------------------------------------------
+   Lançar à mão a PCI e as dezenas de itens do orçamento é onde o erro entra.
+   Aqui a planilha que já existe (a PCI da CAIXA, a planilha de análise do
+   orçamento) vira os lançamentos da obra: o app lê, mostra o que entendeu de
+   cada coluna, deixa corrigir o de-para e só grava depois que você confere.
+   ========================================================================== */
+const IMPORT_DESTINOS = {
+  pci: {
+    titulo: 'Importar a PCI (etapas de liberação do CAIXA)',
+    nota: 'Uma linha por etapa do PCI. O valor de cada etapa é o que o banco libera ao aprovar aquela medição.',
+    campos: [
+      { k: 'etapa', rot: 'Etapa (número)', tipo: 'int', dicas: ['etapa', 'item', 'ordem', 'n'] },
+      { k: 'descricao', rot: 'Descrição da etapa', tipo: 'txt', obrig: true, dicas: ['descricao', 'descrição', 'servico', 'serviço', 'etapa'] },
+      { k: 'valor', rot: 'Valor da etapa', tipo: 'num', obrig: true, dicas: ['valor', 'liberacao', 'liberação', 'parcela', 'total'] },
+      { k: 'mesProgramado', rot: 'Mês programado', tipo: 'int', dicas: ['mes', 'mês', 'periodo', 'período'] },
+      { k: 'percLimiteAcumulado', rot: '% limite acumulado', tipo: 'perc', dicas: ['acumulado', 'limite', '%'] },
+    ],
+  },
+  categorias: {
+    titulo: 'Importar a estrutura de custo (categorias e itens)',
+    nota: 'Uma linha por item do orçamento. Itens com a mesma categoria são agrupados; a categoria recebe a soma dos itens dela.',
+    campos: [
+      { k: 'categoria', rot: 'Categoria', tipo: 'txt', obrig: true, dicas: ['categoria', 'etapa', 'grupo', 'servico', 'serviço'] },
+      { k: 'descricao', rot: 'Descrição do item', tipo: 'txt', obrig: true, dicas: ['descricao', 'descrição', 'item', 'insumo'] },
+      { k: 'unidade', rot: 'Unidade', tipo: 'txt', dicas: ['unidade', 'und', 'un'] },
+      { k: 'valorOrcado', rot: 'Valor orçado', tipo: 'num', obrig: true, dicas: ['orcado', 'orçado', 'valor', 'total', 'previsto'] },
+      { k: 'verbaCaixa', rot: 'Verba CAIXA da categoria', tipo: 'num', dicas: ['caixa', 'verba', 'banco'] },
+    ],
+  },
+};
+
+function impNormaliza(t) { return String(t || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim(); }
+function impNumero(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return v;
+  let t = String(v).replace(/[R$\s%]/g, '').trim();
+  if (/,\d{1,2}$/.test(t)) t = t.replace(/\./g, '').replace(',', '.');
+  else t = t.replace(/,/g, '');
+  const n = Number(t);
+  return Number.isFinite(n) ? n : 0;
+}
+function impPercent(v) {
+  const n = impNumero(v);
+  return n > 1.5 ? round4(n / 100) : round4(n);
+}
+function round4(n) { return Math.round((Number(n) || 0) * 10000) / 10000; }
+
+function abrirImportarPlanilha(destinoId, aoAplicar) {
+  const D = IMPORT_DESTINOS[destinoId];
+  if (!D) return;
+  const estadoImp = { abas: null, aba: 0, cabecalho: 0, mapa: {}, erro: null };
+
+  openModal(D.titulo, (body, close) => {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `<div class="muted" style="margin-bottom:10px">${esc(D.nota)} Aceita .xlsx e .csv. O arquivo é lido aqui no navegador, nada é enviado para fora antes de você conferir e aplicar.</div>`;
+    const passo1 = document.createElement('div');
+    passo1.className = 'imp-passo';
+    passo1.innerHTML = '<div class="imp-passo-titulo">1. Escolha a planilha</div>';
+    const inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = '.xlsx,.csv,.txt';
+    passo1.appendChild(inp);
+    const aviso = document.createElement('div');
+    aviso.className = 'login-erro';
+    aviso.hidden = true;
+    passo1.appendChild(aviso);
+    wrap.appendChild(passo1);
+
+    const resto = document.createElement('div');
+    wrap.appendChild(resto);
+    body.appendChild(wrap);
+
+    const linhasDaAba = () => (estadoImp.abas && estadoImp.abas[estadoImp.aba] && estadoImp.abas[estadoImp.aba].linhas) || [];
+    const cabecalhoAtual = () => (linhasDaAba()[estadoImp.cabecalho] || []).map((c) => String(c === undefined ? '' : c));
+
+    // Acha sozinho a linha de cabeçalho: a primeira com pelo menos duas
+    // células de texto. Planilha de obra costuma ter título e logo em cima.
+    const acharCabecalho = () => {
+      const ls = linhasDaAba();
+      for (let i = 0; i < Math.min(ls.length, 30); i++) {
+        const preenchidas = (ls[i] || []).filter((c) => String(c || '').trim()).length;
+        if (preenchidas >= 2) return i;
+      }
+      return 0;
+    };
+    const automapear = () => {
+      const cab = cabecalhoAtual().map(impNormaliza);
+      estadoImp.mapa = {};
+      for (const campo of D.campos) {
+        let achou = -1;
+        for (const dica of campo.dicas) {
+          achou = cab.findIndex((c) => c && c.includes(dica));
+          if (achou >= 0) break;
+        }
+        if (achou >= 0 && !Object.values(estadoImp.mapa).includes(achou)) estadoImp.mapa[campo.k] = achou;
+      }
+    };
+
+    const montarLinhas = () => {
+      const ls = linhasDaAba().slice(estadoImp.cabecalho + 1);
+      const pega = (linha, k) => {
+        const i = estadoImp.mapa[k];
+        return (i === undefined || i < 0) ? '' : (linha[i] === undefined ? '' : linha[i]);
+      };
+      const out = [];
+      for (const linha of ls) {
+        if (!linha || !linha.some((c) => String(c || '').trim())) continue;
+        const reg = {};
+        let vazio = true;
+        for (const campo of D.campos) {
+          const bruto = pega(linha, campo.k);
+          reg[campo.k] = (campo.tipo === 'num' || campo.tipo === 'int') ? impNumero(bruto) : (campo.tipo === 'perc' ? impPercent(bruto) : String(bruto).trim());
+          if (campo.obrig && String(bruto).trim()) vazio = false;
+        }
+        if (!vazio) out.push(reg);
+      }
+      return out;
+    };
+
+    const desenhar = () => {
+      resto.innerHTML = '';
+      if (!estadoImp.abas) return;
+
+      const p2 = document.createElement('div');
+      p2.className = 'imp-passo';
+      p2.innerHTML = '<div class="imp-passo-titulo">2. Aba e linha de cabeçalho</div>';
+      const linhaSel = document.createElement('div');
+      linhaSel.className = 'imp-map';
+      const selAba = document.createElement('label');
+      selAba.innerHTML = 'Aba da planilha';
+      const sa = document.createElement('select');
+      estadoImp.abas.forEach((a, i) => {
+        const o = document.createElement('option');
+        o.value = String(i); o.textContent = `${a.nome} (${a.linhas.length} linhas)`;
+        if (i === estadoImp.aba) o.selected = true;
+        sa.appendChild(o);
+      });
+      sa.onchange = () => { estadoImp.aba = Number(sa.value); estadoImp.cabecalho = acharCabecalho(); automapear(); desenhar(); };
+      selAba.appendChild(sa);
+      const selCab = document.createElement('label');
+      selCab.innerHTML = 'Linha do cabeçalho';
+      const sc = document.createElement('select');
+      linhasDaAba().slice(0, 40).forEach((l, i) => {
+        const o = document.createElement('option');
+        o.value = String(i);
+        o.textContent = `Linha ${i + 1}: ${(l || []).filter(Boolean).slice(0, 4).join(' · ').slice(0, 60) || '(vazia)'}`;
+        if (i === estadoImp.cabecalho) o.selected = true;
+        sc.appendChild(o);
+      });
+      sc.onchange = () => { estadoImp.cabecalho = Number(sc.value); automapear(); desenhar(); };
+      selCab.appendChild(sc);
+      linhaSel.append(selAba, selCab);
+      p2.appendChild(linhaSel);
+      resto.appendChild(p2);
+
+      const p3 = document.createElement('div');
+      p3.className = 'imp-passo';
+      p3.innerHTML = '<div class="imp-passo-titulo">3. De-para das colunas</div>';
+      const grade = document.createElement('div');
+      grade.className = 'imp-map';
+      const cab = cabecalhoAtual();
+      for (const campo of D.campos) {
+        const lab = document.createElement('label');
+        lab.textContent = campo.rot + (campo.obrig ? ' *' : '');
+        const sel = document.createElement('select');
+        const vazia = document.createElement('option');
+        vazia.value = '-1'; vazia.textContent = campo.obrig ? '— escolha a coluna —' : '— não usar —';
+        sel.appendChild(vazia);
+        cab.forEach((c, i) => {
+          const o = document.createElement('option');
+          o.value = String(i);
+          o.textContent = `${String.fromCharCode(65 + (i % 26))} · ${String(c).slice(0, 34) || '(sem título)'}`;
+          if (estadoImp.mapa[campo.k] === i) o.selected = true;
+          sel.appendChild(o);
+        });
+        if (campo.obrig && (estadoImp.mapa[campo.k] === undefined || estadoImp.mapa[campo.k] < 0)) sel.classList.add('faltando');
+        sel.onchange = () => {
+          const v = Number(sel.value);
+          if (v < 0) delete estadoImp.mapa[campo.k]; else estadoImp.mapa[campo.k] = v;
+          desenhar();
+        };
+        lab.appendChild(sel);
+        grade.appendChild(lab);
+      }
+      p3.appendChild(grade);
+      resto.appendChild(p3);
+
+      const regs = montarLinhas();
+      const p4 = document.createElement('div');
+      p4.className = 'imp-passo';
+      p4.innerHTML = '<div class="imp-passo-titulo">4. Confira antes de aplicar</div>';
+      const resumo = document.createElement('div');
+      resumo.className = 'imp-resumo';
+      if (destinoId === 'pci') {
+        const total = round2(regs.reduce((a, r) => a + (r.valor || 0), 0));
+        resumo.innerHTML = `<strong>${regs.length}</strong> etapa(s) lidas, somando <strong>${money(total)}</strong>.`;
+      } else {
+        const cats = new Set(regs.map((r) => r.categoria).filter(Boolean));
+        const total = round2(regs.reduce((a, r) => a + (r.valorOrcado || 0), 0));
+        resumo.innerHTML = `<strong>${cats.size}</strong> categoria(s) e <strong>${regs.length}</strong> item(ns), somando <strong>${money(total)}</strong> de orçado.`;
+      }
+      p4.appendChild(resumo);
+      const previa = document.createElement('div');
+      previa.className = 'table-scroll imp-previa';
+      const celula = (c, r) => (c.tipo === 'num' ? money(r[c.k]) : (c.tipo === 'perc' ? pct(r[c.k]) : (c.tipo === 'int' ? String(Math.round(Number(r[c.k]) || 0) || '') : esc(r[c.k]))));
+      previa.innerHTML = `<table class="extrato-table"><thead><tr>${D.campos.map((c) => `<th${c.tipo === 'txt' ? '' : ' class="num"'}>${esc(c.rot)}</th>`).join('')}</tr></thead>
+        <tbody>${regs.slice(0, 8).map((r) => `<tr>${D.campos.map((c) => `<td${c.tipo === 'txt' ? '' : ' class="num"'}>${celula(c, r)}</td>`).join('')}</tr>`).join('')}</tbody></table>
+        ${regs.length > 8 ? `<div class="muted" style="padding:6px 2px">… e mais ${regs.length - 8} linha(s).</div>` : ''}`;
+      p4.appendChild(previa);
+      resto.appendChild(p4);
+
+      const acoes = document.createElement('div');
+      acoes.className = 'conta-acoes no-print';
+      const bAplicar = document.createElement('button');
+      bAplicar.type = 'button';
+      bAplicar.className = 'btn primary';
+      bAplicar.textContent = destinoId === 'pci' ? 'Substituir a PCI por estas etapas' : 'Substituir a estrutura por estas categorias';
+      const faltando = D.campos.filter((c) => c.obrig && (estadoImp.mapa[c.k] === undefined || estadoImp.mapa[c.k] < 0));
+      bAplicar.disabled = !!faltando.length || !regs.length;
+      bAplicar.title = faltando.length ? `Falta escolher a coluna de: ${faltando.map((c) => c.rot).join(', ')}` : '';
+      bAplicar.onclick = async () => {
+        const quantos = destinoId === 'pci' ? `${regs.length} etapas do PCI` : `${regs.length} itens de orçamento`;
+        const ok = await confirmDialog(`Isto substitui o que já está lançado nesta obra por ${quantos} da planilha. O que foi medido e pago continua onde está; só a estrutura é trocada. Confirmar?`, { title: 'Aplicar importação', okLabel: 'Aplicar', danger: false });
+        if (!ok) return;
+        aplicarImportacao(destinoId, regs);
+        close();
+        if (typeof aoAplicar === 'function') aoAplicar();
+      };
+      acoes.appendChild(bAplicar);
+      resto.appendChild(acoes);
+    };
+
+    inp.addEventListener('change', async () => {
+      const f = inp.files && inp.files[0];
+      if (!f) return;
+      aviso.hidden = true;
+      resto.innerHTML = '<div class="muted">Lendo a planilha…</div>';
+      try {
+        estadoImp.abas = await planilhaLerArquivo(f);
+        if (!estadoImp.abas.length) throw new Error('não achei nenhuma aba com dados');
+        estadoImp.aba = 0;
+        estadoImp.cabecalho = acharCabecalho();
+        automapear();
+        desenhar();
+      } catch (e) {
+        resto.innerHTML = '';
+        aviso.hidden = false;
+        aviso.textContent = `Não consegui ler: ${e.message || e}`;
+      }
+    });
+  }, { wide: true, fullscreen: true });
+}
+
+function aplicarImportacao(destinoId, regs) {
+  if (destinoId === 'pci') {
+    STATE.liberacaoPCI = regs.map((r, i) => ({
+      etapa: Number(r.etapa) || i + 1,
+      descricao: r.descricao || `Etapa ${i + 1}`,
+      valor: round2(r.valor),
+      mesProgramado: Number(r.mesProgramado) || (i + 1),
+      percLimiteAcumulado: Number(r.percLimiteAcumulado) || 0,
+      liberadoManual: null,
+    }));
+    registrarAlteracao('Liberação PCI', 'etapas', 'PCI importada de planilha', null, `${regs.length} etapas`);
+  } else {
+    const porCategoria = new Map();
+    for (const r of regs) {
+      const nome = r.categoria || 'Sem categoria';
+      if (!porCategoria.has(nome)) porCategoria.set(nome, { nome, itens: [], verbaCaixa: 0 });
+      const c = porCategoria.get(nome);
+      c.itens.push(r);
+      if (r.verbaCaixa) c.verbaCaixa = round2(r.verbaCaixa);
+    }
+    const antigas = new Map((STATE.categorias || []).map((c) => [impNormaliza(c.nome), c]));
+    STATE.categorias = [...porCategoria.values()].map((c, i) => {
+      const slug = impNormaliza(c.nome).replace(/[^a-z0-9]+/g, '-').slice(0, 30);
+      const id = `cat-${String(i + 1).padStart(2, '0')}-${slug}`;
+      // Mantém o que já foi medido quando a categoria tem o mesmo nome: a
+      // importação troca a estrutura, não apaga o avanço da obra.
+      const velha = antigas.get(impNormaliza(c.nome)) || {};
+      const valorOrcado = round2(c.itens.reduce((a, x) => a + (Number(x.valorOrcado) || 0), 0));
+      return {
+        id: velha.id || id,
+        numero: i + 1,
+        nome: c.nome,
+        observacao: velha.observacao || '',
+        valorOrcado,
+        verbaCaixa: c.verbaCaixa || Number(velha.verbaCaixa) || 0,
+        percAvancoManual: velha.percAvancoManual !== undefined ? velha.percAvancoManual : null,
+        dataUltimoAvanco: velha.dataUltimoAvanco || null,
+        cronogramaPrevisto: velha.cronogramaPrevisto || null,
+        liberadoCaixaManual: velha.liberadoCaixaManual !== undefined ? velha.liberadoCaixaManual : null,
+        pagoDiretoProprietario: !!velha.pagoDiretoProprietario,
+        itens: c.itens.map((x, j) => ({
+          id: `${velha.id || id}-item-${j + 1}`,
+          descricao: x.descricao,
+          unidade: x.unidade || 'verba',
+          valorOrcado: round2(x.valorOrcado),
+          valorRealizado: 0,
+          dataPagamento: '',
+          formaPagamento: '',
+        })),
+      };
+    });
+    registrarAlteracao('Detalhamento FC', 'categorias', 'estrutura importada de planilha', null, `${STATE.categorias.length} categorias`);
+  }
+  afterMutation();
+  VIEW = recompute(STATE);
+  renderAll();
+  toast(destinoId === 'pci' ? 'PCI importada.' : 'Estrutura de custo importada.');
+}
+
+/* Distribui o contrato do empreiteiro pelo peso de cada categoria.
+   O Emanuel pediu: lançar o valor total (ou o valor por m²) e o app gerar o
+   valor de cada categoria na mesma proporção do orçamento já cadastrado, que
+   é o que manda no avanço e no pagamento. */
+function distribuirContratoEmpreiteiro(total) {
+  const cats = STATE.categorias || [];
+  const base = round2(cats.reduce((a, c) => a + (Number(c.valorOrcado) || 0), 0));
+  if (!base || !total) return false;
+  const fator = total / base;
+  for (const c of cats) {
+    const novo = round2((Number(c.valorOrcado) || 0) * fator);
+    const itens = c.itens || [];
+    itens.forEach((it) => { it.valorOrcado = round2((Number(it.valorOrcado) || 0) * fator); });
+    // O arredondamento item a item deixa centavos sobrando; o último item
+    // absorve a diferença para a soma dos itens fechar com a categoria.
+    if (itens.length) {
+      const somaItens = round2(itens.reduce((a, it) => a + (Number(it.valorOrcado) || 0), 0));
+      const sobra = round2(novo - somaItens);
+      if (sobra) itens[itens.length - 1].valorOrcado = round2((Number(itens[itens.length - 1].valorOrcado) || 0) + sobra);
+    }
+    c.valorOrcado = novo;
+  }
+  STATE.parametros.contratoTotalEmpreiteiro = round2(total);
+  registrarAlteracao('Parâmetros', 'contratoTotalEmpreiteiro', 'contrato distribuído pelo peso das categorias', base, round2(total));
+  afterMutation();
+  VIEW = recompute(STATE);
+  renderAll();
+  return true;
+}
+
 function renderCadastroObras() {
   const root = document.getElementById('tab-obras');
   if (!root) return;
@@ -6658,8 +7147,89 @@ function renderCadastroObras() {
       </tr>`).join('') || '<tr><td colspan="6" class="muted">Nenhum usuário cadastrado ainda além do seu acesso.</td></tr>'}</tbody>
     </table></div>`;
   root.appendChild(pUsers);
+  root.appendChild(renderPainelImportacao());
   pUsers.querySelector('button[data-acao="novo-usuario"]').onclick = () => abrirEdicaoUsuario(null);
   pUsers.querySelectorAll('button[data-user]').forEach((b) => { b.onclick = () => abrirEdicaoUsuario((CADASTRO.usuarios || []).find((u) => u.usuario === b.dataset.user)); });
+}
+
+/* Painel de importação: alimenta a obra ABERTA a partir das planilhas que já
+   existem, em vez de digitar etapa por etapa e item por item. */
+function renderPainelImportacao() {
+  const p = document.createElement('div');
+  p.className = 'panel';
+  const cats = (STATE.categorias || []).length;
+  const itens = (STATE.categorias || []).reduce((a, c) => a + ((c.itens || []).length), 0);
+  const etapas = (STATE.liberacaoPCI || []).length;
+  const orcado = round2((STATE.categorias || []).reduce((a, c) => a + (Number(c.valorOrcado) || 0), 0));
+  p.innerHTML = `
+    <div class="panel-header">
+      <div>
+        <h2>Alimentar a obra aberta por planilha</h2>
+        <div class="muted">Em vez de lançar etapa por etapa e item por item, suba a planilha que você já tem. O app lê o arquivo aqui no navegador, mostra o que entendeu de cada coluna, deixa corrigir o de-para e só grava depois da sua conferência. Serve para montar a obra nova e para corrigir a estrutura de uma obra em andamento: o que já foi medido e pago não é apagado.</div>
+      </div>
+    </div>
+    <div class="cad-grid">
+      <div class="imp-passo">
+        <div class="imp-passo-titulo">PCI (liberação do CAIXA)</div>
+        <div class="imp-resumo">Hoje: <strong>${etapas}</strong> etapa(s), somando <strong>${money((STATE.liberacaoPCI || []).reduce((a, e) => a + (Number(e.valor) || 0), 0))}</strong>.</div>
+        <div class="conta-acoes"><button type="button" class="btn primary" data-imp="pci">Importar PCI</button></div>
+      </div>
+      <div class="imp-passo">
+        <div class="imp-passo-titulo">Estrutura de custo (categorias e itens)</div>
+        <div class="imp-resumo">Hoje: <strong>${cats}</strong> categoria(s) e <strong>${itens}</strong> item(ns), somando <strong>${money(orcado)}</strong>.</div>
+        <div class="conta-acoes"><button type="button" class="btn primary" data-imp="categorias">Importar estrutura</button></div>
+      </div>
+      <div class="imp-passo">
+        <div class="imp-passo-titulo">Contrato do empreiteiro</div>
+        <div class="imp-resumo">Lance o valor total, ou o valor por m², e o app distribui pelo peso de cada categoria já cadastrada. É esse valor que manda no avanço e no pagamento.</div>
+        <div class="conta-acoes"><button type="button" class="btn" data-imp="contrato">Lançar contrato por peso</button></div>
+      </div>
+    </div>`;
+  p.querySelector('button[data-imp="pci"]').onclick = () => abrirImportarPlanilha('pci', () => renderCadastroObras());
+  p.querySelector('button[data-imp="categorias"]').onclick = () => abrirImportarPlanilha('categorias', () => renderCadastroObras());
+  p.querySelector('button[data-imp="contrato"]').onclick = abrirContratoEmpreiteiro;
+  return p;
+}
+
+function abrirContratoEmpreiteiro() {
+  const area = Number((VIEW.meta || {}).areaM2) || 0;
+  openModal('Contrato do empreiteiro', (body, close) => {
+    const f = document.createElement('form');
+    f.className = 'cad-form';
+    f.innerHTML = `
+      <div class="muted">O valor entra como contrato total e é distribuído entre as categorias na mesma proporção do orçamento já cadastrado. Nenhuma medição ou pagamento é alterado: muda a base sobre a qual o avanço é calculado.</div>
+      <div class="cad-grid">
+        <label>Valor por m² (área ${area || '—'} m²)<input name="m2" type="number" step="0.01" min="0" placeholder="ex.: 3500"></label>
+        <label>ou valor total do contrato<input name="total" type="number" step="0.01" min="0"></label>
+      </div>
+      <div class="imp-resumo" data-previa>Contrato atual: <strong>${money(Number((VIEW.parametros || {}).contratoTotalEmpreiteiro) || 0)}</strong>.</div>
+      <div class="login-erro" hidden></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" class="btn" data-x="cancelar">Cancelar</button>
+        <button type="submit" class="btn primary">Aplicar</button>
+      </div>`;
+    const erro = f.querySelector('.login-erro');
+    const previa = f.querySelector('[data-previa]');
+    const calcular = () => {
+      const d = Object.fromEntries(new FormData(f).entries());
+      const total = Number(d.total) || (Number(d.m2) || 0) * area;
+      previa.innerHTML = total
+        ? `Contrato total: <strong>${money(total)}</strong>${area ? ` · ${money(total / area)} por m²` : ''}.`
+        : `Contrato atual: <strong>${money(Number((VIEW.parametros || {}).contratoTotalEmpreiteiro) || 0)}</strong>.`;
+      return total;
+    };
+    f.addEventListener('input', calcular);
+    f.querySelector('[data-x="cancelar"]').onclick = close;
+    f.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const total = calcular();
+      if (!total) { erro.hidden = false; erro.textContent = 'Informe o valor por m² (com a área preenchida) ou o valor total.'; return; }
+      if (!distribuirContratoEmpreiteiro(total)) { erro.hidden = false; erro.textContent = 'Cadastre a estrutura de custo antes: é o peso dela que distribui o contrato.'; return; }
+      close();
+      toast('Contrato do empreiteiro distribuído pelas categorias.');
+    });
+    body.appendChild(f);
+  }, { wide: true });
 }
 
 function abrirNovaObra() {
