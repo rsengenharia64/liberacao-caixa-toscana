@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro de obra residencial no Gran Park Toscana.">
-<meta name="app-version" content="20261007T043951">
+<meta name="app-version" content="20261118T152933">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -701,6 +701,19 @@
   .mov-fech-aviso { margin-top: 8px; padding: 7px 10px; border-radius: 8px; background: var(--danger-soft); color: var(--danger); font-size: 12.5px; }
   .mov-fech-ok { margin-top: 8px; padding: 7px 10px; border-radius: 8px; background: var(--good-soft); color: var(--good); font-size: 12.5px; }
   .mov-saldo-ini td { background: var(--surface-2); }
+  /* Seletor de obra no cabeçalho e tela de cadastro (multi-obra). */
+  .obra-sel { display: inline-flex; align-items: center; gap: 6px; }
+  .obra-sel select {
+    font: 600 11.5px/1 "Archivo", sans-serif; padding: 6px 10px; border-radius: 999px;
+    background: rgba(255,255,255,.10); color: #eef3fa; border: 1px solid rgba(255,255,255,.28); max-width: 230px;
+  }
+  .obra-sel select option { color: #0f2137; background: #fff; }
+  .cad-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 10px; }
+  .cad-form { display: flex; flex-direction: column; gap: 8px; }
+  .cad-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+  .cad-form input, .cad-form select { font: inherit; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--ink); }
+  .cad-obras-check { display: flex; flex-direction: column; gap: 4px; max-height: 170px; overflow: auto; border: 1px solid var(--border); border-radius: 7px; padding: 7px 9px; }
+  .cad-obras-check label { flex-direction: row; align-items: center; gap: 7px; font-weight: 400; }
   .comp-barra { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 4px 0 10px; }
   .comp-barra label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
   .comp-barra input { min-width: 260px; border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 5px 8px; }
@@ -1252,7 +1265,7 @@
       <div class="titleblock-name" id="obraNome">Obra</div>
       <div class="titleblock-meta" id="obraMeta"></div>
     </div>
-    <div class="titleblock-acoes"><span class="status-chip saved" id="statusChip"><span class="dot"></span><span id="statusChipText">Sincronizado</span></span><button type="button" class="btn-sessao" id="btnSessao">Entrar para lançar</button></div>
+    <div class="titleblock-acoes"><span class="status-chip saved" id="statusChip"><span class="dot"></span><span id="statusChipText">Sincronizado</span></span><span class="obra-sel" id="obraSeletor" hidden></span><button type="button" class="btn-sessao" id="btnSessao">Entrar para lançar</button></div>
   </div>
   <nav class="tabs" id="tabs">
     <button class="tab-btn active" data-tab="capa">Início</button>
@@ -1271,6 +1284,7 @@
     <button class="tab-btn" data-tab="analise">Análise</button>
     <button class="tab-btn" data-tab="rastreabilidade">Rastreabilidade</button>
     <button class="tab-btn" data-tab="parametros">Parâmetros</button>
+    <button class="tab-btn" data-tab="obras" id="tabBtnObras" hidden>Obras e usuários</button>
   </nav>
 </header>
 
@@ -1292,6 +1306,7 @@
   <section id="tab-analise" class="tab-panel" hidden=""></section>
   <section id="tab-rastreabilidade" class="tab-panel" hidden=""></section>
   <section id="tab-parametros" class="tab-panel" hidden=""></section>
+  <section id="tab-obras" class="tab-panel" hidden=""></section>
 </main>
 
 <template id="tpl-modal">
@@ -4064,6 +4079,25 @@ async function hashCredencial(usuario, senha) {
   return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
+/* Token de gravação da obra aberta.
+   Antes era uma constante só (a chave desta obra). Agora cada obra tem o seu,
+   e o login no servidor devolve o token de cada obra que a pessoa pode abrir.
+   A constante segue como reserva: é o que faz a cópia offline e o artifact
+   continuarem funcionando sem rede. */
+function tokenObraAtual() {
+  const lista = (SESSAO && SESSAO.obras) || [];
+  const o = lista.find((x) => x && x.id === NUVEM_CFG.obraId);
+  return (o && o.token) || CREDENCIAL_HASH;
+}
+function ehMaster() { return !!(SESSAO && SESSAO.perfil === 'master'); }
+function trocarDeObra(id) {
+  if (!id || id === NUVEM_CFG.obraId) return;
+  try { localStorage.setItem(CHAVE_OBRA, id); } catch (e) { /* sem storage */ }
+  const u = new URL(location.href);
+  u.searchParams.set('obra', id);
+  location.href = u.toString();
+}
+
 function lerSessao() {
   try {
     const raw = sessionStorage.getItem(CHAVE_SESSAO);
@@ -4142,20 +4176,45 @@ function abrirLogin() {
          quem fez cada mudança. */
       const daEquipe = (STATE.acessos || []).find((a) => a.hash === hash);
       const ehDono = hash === CREDENCIAL_HASH;
-      if (!ehDono && !daEquipe) {
+      /* Terceira origem, a do cadastro central: o servidor diz quais obras
+         esta pessoa pode abrir e devolve o token de gravação de cada uma.
+         As duas origens locais continuam valendo, inclusive sem rede. */
+      const btnEntrar = form.querySelector('button[type="submit"]');
+      btnEntrar.disabled = true; btnEntrar.textContent = 'Entrando…';
+      let servidor = null;
+      if (typeof nuvemHabilitada === 'function' && nuvemHabilitada()) {
+        try {
+          const rl = await nuvemRpc('login_app', { p_usuario: String(dados.usuario).trim().toLowerCase(), p_hash: hash, p_obra: NUVEM_CFG.obraId });
+          if (rl && rl.ok) servidor = rl;
+        } catch (e) { /* sem rede ou servidor fora: segue pelas origens locais */ }
+      }
+      btnEntrar.disabled = false; btnEntrar.textContent = 'Entrar';
+      if (!ehDono && !daEquipe && !servidor) {
         erro.hidden = false;
         erro.innerHTML = 'Usuário ou senha não confere. <span class="muted">Lembre que o <strong>usuário</strong> também faz parte da chave — não basta a senha certa.</span>';
         return;
       }
+      const obrasDaSessao = (servidor && Array.isArray(servidor.obras) && servidor.obras.length)
+        ? servidor.obras
+        : [{ id: NUVEM_CFG.obraId, nome: (VIEW.meta && VIEW.meta.obra) || NUVEM_CFG.obraId, token: CREDENCIAL_HASH }];
       SESSAO = {
         usuario: String(dados.usuario).trim(),
-        papel: ehDono ? 'dono' : (daEquipe.papel || 'equipe'),
+        papel: (ehDono || (servidor && servidor.perfil === 'master')) ? 'dono' : (daEquipe ? (daEquipe.papel || 'equipe') : 'equipe'),
+        perfil: servidor ? servidor.perfil : (ehDono ? 'gestor' : 'equipe'),
+        obras: obrasDaSessao,
+        hash,
       };
       gravarSessao(SESSAO);
+      // Quem tem obras liberadas, mas não esta, é levado para a primeira delas.
+      if (!obrasDaSessao.some((o) => o.id === NUVEM_CFG.obraId)) {
+        toast(`Entrando na obra ${obrasDaSessao[0].nome}…`);
+        trocarDeObra(obrasDaSessao[0].id);
+        return;
+      }
       close();
       aplicarModo();
       renderAll();
-      toast('Modo lançamento ativo.');
+      toast(`Modo lançamento ativo${obrasDaSessao.length > 1 ? ` · ${obrasDaSessao.length} obras disponíveis` : ''}.`);
     });
     body.appendChild(form);
     setTimeout(() => form.querySelector('input[name="usuario"]').focus(), 30);
@@ -4462,10 +4521,28 @@ function restoreViewState() {
      local (file://) também não sincroniza.
    - O histórico das últimas 300 gravações fica em `obras_historico`.
    ========================================================================== */
+/* Qual obra este painel está mostrando.
+   -------------------------------------------------------------------------
+   O app deixou de ser de uma obra só. A obra vem, nesta ordem: do endereço
+   (?obra=slug), da última obra aberta neste navegador, e por fim da Toscana,
+   que é a obra original. Assim todo link que já existe continua abrindo
+   exatamente a mesma obra de antes. */
+const OBRA_PADRAO = 'casa-newton-toscana';
+const CHAVE_OBRA = 'lct_obra';
+function obraIdInicial() {
+  try {
+    const u = new URL(location.href);
+    const naUrl = (u.searchParams.get('obra') || (/[?&#]obra=([a-z0-9-]+)/i.exec(u.hash || '') || [])[1] || '').trim().toLowerCase();
+    if (naUrl) return naUrl.replace(/[^a-z0-9-]/g, '');
+    const guardada = (localStorage.getItem(CHAVE_OBRA) || '').trim().toLowerCase();
+    if (guardada) return guardada.replace(/[^a-z0-9-]/g, '');
+  } catch (e) { /* sem URL ou sem storage: fica na obra original */ }
+  return OBRA_PADRAO;
+}
 const NUVEM_CFG = {
   url: 'https://iyposryvzqswcwawnyzd.supabase.co',
   chave: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5cG9zcnl2enFzd2N3YXdueXpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NzMwNTIsImV4cCI6MjEwNDA0OTA1Mn0.paXwRFXHnhlJgkS3021i8lWOY8KU06Y0at_Nv8Q_jpI',
-  obraId: 'casa-newton-toscana',
+  obraId: obraIdInicial(),
   pollMs: 30000,
 };
 const NUVEM = {
@@ -4649,7 +4726,7 @@ async function nuvemSalvar() {
   try {
     let r;
     if (SESSAO) {
-      r = await nuvemRpc('salvar_obra', { p_id: NUVEM_CFG.obraId, p_estado: STATE, p_versao_base: NUVEM.versao, p_token: CREDENCIAL_HASH, p_usuario: SESSAO.usuario });
+      r = await nuvemRpc('salvar_obra', { p_id: NUVEM_CFG.obraId, p_estado: STATE, p_versao_base: NUVEM.versao, p_token: tokenObraAtual(), p_usuario: SESSAO.usuario });
     } else {
       r = await nuvemRpc('salvar_controle_mensal', { p_id: NUVEM_CFG.obraId, p_controle: STATE.controleMensalCaixa || {}, p_usuario: 'cliente (Controle Mensal)' });
     }
@@ -6412,8 +6489,338 @@ function atualizarCabecalho() {
   }
 }
 
+/* Seletor de obra: só aparece para quem tem mais de uma obra liberada. */
+function renderSeletorObra() {
+  const host = document.getElementById('obraSeletor');
+  if (!host) return;
+  const obras = (SESSAO && SESSAO.obras) || [];
+  if (obras.length < 2) { host.hidden = true; host.innerHTML = ''; return; }
+  host.hidden = false;
+  host.innerHTML = '';
+  const sel = document.createElement('select');
+  sel.className = 'filter-control';
+  sel.title = 'Trocar de obra';
+  for (const o of obras) {
+    const op = document.createElement('option');
+    op.value = o.id;
+    op.textContent = o.nome || o.id;
+    if (o.id === NUVEM_CFG.obraId) op.selected = true;
+    sel.appendChild(op);
+  }
+  sel.onchange = () => trocarDeObra(sel.value);
+  host.appendChild(sel);
+}
+
+/* ==========================================================================
+   OBRAS E USUÁRIOS — cadastro (perfil master)
+   --------------------------------------------------------------------------
+   O painel deixou de ser de uma obra só. Aqui o master cadastra a obra nova,
+   diz de quem ela é e libera quem enxerga o quê. Cada obra tem o seu próprio
+   token de gravação no servidor, então um usuário só grava nas obras que
+   aparecem para ele. A obra nova nasce com a ESTRUTURA desta obra modelo
+   (categorias de serviço, etapas do PCI, parâmetros de regra) e com todos os
+   valores e lançamentos zerados, para nenhum número de um cliente aparecer
+   na obra de outro.
+   ========================================================================== */
+const CADASTRO = { carregando: false, erro: null, obras: null, usuarios: null, editando: null };
+
+// Parâmetros que são regra do negócio e não dinheiro de uma obra específica.
+const PARAMS_DE_REGRA = ['taxaAdministracaoPercent', 'cartaoDiaFechamento', 'cartaoDiaVencimento', 'cartaoAutoSync',
+  'taxaJurosAnualCEF', 'taxaCreditoImobiliario', 'irPercent', 'corretagemPercent', 'cdiAnual', 'rendimentoAlvoAnual',
+  'fatorExposicaoCapital', 'prazoVendaMeses', 'prazoAlavancagemMeses', 'cenarioVgv'];
+
+function estadoModeloNovaObra(meta) {
+  const base = JSON.parse(JSON.stringify(STATE));
+  const zero = {};
+  for (const [k, v] of Object.entries(base.parametros || {})) {
+    if (PARAMS_DE_REGRA.includes(k)) { zero[k] = v; continue; }
+    if (typeof v === 'number') { zero[k] = 0; continue; }
+    if (typeof v === 'boolean') { zero[k] = v; continue; }
+    zero[k] = (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) ? '' : (v === null ? null : (typeof v === 'string' ? '' : v));
+  }
+  const categorias = (base.categorias || []).map((c) => ({
+    ...c,
+    itens: (c.itens || []).map((i) => ({
+      id: i.id, descricao: i.descricao, unidade: i.unidade,
+      valorOrcado: 0, valorRealizado: 0, dataPagamento: '', formaPagamento: '',
+    })),
+  }));
+  const liberacaoPCI = (base.liberacaoPCI || []).map((e) => ({
+    etapa: e.etapa, descricao: e.descricao, mesProgramado: e.mesProgramado,
+    percLimiteAcumulado: e.percLimiteAcumulado, valor: 0, liberadoManual: null,
+  }));
+  return {
+    meta: { obra: meta.obra || '', endereco: meta.endereco || '', proprietario: meta.proprietario || '',
+            incorporador: meta.incorporador || '', responsavelTecnico: meta.responsavelTecnico || '',
+            areaM2: Number(meta.areaM2) || 0, dataInicio: meta.dataInicio || '', previsaoTermino: meta.previsaoTermino || '' },
+    parametros: zero,
+    categorias,
+    liberacaoPCI,
+    parcelas: [], liberacoesCaixa: [], historicoAvancos: [], consumosRecursoProprio: [],
+    fluxoCaixaAjustes: [], auditoria: [], baixas: {}, analise: {},
+    comprovantes: { pastas: COMP_PASTAS_INICIAIS.slice(), meta: {} },
+    controleMensalCaixa: {}, recebedoresPix: {}, estudoMercado: base.estudoMercado || {},
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+async function cadastroCarregar() {
+  if (!ehMaster() || !compDisponivel()) return;
+  CADASTRO.carregando = true; CADASTRO.erro = null;
+  try {
+    const r = await nuvemRpc('listar_cadastro_app', { p_usuario: SESSAO.usuario, p_hash: tokenSenhaSessao() });
+    if (r && r.ok) { CADASTRO.obras = r.obras || []; CADASTRO.usuarios = r.usuarios || []; }
+    else CADASTRO.erro = (r && r.erro) || 'não autorizado';
+  } catch (e) { CADASTRO.erro = String(e.message || e); }
+  CADASTRO.carregando = false;
+  renderCadastroObras();
+}
+
+/* O servidor confere a senha, não o token da obra: o hash da credencial fica
+   guardado na sessão desta aba só para as chamadas de cadastro. */
+function tokenSenhaSessao() { return (SESSAO && SESSAO.hash) || tokenObraAtual(); }
+
+function renderCadastroObras() {
+  const root = document.getElementById('tab-obras');
+  if (!root) return;
+  root.innerHTML = '';
+  if (!ehMaster()) {
+    root.innerHTML = '<div class="panel"><div class="muted">Esta aba é do cadastro de obras e usuários. Entre com um usuário master para abrir.</div></div>';
+    return;
+  }
+  if (!compDisponivel()) {
+    root.innerHTML = '<div class="panel"><div class="muted">O cadastro de obras e usuários fica no servidor da obra e só funciona no site publicado (endereço http/https). Nesta cópia não há acesso à rede.</div></div>';
+    return;
+  }
+  if (CADASTRO.obras === null) {
+    root.innerHTML = `<div class="panel"><div class="muted">${CADASTRO.erro ? `Não consegui ler o cadastro (${esc(CADASTRO.erro)}).` : 'Carregando cadastro…'}</div></div>`;
+    if (!CADASTRO.carregando && !CADASTRO.erro) cadastroCarregar();
+    return;
+  }
+
+  /* ---------------------------------------------------------------- obras */
+  const pObras = document.createElement('div');
+  pObras.className = 'panel';
+  pObras.innerHTML = `
+    <div class="panel-header">
+      <div>
+        <h2>Obras cadastradas</h2>
+        <div class="muted">Cada obra tem os seus próprios lançamentos, comprovantes e RDO, e o seu próprio endereço (?obra=identificador). A obra nova nasce com a estrutura desta aqui (categorias de serviço, etapas do PCI e parâmetros de regra) e com todos os valores zerados: nenhum número de um cliente entra na obra de outro.</div>
+      </div>
+      <div class="painel-acoes">
+        <button type="button" class="btn small filter-control" data-acao="recarregar">Atualizar</button>
+        <button type="button" class="btn small primary" data-acao="nova-obra">+ Nova obra</button>
+      </div>
+    </div>
+    <div class="table-scroll"><table class="extrato-table">
+      <thead><tr><th>Obra</th><th>Cliente</th><th>Identificador</th><th class="num">Versão</th><th>Última gravação</th><th>Situação</th><th class="no-print"></th></tr></thead>
+      <tbody>${CADASTRO.obras.map((o) => `<tr${o.id === NUVEM_CFG.obraId ? ' class="linha-destaque"' : ''}>
+        <td>${esc(o.nome || o.id)}</td><td>${esc(o.cliente || '')}</td><td class="mono">${esc(o.id)}</td>
+        <td class="num">${o.versao}</td><td class="muted">${o.atualizadoEm ? `${dateBR(String(o.atualizadoEm).slice(0, 10))} ${String(o.atualizadoEm).slice(11, 16)}` : ''}${o.atualizadoPor ? ` · ${esc(o.atualizadoPor)}` : ''}</td>
+        <td class="${o.ativo ? 'st-ok' : 'muted'}">${o.ativo ? 'ativa' : 'arquivada'}</td>
+        <td class="no-print"><button type="button" class="btn small" data-abrir="${esc(o.id)}">abrir</button> <button type="button" class="btn small" data-editar="${esc(o.id)}">editar</button></td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  root.appendChild(pObras);
+  pObras.querySelector('button[data-acao="recarregar"]').onclick = () => { CADASTRO.obras = null; CADASTRO.erro = null; renderCadastroObras(); };
+  pObras.querySelector('button[data-acao="nova-obra"]').onclick = abrirNovaObra;
+  pObras.querySelectorAll('button[data-abrir]').forEach((b) => { b.onclick = () => trocarDeObra(b.dataset.abrir); });
+  pObras.querySelectorAll('button[data-editar]').forEach((b) => { b.onclick = () => abrirEdicaoObra(CADASTRO.obras.find((o) => o.id === b.dataset.editar)); });
+
+  /* ------------------------------------------------------------- usuários */
+  const pUsers = document.createElement('div');
+  pUsers.className = 'panel';
+  pUsers.innerHTML = `
+    <div class="panel-header">
+      <div>
+        <h2>Usuários e acesso</h2>
+        <div class="muted">O usuário entra com o nome de usuário e a senha dele, e só enxerga as obras marcadas aqui. Master vê todas as obras e cadastra; gestor lança nas obras liberadas; cliente abre só o que foi liberado para ele. A senha não é guardada em texto: o que fica no servidor é o resultado embaralhado dela, e nem eu nem você conseguimos lê-la de volta (para trocar, cadastre uma nova).</div>
+      </div>
+      <div class="painel-acoes"><button type="button" class="btn small primary" data-acao="novo-usuario">+ Novo usuário</button></div>
+    </div>
+    <div class="table-scroll"><table class="extrato-table">
+      <thead><tr><th>Nome</th><th>Usuário</th><th>Perfil</th><th>Obras liberadas</th><th>Situação</th><th class="no-print"></th></tr></thead>
+      <tbody>${(CADASTRO.usuarios || []).map((u) => `<tr>
+        <td>${esc(u.nome)}</td><td class="mono">${esc(u.usuario)}</td><td>${esc(u.perfil)}</td>
+        <td>${u.perfil === 'master' ? '<span class="muted">todas</span>' : ((u.obras || []).map((id) => esc((CADASTRO.obras.find((o) => o.id === id) || {}).nome || id)).join(', ') || '<span class="muted">nenhuma</span>')}</td>
+        <td class="${u.ativo ? 'st-ok' : 'muted'}">${u.ativo ? 'ativo' : 'desativado'}</td>
+        <td class="no-print"><button type="button" class="btn small" data-user="${esc(u.usuario)}">editar</button></td>
+      </tr>`).join('') || '<tr><td colspan="6" class="muted">Nenhum usuário cadastrado ainda além do seu acesso.</td></tr>'}</tbody>
+    </table></div>`;
+  root.appendChild(pUsers);
+  pUsers.querySelector('button[data-acao="novo-usuario"]').onclick = () => abrirEdicaoUsuario(null);
+  pUsers.querySelectorAll('button[data-user]').forEach((b) => { b.onclick = () => abrirEdicaoUsuario((CADASTRO.usuarios || []).find((u) => u.usuario === b.dataset.user)); });
+}
+
+function abrirNovaObra() {
+  openModal('Cadastrar obra nova', (body, close) => {
+    const f = document.createElement('form');
+    f.className = 'cad-form';
+    const sugestao = (txt) => String(txt || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+    f.innerHTML = `
+      <div class="muted">A obra nasce com a estrutura desta obra e sem nenhum valor lançado. Depois de criada, você ajusta contrato, crédito e cronograma nos Parâmetros, como fez aqui no começo.</div>
+      <div class="cad-grid">
+        <label>Nome da obra<input name="obra" required placeholder="Ex.: Obra residencial, Condomínio X"></label>
+        <label>Cliente<input name="cliente" placeholder="Ex.: Aline"></label>
+        <label>Identificador no endereço<input name="id" required placeholder="ex.: casa-aline" pattern="[a-z0-9-]{3,40}"></label>
+        <label>Área (m²)<input name="areaM2" type="number" step="0.01" min="0"></label>
+        <label>Endereço<input name="endereco"></label>
+        <label>Proprietário<input name="proprietario"></label>
+        <label>Incorporador<input name="incorporador" value="Rander Bruno"></label>
+        <label>Responsável técnico<input name="responsavelTecnico"></label>
+        <label>Início da obra<input name="dataInicio" type="date"></label>
+        <label>Previsão de término<input name="previsaoTermino" type="date"></label>
+      </div>
+      <div class="login-erro" hidden></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" class="btn" data-x="cancelar">Cancelar</button>
+        <button type="submit" class="btn primary">Criar obra</button>
+      </div>`;
+    const erro = f.querySelector('.login-erro');
+    f.querySelector('[data-x="cancelar"]').onclick = close;
+    f.querySelector('input[name="obra"]').addEventListener('input', (e) => {
+      const alvo = f.querySelector('input[name="id"]');
+      if (!alvo.dataset.tocado) alvo.value = sugestao(e.target.value);
+    });
+    f.querySelector('input[name="id"]').addEventListener('input', (e) => { e.target.dataset.tocado = '1'; });
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(f).entries());
+      const id = sugestao(d.id);
+      if (id.length < 3) { erro.hidden = false; erro.textContent = 'O identificador precisa de pelo menos 3 letras.'; return; }
+      const btn = f.querySelector('button[type="submit"]');
+      btn.disabled = true; btn.textContent = 'Criando…';
+      try {
+        const estado = estadoModeloNovaObra(d);
+        const r = await nuvemRpc('criar_obra_app', {
+          p_usuario: SESSAO.usuario, p_hash: tokenSenhaSessao(), p_id: id,
+          p_nome: d.obra, p_cliente: d.cliente, p_estado: estado,
+        });
+        if (!r || !r.ok) {
+          const motivos = { ja_existe: 'Já existe uma obra com esse identificador.', nao_autorizado: 'Seu usuário não tem permissão para cadastrar obras.', id_invalido: 'Identificador inválido.' };
+          erro.hidden = false; erro.textContent = motivos[r && r.erro] || `Não consegui criar a obra (${(r && r.erro) || 'erro'}).`;
+          btn.disabled = false; btn.textContent = 'Criar obra';
+          return;
+        }
+        SESSAO.obras = [...(SESSAO.obras || []), { id: r.id, nome: d.obra || r.id, cliente: d.cliente, token: r.token }];
+        gravarSessao(SESSAO);
+        close();
+        toast(`Obra "${d.obra || r.id}" criada. Abrindo…`);
+        trocarDeObra(r.id);
+      } catch (ex) {
+        erro.hidden = false; erro.textContent = String(ex.message || ex);
+        btn.disabled = false; btn.textContent = 'Criar obra';
+      }
+    });
+    body.appendChild(f);
+    setTimeout(() => f.querySelector('input[name="obra"]').focus(), 30);
+  }, { wide: true });
+}
+
+function abrirEdicaoObra(obra) {
+  if (!obra) return;
+  openModal(`Obra: ${obra.nome || obra.id}`, (body, close) => {
+    const f = document.createElement('form');
+    f.className = 'cad-form';
+    f.innerHTML = `
+      <div class="cad-grid">
+        <label>Nome da obra<input name="nome" value="${esc(obra.nome || '')}"></label>
+        <label>Cliente<input name="cliente" value="${esc(obra.cliente || '')}"></label>
+      </div>
+      <label style="flex-direction:row; align-items:center; gap:7px;"><input type="checkbox" name="ativo" ${obra.ativo ? 'checked' : ''}> Obra ativa (desmarque para arquivar: ela some da lista de quem acessa, sem apagar nada)</label>
+      <div class="muted">Endereço direto desta obra: <span class="mono">?obra=${esc(obra.id)}</span></div>
+      <div class="login-erro" hidden></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" class="btn" data-x="cancelar">Cancelar</button>
+        <button type="submit" class="btn primary">Salvar</button>
+      </div>`;
+    const erro = f.querySelector('.login-erro');
+    f.querySelector('[data-x="cancelar"]').onclick = close;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const d = Object.fromEntries(new FormData(f).entries());
+      try {
+        const r = await nuvemRpc('atualizar_obra_app', {
+          p_usuario: SESSAO.usuario, p_hash: tokenSenhaSessao(), p_id: obra.id,
+          p_nome: d.nome, p_cliente: d.cliente, p_ativo: !!d.ativo,
+        });
+        if (!r || !r.ok) { erro.hidden = false; erro.textContent = `Não consegui salvar (${(r && r.erro) || 'erro'}).`; return; }
+        close(); CADASTRO.obras = null; renderCadastroObras(); toast('Obra atualizada.');
+      } catch (ex) { erro.hidden = false; erro.textContent = String(ex.message || ex); }
+    });
+    body.appendChild(f);
+  });
+}
+
+function abrirEdicaoUsuario(usuario) {
+  const novo = !usuario;
+  openModal(novo ? 'Cadastrar usuário' : `Usuário: ${usuario.nome}`, (body, close) => {
+    const f = document.createElement('form');
+    f.className = 'cad-form';
+    const marcadas = new Set((usuario && usuario.obras) || []);
+    f.innerHTML = `
+      <div class="cad-grid">
+        <label>Nome<input name="nome" required value="${esc((usuario && usuario.nome) || '')}"></label>
+        <label>Usuário (para entrar)<input name="usuario" required ${novo ? '' : 'readonly'} autocapitalize="none" value="${esc((usuario && usuario.usuario) || '')}"></label>
+        <label>Senha${novo ? '' : ' (deixe vazio para manter)'}<input name="senha" type="password" autocomplete="new-password" ${novo ? 'required' : ''}></label>
+        <label>Perfil<select name="perfil">
+          <option value="gestor"${usuario && usuario.perfil === 'gestor' ? ' selected' : ''}>Gestor (lança nas obras liberadas)</option>
+          <option value="cliente"${usuario && usuario.perfil === 'cliente' ? ' selected' : ''}>Cliente (acompanha a obra dele)</option>
+          <option value="master"${usuario && usuario.perfil === 'master' ? ' selected' : ''}>Master (vê todas e cadastra)</option>
+        </select></label>
+      </div>
+      <label>Obras liberadas
+        <div class="cad-obras-check">${(CADASTRO.obras || []).map((o) => `<label><input type="checkbox" name="obra" value="${esc(o.id)}"${marcadas.has(o.id) ? ' checked' : ''}> ${esc(o.nome || o.id)}${o.cliente ? ` <span class="muted">· ${esc(o.cliente)}</span>` : ''}</label>`).join('')}</div>
+      </label>
+      <label style="flex-direction:row; align-items:center; gap:7px;"><input type="checkbox" name="ativo" ${!usuario || usuario.ativo ? 'checked' : ''}> Usuário ativo</label>
+      <div class="muted">Master enxerga todas as obras, independente do que estiver marcado acima.</div>
+      <div class="login-erro" hidden></div>
+      <div style="display:flex; gap:8px; justify-content:flex-end;">
+        <button type="button" class="btn" data-x="cancelar">Cancelar</button>
+        <button type="submit" class="btn primary">Salvar usuário</button>
+      </div>`;
+    const erro = f.querySelector('.login-erro');
+    f.querySelector('[data-x="cancelar"]').onclick = close;
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(f);
+      const alvo = String(fd.get('usuario') || '').trim().toLowerCase();
+      const senha = String(fd.get('senha') || '');
+      const obras = fd.getAll('obra');
+      const btn = f.querySelector('button[type="submit"]');
+      btn.disabled = true; btn.textContent = 'Salvando…';
+      try {
+        const hashAlvo = senha ? await hashCredencial(alvo, senha) : '';
+        const r = await nuvemRpc('salvar_usuario_app', {
+          p_usuario: SESSAO.usuario, p_hash: tokenSenhaSessao(), p_alvo: alvo,
+          p_nome: String(fd.get('nome') || ''), p_senha_hash: hashAlvo,
+          p_perfil: String(fd.get('perfil') || 'gestor'), p_obras: obras, p_ativo: !!fd.get('ativo'),
+        });
+        if (!r || !r.ok) {
+          const motivos = { nao_autorizado: 'Seu usuário não tem permissão para cadastrar.', senha_obrigatoria: 'Usuário novo precisa de senha.', usuario_invalido: 'Nome de usuário inválido.' };
+          erro.hidden = false; erro.textContent = motivos[r && r.erro] || `Não consegui salvar (${(r && r.erro) || 'erro'}).`;
+          btn.disabled = false; btn.textContent = 'Salvar usuário';
+          return;
+        }
+        close(); CADASTRO.usuarios = null; CADASTRO.obras = null; renderCadastroObras();
+        toast(`Usuário ${alvo} salvo.`);
+      } catch (ex) {
+        erro.hidden = false; erro.textContent = String(ex.message || ex);
+        btn.disabled = false; btn.textContent = 'Salvar usuário';
+      }
+    });
+    body.appendChild(f);
+    setTimeout(() => f.querySelector('input[name="nome"]').focus(), 30);
+  }, { wide: true });
+}
+
 function renderAll() {
   atualizarCabecalho();
+  renderSeletorObra();
+  const btnObras = document.getElementById('tabBtnObras');
+  if (btnObras) btnObras.hidden = !ehMaster();
+  if (!ehMaster() && ACTIVE_TAB === 'obras') ACTIVE_TAB = 'painel';
+
   document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b.dataset.tab === ACTIVE_TAB));
   document.querySelectorAll('.tab-panel').forEach((p) => { p.hidden = p.id !== `tab-${ACTIVE_TAB}`; });
 
@@ -6433,6 +6840,7 @@ function renderAll() {
   renderAnalise();
   renderRastreabilidade();
   renderParametros();
+  renderCadastroObras();
   marcarSimulacaoNoCabecalho();
 
   if (READONLY) {
@@ -9772,12 +10180,11 @@ function renderDashboard() {
       <div class="progress-bar" style="margin-top:6px"><span style="width:${Math.min(100, r.percExecucaoFinanceira * 100)}%"></span></div>
       <div class="card-sub">Gasto total da obra (${money(r.totalGastoAcumulado)}: quinzenas realizadas + lote + serviços preliminares) sobre o financiamento total disponível: crédito CAIXA (${money(r.creditoCaixaTotalPCI)}) + recurso próprio planejado (${money(r.recursoProprioPlanejado)})</div>
     </div>
-    ${(() => { const pr = projecaoSaldoConta(); const prop = Number(pr.proprioNecessario) || 0; return `<div class="card ${prop > 0 ? 'warn' : ''}">
-      <div class="card-label">Saldo em conta projetado (fim de ${esc(pr.mesAtualLabel)})</div>
-      ${cardValueDrill('saldoProjetado', pr.saldoFimMesAtual, 'ver mês a mês')}
-      ${prop > 0 ? `<div class="card-alerta-proprio">Consome <strong>${money(prop)}</strong> de recurso próprio no período — a conta do CAIXA zera antes de cobrir as quinzenas.</div>` : ''}
-      <div class="card-sub">Saldo de hoje ${money(pr.saldoHoje)} + entradas previstas ${money(pr.entradasPrevistas)} − quinzenas planejadas ${money(pr.saidasPlanejadas)}${prop > 0 ? ` + recurso próprio ${money(prop)}` : ''}. Só lançamento com status PLANEJADO entra; clique para ver mês a mês, linha por linha.</div>
-    </div>`; })()}
+    <div class="card accent">
+      <div class="card-label">PLS a receber (crédito CAIXA ainda a liberar)</div>
+      ${cardValueDrill('creditoPCI', r.saldoCaixaDisponivel, 'ver medições')}
+      <div class="card-sub">Crédito contratado do PCI (${money(r.creditoCaixaTotalPCI)}) − crédito já liberado pelo banco (${money(r.caixaLiberadaAcumulada)}). Não é saldo em banco: é o que o CAIXA ainda vai depositar conforme as medições forem aprovadas.</div>
+    </div>
     <div class="card">
       <div class="card-label">Valor caixa liberado</div>
       ${cardValueDrill('caixaLiberado', r.caixaLiberadaAcumulada)}
@@ -10944,8 +11351,16 @@ function renderFluxo() {
       <div class="progress-bar" style="margin-top:6px"><span style="width:${Math.min(100, r.percCaixaLiberada * 100)}%"></span></div>
       <div class="card-sub">Crédito CAIXA ainda a liberar: ${money(r.saldoCaixaDisponivel)}</div>
     </div>
+    ${(() => { const pr = projecaoSaldoConta(); const prop = Number(pr.proprioNecessario) || 0; return `<div class="card ${prop > 0 ? 'warn' : ''}">
+      <div class="card-label">Saldo em conta projetado (fim de ${esc(pr.mesAtualLabel)})</div>
+      ${cardValueDrill('saldoProjetado', pr.saldoFimMesAtual, 'ver mês a mês')}
+      ${prop > 0 ? `<div class="card-alerta-proprio">Consome <strong>${money(prop)}</strong> de recurso próprio no período — a conta do CAIXA zera antes de cobrir as quinzenas.</div>` : ''}
+      <div class="card-sub">Dinheiro na conta da obra: saldo de hoje ${money(pr.saldoHoje)} + entradas previstas ${money(pr.entradasPrevistas)} − quinzenas planejadas ${money(pr.saidasPlanejadas)}${prop > 0 ? ` + recurso próprio ${money(prop)}` : ''}. Só lançamento com status PLANEJADO entra; clique para ver mês a mês, linha por linha.</div>
+    </div>`; })()}
   `;
   root.appendChild(tracking);
+  ligarDrills(tracking);
+  if (typeof ajustarCardsGrid === 'function') requestAnimationFrame(() => ajustarCardsGrid(tracking));
   root.appendChild(renderVerbaFuturaBlock());
 
   root.appendChild(renderLiberacaoPorCategoriaResumo());
@@ -15107,21 +15522,28 @@ const COMP_DISCIPLINAS = [
   { id: 'cartao', nome: 'Cartão (materiais)', grupo: 'cartao', pastas: ['CARTAO', 'CARTOES', 'MATERIAIS'] },
   { id: 'adm', nome: 'Administração RS Engenharia', grupo: 'adm', pastas: ['ADMINISTRACAO', 'ADM', 'RS ENGENHARIA'] },
   { id: 'projetos', nome: 'Projetos e ART', grupo: 'preliminares:projetos', pastas: ['ARQUITETONICO', 'ART DE EXECUCAO', 'ESTRUTURAL ELETRICO HIDRAULICO', 'PLANIALTIMETRICO', 'SONDAGEM', 'PROJETOS'] },
-  { id: 'prefeitura', nome: 'Taxas da prefeitura e licenças', grupo: 'preliminares:prefeitura', pastas: ['TAXAS DA PREFEITURA', 'TAXA DE APROVACAO PROJETO CONDOMINIO'] },
+  { id: 'prefeitura', nome: 'Taxas da prefeitura e licenças', grupo: 'preliminares:prefeitura', pastas: ['TAXAS DA PREFEITURA'] },
   { id: 'cartorio', nome: 'Cartório, registro e ITBI', grupo: 'preliminares:cartorio', pastas: ['TAXAS DE CARTORIO', 'ITBI', 'CARTORIO'] },
-  { id: 'taxas', nome: 'Taxas de banco e financiamento', grupo: 'preliminares:taxas', pastas: ['TAXA DE FINANCIAMENTO', 'TAXAS'] },
+  { id: 'taxas', nome: 'Taxas de banco, financiamento e condomínio', grupo: 'preliminares:taxas', pastas: ['TAXA DE FINANCIAMENTO', 'TAXA DE APROVACAO PROJETO CONDOMINIO', 'TAXAS'] },
   { id: 'lote', nome: 'Lote (terreno)', grupo: 'lote', pastas: ['LOTE', 'TERRENO'] },
   { id: 'evolucao', nome: 'Evolução CAIXA (juros, seguro)', grupo: 'evolucao', pastas: ['EVOLUCAO CAIXA', 'EVOLUCAO'] },
   { id: 'outras', nome: 'Outras pastas', grupo: '', pastas: [] },
 ];
-const COMP = { cache: null, carregando: false, erro: null, pastaAtiva: '', filtro: '', disciplina: 'todas' };
+const COMP = { cache: null, carregando: false, erro: null, pastaAtiva: '', filtro: '', disciplina: 'todas', situacao: 'todos' };
 function compEstado() {
   STATE.comprovantes = STATE.comprovantes || {};
   STATE.comprovantes.pastas = STATE.comprovantes.pastas || COMP_PASTAS_INICIAIS.slice();
   STATE.comprovantes.meta = STATE.comprovantes.meta || {};
   return STATE.comprovantes;
 }
-function compUrlPublica(caminho) { return `${NUVEM_CFG.url}/storage/v1/object/public/${COMP_BUCKET}/${caminho.split('/').map(encodeURIComponent).join('/')}`; }
+/* Cada obra tem o seu próprio arquivo de comprovantes dentro do mesmo balde.
+   A obra original continua na raiz (nenhum caminho antigo muda de lugar); as
+   obras novas ficam em obras/<identificador>/, e por isso uma obra nunca
+   enxerga o comprovante da outra. Os caminhos guardados no estado da obra
+   seguem sem o prefixo: ele entra só na hora de falar com o servidor. */
+function compRaiz() { return NUVEM_CFG.obraId === OBRA_PADRAO ? '' : `obras/${NUVEM_CFG.obraId}/`; }
+function compCaminhoServidor(caminho) { return `${compRaiz()}${caminho}`; }
+function compUrlPublica(caminho) { return `${NUVEM_CFG.url}/storage/v1/object/public/${COMP_BUCKET}/${compCaminhoServidor(caminho).split('/').map(encodeURIComponent).join('/')}`; }
 function compHeaders(extra = {}) { return { apikey: NUVEM_CFG.chave, Authorization: `Bearer ${NUVEM_CFG.chave}`, ...extra }; }
 function compNomeSeguro(nome) {
   return String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9 ._()\-]/g, '_').replace(/\s+/g, ' ').trim();
@@ -15134,32 +15556,94 @@ function compDisciplinaDaPasta(caminho) {
   return d ? d.id : 'outras';
 }
 function compNomeDisciplina(id) { const d = COMP_DISCIPLINAS.find((x) => x.id === id); return d ? d.nome : id; }
+
+/* Valor de um comprovante: um arquivo pode conter mais de um pagamento.
+   -------------------------------------------------------------------------
+   Um mesmo print às vezes mostra duas parcelas (dois PIX no mesmo dia), e às
+   vezes um único PIX paga coisas de disciplinas diferentes (empreiteiro mais
+   administração). Por isso cada arquivo guarda uma lista de lançamentos
+   (meta.itens = [{ d: descrição, v: valor, disc: disciplina }]) e o campo
+   meta.valor continua valendo para o caso simples de um pagamento só — é o
+   que mantém compatível tudo que já estava informado.
+   Arquivo marcado como meta.tipo = 'documento' é documento de apoio (ART,
+   projeto, nota sem pagamento): não entra em nenhum total. */
+function compItens(caminho) {
+  const m = compEstado().meta[caminho] || {};
+  return Array.isArray(m.itens) ? m.itens.filter((i) => i && (Number(i.v) || 0) !== 0) : [];
+}
+function compEhDocumento(caminho) { return (compEstado().meta[caminho] || {}).tipo === 'documento'; }
+function compValorArquivo(caminho) {
+  const m = compEstado().meta[caminho] || {};
+  if (m.tipo === 'documento') return 0;
+  const itens = compItens(caminho);
+  if (itens.length) return round2(itens.reduce((a, i) => a + (Number(i.v) || 0), 0));
+  return Number(m.valor) || 0;
+}
+// Quanto deste arquivo pertence a uma disciplina. Sem lista de lançamentos, o
+// valor inteiro é da disciplina da pasta onde o arquivo está.
+function compValorNaDisciplina(caminho, discId, discDaPasta) {
+  const m = compEstado().meta[caminho] || {};
+  if (m.tipo === 'documento') return 0;
+  const itens = compItens(caminho);
+  if (!itens.length) return discDaPasta === discId ? round2(Number(m.valor) || 0) : 0;
+  return round2(itens.filter((i) => (i.disc || discDaPasta) === discId).reduce((a, i) => a + (Number(i.v) || 0), 0));
+}
+// Filtro rápido por situação do arquivo (chips acima da árvore de pastas).
+function compArquivoNaSituacao(caminho, sit) {
+  if (!sit || sit === 'todos') return true;
+  const doc = compEhDocumento(caminho);
+  if (sit === 'documento') return doc;
+  if (doc) return false;
+  if (sit === 'varios') return compItens(caminho).length > 1;
+  if (sit === 'sem-valor') return compValorArquivo(caminho) === 0;
+  if (sit === 'com-valor') return compValorArquivo(caminho) > 0;
+  return true;
+}
 // Quanto já está lançado (realizado) no grupo de despesa que corresponde à disciplina.
 function compLancadoDoGrupo(mov, grupo) {
   if (!grupo) return 0;
   return round2((mov.linhas || []).filter((l) => l.tipo === 'saida' && l.status === 'REALIZADO' && linhaMovNoFiltro(l, grupo)).reduce((a, l) => a + (Number(l.valor) || 0), 0));
 }
-// Resumo por disciplina: arquivos, valor informado nos comprovantes e valor lançado.
+// Quanto ainda está planejado (não realizado) no grupo da disciplina.
+function compPlanejadoDoGrupo(mov, grupo) {
+  if (!grupo) return 0;
+  return round2((mov.linhas || []).filter((l) => l.tipo === 'saida' && l.status !== 'REALIZADO' && linhaMovNoFiltro(l, grupo)).reduce((a, l) => a + (Number(l.valor) || 0), 0));
+}
+/* Resumo por disciplina: arquivos, valor comprovado e valor lançado.
+   O valor comprovado respeita os lançamentos de cada arquivo, então um PIX
+   que paga empreiteiro e administração entra partido nas duas linhas. */
 function compResumoDisciplinas(cache) {
   const meta = compEstado().meta;
-  const mov = movimentoDinheiro();
-  const base = COMP_DISCIPLINAS.map((d) => ({ id: d.id, nome: d.nome, grupo: d.grupo, arquivos: 0, valor: 0, semValor: 0, lancado: compLancadoDoGrupo(mov, d.grupo) }));
+  const mov = movimentoDinheiro({ incluirPlanejado: true });
+  const base = COMP_DISCIPLINAS.map((d) => ({
+    id: d.id, nome: d.nome, grupo: d.grupo, arquivos: 0, valor: 0, semValor: 0, documentos: 0,
+    lancado: compLancadoDoGrupo(mov, d.grupo), planejado: compPlanejadoDoGrupo(mov, d.grupo),
+  }));
   const idx = new Map(base.map((d) => [d.id, d]));
   for (const a of ((cache && cache.arquivos) || [])) {
     const m = meta[a.caminho] || {};
     if (m.oculto || ehCaminhoRDO(a.caminho)) continue;
-    const d = idx.get(compDisciplinaDaPasta(a.pasta || a.caminho));
+    const dp = compDisciplinaDaPasta(a.pasta || a.caminho);
+    const d = idx.get(dp);
     if (!d) continue;
     d.arquivos += 1;
-    const v = Number(m.valor) || 0;
-    if (v > 0) d.valor = round2(d.valor + v); else d.semValor += 1;
+    if (m.tipo === 'documento') { d.documentos += 1; continue; }
+    if (compValorArquivo(a.caminho) > 0) {
+      for (const alvo of base) {
+        const parte = compValorNaDisciplina(a.caminho, alvo.id, dp);
+        if (parte) alvo.valor = round2(alvo.valor + parte);
+      }
+    } else d.semValor += 1;
   }
-  for (const d of base) d.diferenca = round2(d.valor - d.lancado);
+  for (const d of base) {
+    d.lancadoTotal = round2(d.lancado + d.planejado);
+    d.diferenca = round2(d.valor - d.lancado);
+  }
   return base;
 }
 function compDisponivel() { return typeof nuvemHabilitada === 'function' && nuvemHabilitada(); }
 async function compListarPasta(prefixo) {
-  const r = await fetch(`${NUVEM_CFG.url}/storage/v1/object/list/${COMP_BUCKET}`, { method: 'POST', headers: compHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ prefix: prefixo, limit: 1000, offset: 0, sortBy: { column: 'name', order: 'asc' } }) });
+  const r = await fetch(`${NUVEM_CFG.url}/storage/v1/object/list/${COMP_BUCKET}`, { method: 'POST', headers: compHeaders({ 'Content-Type': 'application/json' }), body: JSON.stringify({ prefix: compCaminhoServidor(prefixo), limit: 1000, offset: 0, sortBy: { column: 'name', order: 'asc' } }) });
   if (!r.ok) throw new Error(`lista ${r.status}`);
   return r.json();
 }
@@ -15177,6 +15661,7 @@ async function compCarregar(forcar = false) {
       const proximo = [];
       for (const [pre, itens] of resultados) for (const it of itens) {
         const caminho = pre ? `${pre}/${it.name}` : it.name;
+        if (!pre && !compRaiz() && it.name === 'obras') continue; // arquivo das outras obras
         if (!it.id) { pastas.add(caminho); proximo.push(caminho); continue; }
         if (it.name === '.pasta') continue;
         arquivos.push({ caminho, nome: it.name, pasta: pre, tamanho: Number(it.metadata && it.metadata.size) || 0, tipo: (it.metadata && it.metadata.mimetype) || '', em: it.created_at || it.updated_at || null });
@@ -15196,8 +15681,9 @@ async function compEnviar(pasta, files) {
     const nome = compNomeSeguro(f.name) || `arquivo-${Date.now()}`;
     const caminho = pasta ? `${pasta}/${nome}` : nome;
     try {
-      const r = await fetch(`${NUVEM_CFG.url}/storage/v1/object/${COMP_BUCKET}/${caminho.split('/').map(encodeURIComponent).join('/')}`, { method: 'POST', headers: compHeaders({ 'Content-Type': f.type || 'application/octet-stream', 'x-upsert': 'false' }), body: f });
-      if (r.status === 409 || r.status === 400) { const r2 = await fetch(`${NUVEM_CFG.url}/storage/v1/object/${COMP_BUCKET}/${caminho.split('/').map(encodeURIComponent).join('/')}`, { method: 'POST', headers: compHeaders({ 'Content-Type': f.type || 'application/octet-stream', 'x-upsert': 'true' }), body: f }); if (!r2.ok) throw new Error(`${r2.status}`); }
+      const alvo = compCaminhoServidor(caminho).split('/').map(encodeURIComponent).join('/');
+      const r = await fetch(`${NUVEM_CFG.url}/storage/v1/object/${COMP_BUCKET}/${alvo}`, { method: 'POST', headers: compHeaders({ 'Content-Type': f.type || 'application/octet-stream', 'x-upsert': 'false' }), body: f });
+      if (r.status === 409 || r.status === 400) { const r2 = await fetch(`${NUVEM_CFG.url}/storage/v1/object/${COMP_BUCKET}/${alvo}`, { method: 'POST', headers: compHeaders({ 'Content-Type': f.type || 'application/octet-stream', 'x-upsert': 'true' }), body: f }); if (!r2.ok) throw new Error(`${r2.status}`); }
       else if (!r.ok) throw new Error(`${r.status}`);
       enviados.push(caminho);
       compEstado().meta[caminho] = { ...(compEstado().meta[caminho] || {}), enviadoPor: (SESSAO && SESSAO.usuario) || '', enviadoEm: new Date().toISOString().slice(0, 16) };
@@ -15252,6 +15738,82 @@ function compAtualizarMeta(caminho, patch) { const est = compEstado(); est.meta[
 function compTamanho(n) { return n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : (n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} B`); }
 function compEhImagem(a) { return /^image\//.test(a.tipo) || /\.(jpe?g|png|webp|gif)$/i.test(a.nome); }
 
+/* Lançamentos de um comprovante.
+   -------------------------------------------------------------------------
+   Abre a lista de pagamentos que o arquivo comprova. Serve para os dois casos
+   que apareceram na leitura dos comprovantes: o print com duas parcelas e o
+   PIX único que paga mais de uma disciplina. Com um lançamento só, o valor
+   volta a ser guardado no campo simples — a tela não fica mais complexa do que
+   o comprovante exige. */
+function abrirLancamentosComprovante(caminho, aoFechar) {
+  const m = compEstado().meta[caminho] || {};
+  const dp = compDisciplinaDaPasta(caminho);
+  let itens = compItens(caminho).map((i) => ({ d: i.d || '', v: Number(i.v) || 0, disc: i.disc || dp }));
+  if (!itens.length) itens = [{ d: m.obs || '', v: Number(m.valor) || 0, disc: dp }];
+  const corpo = document.createElement('div');
+  corpo.style.display = 'flex'; corpo.style.flexDirection = 'column'; corpo.style.gap = '10px';
+  const info = document.createElement('div');
+  info.className = 'muted';
+  info.innerHTML = `Arquivo <strong>${esc(caminho.split('/').pop())}</strong> em ${esc(caminho.split('/').slice(0, -1).join('/') || 'raiz')}.
+    Cada linha é um pagamento que este comprovante prova. A disciplina pode ser diferente da pasta quando o mesmo pagamento cobre mais de um controle.`;
+  corpo.appendChild(info);
+  const tabela = document.createElement('table');
+  tabela.className = 'extrato-table';
+  tabela.innerHTML = '<thead><tr><th>Descrição</th><th class="num">Valor</th><th>Disciplina</th><th class="no-print"></th></tr></thead><tbody></tbody><tfoot><tr><td><strong>Total</strong></td><td class="num"><strong class="comp-lanc-total"></strong></td><td colspan="2"></td></tr></tfoot>';
+  corpo.appendChild(tabela);
+  const total = () => round2(itens.reduce((a, i) => a + (Number(i.v) || 0), 0));
+  const desenhar = () => {
+    const tb = tabela.querySelector('tbody');
+    tb.innerHTML = '';
+    itens.forEach((it, k) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td></td><td class="num"></td><td></td><td class="no-print"></td>';
+      const d = document.createElement('input'); d.type = 'text'; d.className = 'cell-input wide'; d.value = it.d || '';
+      d.placeholder = 'ex.: 1ª parcela, PIX Fama, ADM RS Engenharia';
+      d.addEventListener('input', () => { it.d = d.value; });
+      tr.children[0].appendChild(d);
+      tr.children[1].appendChild(moneyInput({ value: it.v, onSave: (v) => { it.v = v; tabela.querySelector('.comp-lanc-total').textContent = money(total()); } }));
+      const sel = document.createElement('select'); sel.className = 'cell-input';
+      for (const x of COMP_DISCIPLINAS) { const o = document.createElement('option'); o.value = x.id; o.textContent = x.nome; if ((it.disc || dp) === x.id) o.selected = true; sel.appendChild(o); }
+      sel.addEventListener('change', () => { it.disc = sel.value; });
+      tr.children[2].appendChild(sel);
+      const bx = document.createElement('button'); bx.type = 'button'; bx.className = 'btn small'; bx.textContent = 'Remover';
+      bx.onclick = () => { itens.splice(k, 1); if (!itens.length) itens.push({ d: '', v: 0, disc: dp }); desenhar(); };
+      tr.children[3].appendChild(bx);
+      tb.appendChild(tr);
+    });
+    tabela.querySelector('.comp-lanc-total').textContent = money(total());
+  };
+  desenhar();
+  const bAdd = document.createElement('button'); bAdd.type = 'button'; bAdd.className = 'btn small';
+  bAdd.textContent = '+ lançamento';
+  bAdd.onclick = () => { itens.push({ d: '', v: 0, disc: dp }); desenhar(); };
+  corpo.appendChild(bAdd);
+  openModal('Lançamentos deste comprovante', (body, close) => {
+    body.appendChild(corpo);
+    const rodape = document.createElement('div');
+    rodape.className = 'conta-acoes no-print';
+    const bOk = document.createElement('button'); bOk.type = 'button'; bOk.className = 'btn primary';
+    bOk.textContent = 'Salvar lançamentos';
+    bOk.onclick = () => {
+      const limpos = itens.filter((i) => (Number(i.v) || 0) !== 0).map((i) => ({ d: String(i.d || '').trim(), v: round2(Number(i.v) || 0), disc: i.disc || dp }));
+      if (limpos.length <= 1) {
+        const um = limpos[0];
+        compAtualizarMeta(caminho, { itens: [], valor: um ? um.v : 0 });
+      } else {
+        compAtualizarMeta(caminho, { itens: limpos, valor: round2(limpos.reduce((a, i) => a + i.v, 0)), tipo: '' });
+      }
+      close();
+      if (typeof aoFechar === 'function') aoFechar();
+    };
+    const bCancel = document.createElement('button'); bCancel.type = 'button'; bCancel.className = 'btn';
+    bCancel.textContent = 'Cancelar'; bCancel.onclick = close;
+    rodape.append(bOk, bCancel);
+    body.appendChild(rodape);
+    if (READONLY) travarSomenteLeitura(body);
+  }, { wide: true });
+}
+
 function renderComprovantes() {
   const root = document.getElementById('tab-comprovantes');
   if (!root) return;
@@ -15293,7 +15855,9 @@ function renderComprovantes() {
     const totArquivos = foco.reduce((a, d) => a + d.arquivos, 0);
     const totValor = round2(foco.reduce((a, d) => a + d.valor, 0));
     const totSemValor = foco.reduce((a, d) => a + d.semValor, 0);
+    const totDocs = foco.reduce((a, d) => a + (d.documentos || 0), 0);
     const totLancado = round2(foco.reduce((a, d) => a + d.lancado, 0));
+    const totPlanejado = round2(foco.reduce((a, d) => a + (d.planejado || 0), 0));
     const totDif = round2(totValor - totLancado);
 
     const chips = document.createElement('div');
@@ -15308,13 +15872,36 @@ function renderComprovantes() {
     for (const d of comUso) addChip(d.id, `${d.nome} (${d.arquivos})`, COMP.disciplina === d.id);
     corpo.appendChild(chips);
 
+    /* Segundo filtro: situação do arquivo. Serve para achar rápido o que
+       ainda falta valorar e os arquivos que guardam mais de um pagamento. */
+    const noFoco = cache.arquivos.filter((a) => !ehCaminhoRDO(a.caminho) && !(meta[a.caminho] || {}).oculto
+      && (COMP.disciplina === 'todas' || compDisciplinaDaPasta(a.pasta || a.caminho) === COMP.disciplina));
+    const contaSit = (sit) => noFoco.filter((a) => compArquivoNaSituacao(a.caminho, sit)).length;
+    const chipsSit = document.createElement('div');
+    chipsSit.className = 'comp-chips no-print';
+    const SITUACOES = [
+      ['todos', 'Todas as situações'],
+      ['sem-valor', `Sem valor informado (${contaSit('sem-valor')})`],
+      ['com-valor', `Com valor (${contaSit('com-valor')})`],
+      ['varios', `Vários lançamentos (${contaSit('varios')})`],
+      ['documento', `Documento de apoio (${contaSit('documento')})`],
+    ];
+    for (const [id, texto] of SITUACOES) {
+      const b = document.createElement('button'); b.type = 'button';
+      b.className = `btn small comp-chip${COMP.situacao === id ? ' primary' : ''}`;
+      b.textContent = texto;
+      b.onclick = () => { COMP.situacao = id; desenhar(); };
+      chipsSit.appendChild(b);
+    }
+    corpo.appendChild(chipsSit);
+
     const cards = document.createElement('div');
     cards.className = 'cards-grid comp-cards';
     const situacao = totValor === 0 ? 'informe os valores para cruzar' : (Math.abs(totDif) <= 0.01 ? 'comprovado igual ao lançado' : (totDif > 0 ? 'comprovantes acima do lançado: conferir' : `faltam comprovantes de ${money(Math.abs(totDif))}`));
     cards.innerHTML = `
       <div class="card"><div class="card-label">Total dos comprovantes${sel ? ` · ${esc(sel.nome)}` : ''}</div><div class="card-value">${money(totValor)}</div><div class="card-sub">${totArquivos - totSemValor} de ${totArquivos} arquivo(s) com valor informado</div></div>
-      <div class="card ${totSemValor ? 'accent' : 'good'}"><div class="card-label">Sem valor informado</div><div class="card-value">${totSemValor}</div><div class="card-sub">arquivo(s) aguardando o valor para entrar no total</div></div>
-      <div class="card"><div class="card-label">Lançado no app (realizado)</div><div class="card-value">${money(totLancado)}</div><div class="card-sub">${sel ? `grupo ${esc(sel.nome)} no extrato de custos` : 'soma dos grupos das disciplinas com comprovante'}</div></div>
+      <div class="card ${totSemValor ? 'accent' : 'good'}"><div class="card-label">Sem valor informado</div><div class="card-value">${totSemValor}</div><div class="card-sub">${totSemValor ? 'arquivo(s) aguardando o valor para entrar no total' : 'todos os pagamentos estão valorados'}${totDocs ? ` · ${totDocs} documento(s) de apoio fora do total` : ''}</div></div>
+      <div class="card"><div class="card-label">Lançado no app (realizado)</div><div class="card-value">${money(totLancado)}</div><div class="card-sub">${sel ? `grupo ${esc(sel.nome)} no extrato de custos` : 'soma dos grupos das disciplinas com comprovante'}${totPlanejado ? ` · ainda planejado ${money(totPlanejado)}` : ''}</div></div>
       <div class="card ${totValor === 0 ? '' : (Math.abs(totDif) <= 0.01 ? 'good' : (totDif > 0 ? 'warn' : 'accent'))}"><div class="card-label">Diferença (comprovado − lançado)</div><div class="card-value">${money(totDif)}</div><div class="card-sub">${situacao}</div></div>`;
     corpo.appendChild(cards);
     if (typeof ajustarCardsGrid === 'function') requestAnimationFrame(() => ajustarCardsGrid(cards));
@@ -15322,14 +15909,14 @@ function renderComprovantes() {
     const cruz = document.createElement('div');
     cruz.className = 'table-scroll comp-cross';
     cruz.innerHTML = `<table class="extrato-table">
-      <caption class="muted">Comprovantes × lançamentos, por disciplina. O valor lançado é a soma das saídas realizadas do grupo correspondente no extrato de custos (no lote, o valor bruto pago, antes do estorno devolvido); o valor comprovado é a soma dos valores informados em cada arquivo.</caption>
-      <thead><tr><th>Disciplina / controle</th><th class="num">Arquivos</th><th class="num">Sem valor</th><th class="num">Comprovantes</th><th class="num">Lançado no app</th><th class="num">Diferença</th><th>Situação</th><th class="no-print"></th></tr></thead>
+      <caption class="muted">Comprovantes × lançamentos, por disciplina. O valor lançado realizado é a soma das saídas realizadas do grupo correspondente no extrato de custos (no lote, o valor bruto pago, antes do estorno devolvido). O valor comprovado é a soma dos lançamentos informados em cada arquivo: um comprovante pode guardar mais de uma parcela, e um pagamento que cobre duas disciplinas entra partido nas duas linhas. Documento de apoio (ART, projeto, nota sem pagamento) não entra em nenhum total. A diferença compara comprovantes com o realizado; a coluna planejado mostra o que ainda vai acontecer e por isso ainda não tem comprovante.</caption>
+      <thead><tr><th>Disciplina / controle</th><th class="num">Arquivos</th><th class="num">Sem valor</th><th class="num">Comprovantes</th><th class="num">Lançado realizado</th><th class="num">Lançado planejado</th><th class="num">Diferença</th><th>Situação</th><th class="no-print"></th></tr></thead>
       <tbody>${resumo.filter((d) => d.arquivos || d.valor || d.lancado).map((d) => {
         const st = d.valor === 0 ? (d.lancado ? 'sem valor informado' : 'sem lançamento e sem valor') : (Math.abs(d.diferenca) <= 0.01 ? 'confere' : (d.diferenca > 0 ? 'comprovado acima do lançado' : `faltam ${money(Math.abs(d.diferenca))} em comprovantes`));
         const cls = d.valor === 0 ? 'muted' : (Math.abs(d.diferenca) <= 0.01 ? 'st-ok' : (d.diferenca > 0 ? 'st-neg' : 'st-aviso'));
-        return `<tr${COMP.disciplina === d.id ? ' class="linha-destaque"' : ''}><td>${esc(d.nome)}</td><td class="num">${d.arquivos}</td><td class="num">${d.semValor || ''}</td><td class="num">${money(d.valor)}</td><td class="num">${money(d.lancado)}</td><td class="num">${money(d.diferenca)}</td><td class="${cls}">${st}</td><td class="no-print"><button type="button" class="btn small" data-disc="${d.id}">ver</button></td></tr>`;
+        return `<tr${COMP.disciplina === d.id ? ' class="linha-destaque"' : ''}><td>${esc(d.nome)}${d.documentos ? ` <span class="muted">(${d.documentos} doc.)</span>` : ''}</td><td class="num">${d.arquivos}</td><td class="num">${d.semValor || ''}</td><td class="num">${money(d.valor)}</td><td class="num">${money(d.lancado)}</td><td class="num">${d.planejado ? money(d.planejado) : ''}</td><td class="num">${money(d.diferenca)}</td><td class="${cls}">${st}</td><td class="no-print"><button type="button" class="btn small" data-disc="${d.id}">ver</button></td></tr>`;
       }).join('')}</tbody>
-      <tfoot><tr class="extrato-residuo"><td><strong>Total</strong></td><td class="num"><strong>${resumo.reduce((a, d) => a + d.arquivos, 0)}</strong></td><td class="num">${resumo.reduce((a, d) => a + d.semValor, 0)}</td><td class="num"><strong>${money(round2(resumo.reduce((a, d) => a + d.valor, 0)))}</strong></td><td class="num"><strong>${money(round2(resumo.reduce((a, d) => a + d.lancado, 0)))}</strong></td><td class="num"><strong>${money(round2(resumo.reduce((a, d) => a + d.valor - d.lancado, 0)))}</strong></td><td colspan="2"></td></tr></tfoot></table>`;
+      <tfoot><tr class="extrato-residuo"><td><strong>Total</strong></td><td class="num"><strong>${resumo.reduce((a, d) => a + d.arquivos, 0)}</strong></td><td class="num">${resumo.reduce((a, d) => a + d.semValor, 0)}</td><td class="num"><strong>${money(round2(resumo.reduce((a, d) => a + d.valor, 0)))}</strong></td><td class="num"><strong>${money(round2(resumo.reduce((a, d) => a + d.lancado, 0)))}</strong></td><td class="num"><strong>${money(round2(resumo.reduce((a, d) => a + (d.planejado || 0), 0)))}</strong></td><td class="num"><strong>${money(round2(resumo.reduce((a, d) => a + d.valor - d.lancado, 0)))}</strong></td><td colspan="2"></td></tr></tfoot></table>`;
     cruz.querySelectorAll('button[data-disc]').forEach((b) => { b.onclick = () => { COMP.disciplina = b.dataset.disc; COMP.pastaAtiva = ''; desenhar(); }; });
     corpo.appendChild(cruz);
 
@@ -15341,14 +15928,16 @@ function renderComprovantes() {
     corpo.appendChild(barra);
 
     // Os RDO têm aba própria: não entram na árvore de comprovantes.
-    const visiveis = cache.arquivos.filter((a) => !ehCaminhoRDO(a.caminho)).filter((a) => !(meta[a.caminho] || {}).oculto || filtro === 'ocultos');
+    const visiveis = cache.arquivos.filter((a) => !ehCaminhoRDO(a.caminho))
+      .filter((a) => !(meta[a.caminho] || {}).oculto || filtro === 'ocultos')
+      .filter((a) => compArquivoNaSituacao(a.caminho, COMP.situacao));
     const bate = (a) => !filtro || filtro === 'ocultos' || a.caminho.toLowerCase().includes(filtro) || ((meta[a.caminho] || {}).obs || '').toLowerCase().includes(filtro);
     const arvore = { filhos: new Map(), arquivos: [] };
     const no = (caminho) => { let cur = arvore; if (!caminho) return cur; for (const p of caminho.split('/')) { if (!cur.filhos.has(p)) cur.filhos.set(p, { filhos: new Map(), arquivos: [], caminho: cur.caminho ? `${cur.caminho}/${p}` : p }); cur = cur.filhos.get(p); } return cur; };
     for (const p of cache.pastas) if (!ehCaminhoRDO(p)) no(p);
     for (const a of visiveis) if (bate(a)) no(a.pasta).arquivos.push(a);
     const conta = (n) => n.arquivos.length + [...n.filhos.values()].reduce((s, f) => s + conta(f), 0);
-    const somaValor = (n) => round2(n.arquivos.reduce((s, a) => s + (Number((meta[a.caminho] || {}).valor) || 0), 0) + [...n.filhos.values()].reduce((s, f) => s + somaValor(f), 0));
+    const somaValor = (n) => round2(n.arquivos.reduce((s, a) => s + compValorArquivo(a.caminho), 0) + [...n.filhos.values()].reduce((s, f) => s + somaValor(f), 0));
 
     const linhaArquivo = (a) => {
       const m = meta[a.caminho] || {};
@@ -15359,13 +15948,37 @@ function renderComprovantes() {
         <td class="comp-valor"></td>
         <td class="comp-obs"></td>
         <td class="no-print comp-acoes"></td>`;
-      const val = moneyInput({ value: Number(m.valor) || 0, titulo: 'Valor deste comprovante (entra no total da disciplina e no cruzamento com os lançamentos)', onSave: (v) => { COMP.pastaAtiva = a.pasta || ''; compAtualizarMeta(a.caminho, { valor: v }); desenhar(); } });
-      tr.querySelector('.comp-valor').appendChild(val);
+      const cel = tr.querySelector('.comp-valor');
+      const itens = compItens(a.caminho);
+      if (m.tipo === 'documento') {
+        cel.innerHTML = '<span class="muted">documento de apoio</span>';
+      } else if (itens.length > 1) {
+        // Com mais de um pagamento no mesmo arquivo, a célula mostra a soma e
+        // a lista; o valor não é editável aqui para não haver dois caminhos
+        // de edição do mesmo número.
+        cel.innerHTML = `<strong>${money(compValorArquivo(a.caminho))}</strong><div class="muted comp-sub">${itens.length} lançamentos</div>`;
+        const lista = document.createElement('div');
+        lista.className = 'muted comp-sub';
+        lista.innerHTML = itens.map((i) => `${esc(i.d || 'lançamento')} · ${money(Number(i.v) || 0)}${(i.disc && i.disc !== compDisciplinaDaPasta(a.caminho)) ? ` · ${esc(compNomeDisciplina(i.disc))}` : ''}`).join('<br>');
+        tr.children[1].appendChild(lista);
+      } else {
+        cel.appendChild(moneyInput({ value: compValorArquivo(a.caminho), titulo: 'Valor deste comprovante (entra no total da disciplina e no cruzamento com os lançamentos)', onSave: (v) => { COMP.pastaAtiva = a.pasta || ''; compAtualizarMeta(a.caminho, { valor: v, itens: [] }); desenhar(); } }));
+      }
       const obs = document.createElement('input'); obs.type = 'text'; obs.className = 'cell-input wide'; obs.placeholder = 'observação (ex.: PIX Fama, quinzena Junho/2ª)'; obs.value = m.obs || '';
       obs.addEventListener('change', () => compAtualizarMeta(a.caminho, { obs: obs.value }));
       tr.querySelector('.comp-obs').appendChild(obs);
       const ac = tr.querySelector('.comp-acoes');
       const bAbrir = document.createElement('a'); bAbrir.className = 'btn small filter-control'; bAbrir.textContent = 'Abrir'; bAbrir.href = compUrlPublica(a.caminho); bAbrir.target = '_blank'; bAbrir.rel = 'noopener'; ac.appendChild(bAbrir);
+      const bLanc = document.createElement('button'); bLanc.type = 'button'; bLanc.className = 'btn small';
+      bLanc.textContent = 'Lançamentos';
+      bLanc.title = 'Este comprovante prova mais de um pagamento (duas parcelas, ou disciplinas diferentes no mesmo PIX).';
+      bLanc.onclick = () => { COMP.pastaAtiva = a.pasta || ''; abrirLancamentosComprovante(a.caminho, desenhar); };
+      ac.appendChild(bLanc);
+      const bDoc = document.createElement('button'); bDoc.type = 'button'; bDoc.className = 'btn small';
+      bDoc.textContent = m.tipo === 'documento' ? 'É pagamento' : 'É documento';
+      bDoc.title = 'Documento de apoio (ART, projeto, nota sem pagamento) fica guardado mas não entra em nenhum total.';
+      bDoc.onclick = () => { COMP.pastaAtiva = a.pasta || ''; compAtualizarMeta(a.caminho, { tipo: m.tipo === 'documento' ? '' : 'documento' }); desenhar(); };
+      ac.appendChild(bDoc);
       const bOc = document.createElement('button'); bOc.type = 'button'; bOc.className = 'btn small'; bOc.textContent = m.oculto ? 'Reexibir' : 'Ocultar'; bOc.title = 'Tira da lista sem apagar — para duplicado que você prefere manter guardado.';
       bOc.onclick = () => compAtualizarMeta(a.caminho, { oculto: !m.oculto }); ac.appendChild(bOc);
       /* Subiu errado? Antes só dava para ocultar, e o arquivo ficava no acervo
@@ -16014,7 +16627,7 @@ function memorialCalculo() {
     /* A conferência tem de usar a MESMA conta da projeção: com o saldo travado
        em zero, o que faltaria virou recurso próprio, então ele entra somando —
        senão esta linha acusaria divergência do tamanho exato do próprio. */
-    add('Saldo em conta projetado (card do Demonstrativo)', pr.saldoFinal, 'saldo de hoje + liberações previstas − quinzenas planejadas + recurso próprio necessário (a conta trava em zero)', 'Dashboard › saldo em conta · Liberação PCI · Contas a Pagar', 'saldo de hoje + entradas previstas − saídas planejadas + próprio necessário', round2(pr.saldoHoje + pr.entradasPrevistas - pr.saidasPlanejadas + (Number(pr.proprioNecessario) || 0)), 'dashboard');
+    add('Saldo em conta projetado (card do Fluxo de Caixa)', pr.saldoFinal, 'saldo de hoje + liberações previstas − quinzenas planejadas + recurso próprio necessário (a conta trava em zero)', 'Dashboard › saldo em conta · Liberação PCI · Contas a Pagar', 'saldo de hoje + entradas previstas − saídas planejadas + próprio necessário', round2(pr.saldoHoje + pr.entradasPrevistas - pr.saidasPlanejadas + (Number(pr.proprioNecessario) || 0)), 'dashboard');
   }
   add('PCI ainda a liberar', ccMem.aLiberar, 'crédito PCI contratado − crédito CAIXA liberado (devolução de terceiro não consome crédito)', 'Parâmetros › crédito CAIXA total do PCI · Liberação PCI', 'crédito PCI − (entradas da conta da obra − devoluções e depósitos)', round2(ccMem.total - (m.entradasCaixa - ccMem.somaFora)), 'pci');
   add('Saldo em conta (Dashboard)', r.saldoContaRealizado, `liberações e devoluções desde ${dateBR(r.marcoSaldoConta)} − custo total das quinzenas REALIZADAS desde essa data`, 'Dashboard › Saldo em conta', 'saldo da conta da obra no extrato por conta (entradas − saídas)', m.contas[0].saldo, 'painel');
