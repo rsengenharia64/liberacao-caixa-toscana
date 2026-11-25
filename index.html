@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro de obra residencial no Gran Park Toscana.">
-<meta name="app-version" content="20261125T002010">
+<meta name="app-version" content="20261125T215301">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -724,6 +724,14 @@
   .imp-previa table { font-size: 11.5px; }
   .imp-resumo { font-size: 12.5px; color: var(--ink-soft); line-height: 1.5; }
   .imp-resumo strong { font-family: "IBM Plex Mono", monospace; }
+  .lanc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 10px 16px; }
+  .lanc-campo { display: flex; flex-direction: column; gap: 3px; }
+  .lanc-campo > span { font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+  .lanc-campo > em { font-style: normal; font-size: 11px; color: var(--muted); line-height: 1.35; }
+  .lanc-campo input, .lanc-campo select { font: inherit; padding: 7px 9px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface); color: var(--ink); }
+  .lanc-campo input:focus { border-color: var(--accent); outline: none; }
+  .lanc-derivado { background: var(--surface-2); border: 1px dashed var(--border); border-radius: 9px; padding: 9px 12px; font-size: 12.5px; line-height: 1.6; color: var(--ink-soft); margin-top: 10px; }
+  .lanc-derivado strong { font-family: "IBM Plex Mono", monospace; color: var(--ink); }
   .comp-barra { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 4px 0 10px; }
   .comp-barra label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
   .comp-barra input { min-width: 260px; border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 5px 8px; }
@@ -7184,6 +7192,8 @@ function renderCadastroObras() {
       </tr>`).join('') || '<tr><td colspan="6" class="muted">Nenhum usuário cadastrado ainda além do seu acesso.</td></tr>'}</tbody>
     </table></div>`;
   root.appendChild(pUsers);
+  root.appendChild(renderLancamentoInicial());
+  root.appendChild(renderObraEmAndamento());
   root.appendChild(renderPainelImportacao());
   pUsers.querySelector('button[data-acao="novo-usuario"]').onclick = () => abrirEdicaoUsuario(null);
   pUsers.querySelectorAll('button[data-user]').forEach((b) => { b.onclick = () => abrirEdicaoUsuario((CADASTRO.usuarios || []).find((u) => u.usuario === b.dataset.user)); });
@@ -7221,10 +7231,219 @@ function renderPainelImportacao() {
         <div class="imp-resumo">Lance o valor total, ou o valor por m², e o app distribui pelo peso de cada categoria já cadastrada. É esse valor que manda no avanço e no pagamento.</div>
         <div class="conta-acoes"><button type="button" class="btn" data-imp="contrato">Lançar contrato por peso</button></div>
       </div>
+      <div class="imp-passo">
+        <div class="imp-passo-titulo">Recomeçar do zero</div>
+        <div class="imp-resumo">Apaga os valores desta obra e mantém a estrutura (nomes das categorias, itens e etapas). Serve para a obra que foi criada com número herdado da obra modelo.</div>
+        <div class="conta-acoes"><button type="button" class="btn" data-imp="zerar">Zerar lançamentos desta obra</button></div>
+      </div>
     </div>`;
   p.querySelector('button[data-imp="pci"]').onclick = () => abrirImportarPlanilha('pci', () => renderCadastroObras());
+  p.querySelector('button[data-imp="zerar"]').onclick = zerarLancamentosDaObra;
   p.querySelector('button[data-imp="categorias"]').onclick = () => abrirImportarPlanilha('categorias', () => renderCadastroObras());
   p.querySelector('button[data-imp="contrato"]').onclick = abrirContratoEmpreiteiro;
+  return p;
+}
+
+/* Zera os valores da obra aberta, preservando a estrutura.
+   Nasceu do caso real: uma obra criada antes da correção veio com o orçamento,
+   o avanço e o cronograma da obra modelo. Tirar isso à mão, categoria por
+   categoria, era inviável. A estrutura (nomes, itens, etapas) fica de pé; o
+   que sai é todo número e toda data de execução. */
+async function zerarLancamentosDaObra() {
+  const ok = await confirmDialog(
+    'Zerar os valores desta obra? Saem o orçamento, a verba CAIXA, os avanços, as quinzenas, as liberações e os aportes. Ficam de pé os nomes das categorias, os itens, as etapas do PCI e os comprovantes já enviados. O histórico de versões na nuvem continua guardado, então dá para voltar atrás.',
+    { title: 'Zerar lançamentos', okLabel: 'Zerar', danger: true });
+  if (!ok) return;
+  for (const c of (STATE.categorias || [])) {
+    c.valorOrcado = 0;
+    c.verbaCaixa = 0;
+    c.percAvancoManual = null;
+    c.percItensManual = null;
+    c.percCaixaRealizado = undefined;
+    c.dataUltimoAvanco = null;
+    c.cronogramaPrevisto = null;
+    c.liberadoCaixaManual = null;
+    c.pagoDiretoProprietario = false;
+    for (const it of (c.itens || [])) {
+      it.valorOrcado = 0; it.valorRealizado = 0; it.dataPagamento = ''; it.formaPagamento = '';
+    }
+  }
+  for (const e of (STATE.liberacaoPCI || [])) { e.valor = 0; e.liberadoManual = null; }
+  STATE.parcelas = [];
+  STATE.liberacoesCaixa = [];
+  STATE.historicoAvancos = [];
+  STATE.consumosRecursoProprio = [];
+  STATE.fluxoCaixaAjustes = [];
+  STATE.baixas = {};
+  for (const k of Object.keys(STATE.parametros || {})) {
+    if (PARAMS_DE_REGRA.includes(k)) continue;
+    if (typeof STATE.parametros[k] === 'number') STATE.parametros[k] = 0;
+  }
+  STATE.parametros.dataLoteCaixa = null;
+  registrarAlteracao('Obras', NUVEM_CFG.obraId, 'lançamentos zerados, estrutura mantida', null, null);
+  afterMutation();
+  VIEW = recompute(STATE);
+  renderAll();
+  toast('Obra zerada. A estrutura ficou de pé; lance os valores de referência abaixo.');
+}
+
+/* ==========================================================================
+   LANÇAMENTO INICIAL DA OBRA
+   --------------------------------------------------------------------------
+   Os números que abrem o painel (custo econômico, crédito da CAIXA, recurso
+   próprio, VGV, contrato do empreiteiro) viviam espalhados no fim da aba
+   Parâmetros, no meio de vinte e cinco campos. Quem cadastra uma obra nova
+   precisa deles juntos, com o nome que aparece no card e a explicação do que
+   cada um muda. É o que esta tela faz, e ela inclui o caso da obra comprada
+   em andamento: o que já estava executado quando assumimos entra como avanço
+   inicial, sem virar pagamento nosso.
+   ========================================================================== */
+const LANC_CAMPOS = [
+  { k: 'contratoTotalEmpreiteiro', rot: 'Contrato total do empreiteiro (R$)', nota: 'Card "Contrato total empreiteiro". Em branco, o app usa a soma do orçamento das categorias.' },
+  { k: 'financiamentoObraCaixa', rot: 'Financiamento da obra pela CAIXA (R$)', nota: 'Parte do crédito destinada à construção.' },
+  { k: 'financiamentoLoteCaixa', rot: 'Financiamento do lote pela CAIXA (R$)', nota: 'Parte do crédito que quitou o terreno. Soma com a de cima no crédito PCI total.' },
+  { k: 'recursoProprioPlanejado', rot: 'Recurso próprio planejado (R$)', nota: 'Card "Recursos próprios planejados". É o aporte previsto do proprietário.' },
+  { k: 'custoLoteExecutado', rot: 'Custo do lote já executado (R$)', nota: 'Quanto do lote já foi pago, incluindo taxas e projetos.' },
+  { k: 'vgv', rot: 'VGV atual — valor de venda hoje (R$)', nota: 'Card "VGV estimado". Base do lucro e da margem na viabilidade.' },
+  { k: 'vgvProjetado', rot: 'VGV projetado — cenário de saída (R$)', nota: 'Usado no cenário projetado da viabilidade.' },
+  { k: 'custoTerreno', rot: 'Terreno — valor de aquisição (R$)', nota: 'Entra no custo econômico total.' },
+  { k: 'taxaAdministracaoPercent', rot: 'Taxa de administração (%)', perc: true, nota: 'RS Engenharia, sobre a base escolhida em Parâmetros.' },
+];
+
+function renderLancamentoInicial() {
+  const p = document.createElement('div');
+  p.className = 'panel';
+  p.innerHTML = `
+    <div class="panel-header">
+      <div>
+        <h2>Lançamento inicial da obra</h2>
+        <div class="muted">Os valores de referência que abrem o painel. Editáveis aqui, com o nome do card que cada um alimenta. Alterar qualquer campo recalcula a obra inteira na hora e grava na nuvem.</div>
+      </div>
+    </div>`;
+  const grid = document.createElement('div');
+  grid.className = 'lanc-grid';
+  for (const campo of LANC_CAMPOS) {
+    const lab = document.createElement('label');
+    lab.className = 'lanc-campo';
+    const tit = document.createElement('span');
+    tit.textContent = campo.rot;
+    const inp = document.createElement('input');
+    inp.type = 'number';
+    inp.step = '0.01';
+    inp.min = '0';
+    const atual = Number((VIEW.parametros || {})[campo.k]) || 0;
+    inp.value = campo.perc ? Math.round(atual * 10000) / 100 : atual;
+    inp.addEventListener('blur', () => {
+      const v = Number(inp.value) || 0;
+      updateParametros({ [campo.k]: campo.perc ? v / 100 : v });
+      VIEW = recompute(STATE);
+      renderAll();
+    });
+    const nota = document.createElement('em');
+    nota.textContent = campo.nota;
+    lab.append(tit, inp, nota);
+    grid.appendChild(lab);
+  }
+  p.appendChild(grid);
+
+  const r = VIEW.resumo || {};
+  const der = document.createElement('div');
+  der.className = 'lanc-derivado';
+  der.innerHTML = `Com o que está lançado: crédito PCI total <strong>${money(r.creditoCaixaTotalPCI)}</strong> ·
+    contrato do empreiteiro <strong>${money(r.contratoTotalEmpreiteiro)}</strong> ·
+    orçamento somado das categorias <strong>${money(r.totalOrcadoCategorias)}</strong> ·
+    medido até agora <strong>${money(r.totalMedido)}</strong> (${pct(r.percObraGeral)}).
+    O contrato e o orçamento devem fechar entre si: se o contrato está em branco, é o orçamento que vira contrato.`;
+  p.appendChild(der);
+  return p;
+}
+
+/* Obra comprada em andamento. */
+function renderObraEmAndamento() {
+  const p = document.createElement('div');
+  p.className = 'panel';
+  const jaExec = Number((STATE.parametros || {}).percExecutadoNaAquisicao) || 0;
+  const custoTerceiros = Number((STATE.parametros || {}).custoExecutadoPorTerceiros) || 0;
+  p.innerHTML = `
+    <div class="panel-header">
+      <div>
+        <h2>Obra adquirida em andamento</h2>
+        <div class="muted">Para a obra que já estava construída em parte quando assumimos. O avanço que veio de trás conta no físico, porque a obra está mesmo naquele ponto, mas não vira pagamento nosso nem medição nossa: ele é deduzido do que falta executar. Deixe em zero na obra que começa do chão.</div>
+      </div>
+    </div>`;
+  const grid = document.createElement('div');
+  grid.className = 'lanc-grid';
+
+  const campoPerc = document.createElement('label');
+  campoPerc.className = 'lanc-campo';
+  campoPerc.innerHTML = '<span>Avanço físico já executado na aquisição (%)</span>';
+  const inpPerc = document.createElement('input');
+  inpPerc.type = 'number'; inpPerc.step = '0.01'; inpPerc.min = '0'; inpPerc.max = '100';
+  inpPerc.value = Math.round(jaExec * 10000) / 100;
+  campoPerc.appendChild(inpPerc);
+  const notaPerc = document.createElement('em');
+  notaPerc.textContent = 'Quanto da obra já estava pronta no dia em que assumimos.';
+  campoPerc.appendChild(notaPerc);
+
+  const campoCusto = document.createElement('label');
+  campoCusto.className = 'lanc-campo';
+  campoCusto.innerHTML = '<span>Valor executado por terceiros antes da aquisição (R$)</span>';
+  const inpCusto = document.createElement('input');
+  inpCusto.type = 'number'; inpCusto.step = '0.01'; inpCusto.min = '0';
+  inpCusto.value = custoTerceiros;
+  campoCusto.appendChild(inpCusto);
+  const notaCusto = document.createElement('em');
+  notaCusto.textContent = 'Obra feita e paga por quem estava antes. Deduz do saldo a executar; não entra como custo nosso.';
+  campoCusto.appendChild(notaCusto);
+
+  grid.append(campoPerc, campoCusto);
+  p.appendChild(grid);
+
+  const salvar = () => {
+    updateParametros({
+      percExecutadoNaAquisicao: (Number(inpPerc.value) || 0) / 100,
+      custoExecutadoPorTerceiros: Number(inpCusto.value) || 0,
+    });
+    VIEW = recompute(STATE);
+    renderAll();
+  };
+  inpPerc.addEventListener('blur', salvar);
+  inpCusto.addEventListener('blur', salvar);
+
+  const contrato = Number((VIEW.resumo || {}).contratoTotalEmpreiteiro) || 0;
+  const der = document.createElement('div');
+  der.className = 'lanc-derivado';
+  der.innerHTML = custoTerceiros || jaExec
+    ? `Saldo a executar por nós: <strong>${money(Math.max(0, round2(contrato - custoTerceiros)))}</strong> (contrato ${money(contrato)} − executado por terceiros ${money(custoTerceiros)}).
+       O avanço físico de partida é <strong>${pct(jaExec)}</strong>: a medição nossa conta a partir dali.`
+    : 'Nada lançado aqui: o app trata a obra como iniciada do zero por nós.';
+  p.appendChild(der);
+
+  const acoes = document.createElement('div');
+  acoes.className = 'conta-acoes no-print';
+  const bAplicar = document.createElement('button');
+  bAplicar.type = 'button';
+  bAplicar.className = 'btn';
+  bAplicar.textContent = 'Aplicar o avanço de partida nas categorias';
+  bAplicar.title = 'Marca o percentual informado como avanço inicial de cada categoria, sem gerar pagamento nem quinzena.';
+  bAplicar.onclick = async () => {
+    const perc = (Number(inpPerc.value) || 0) / 100;
+    if (perc <= 0) { toast('Informe o avanço já executado antes de aplicar.', true); return; }
+    const ok = await confirmDialog(`Marcar ${pct(perc)} de avanço inicial em todas as ${(STATE.categorias || []).length} categorias? Nenhum pagamento é gerado: só o avanço físico de partida.`, { title: 'Avanço de partida', okLabel: 'Aplicar', danger: false });
+    if (!ok) return;
+    salvar();
+    for (const c of (STATE.categorias || [])) {
+      // Passa pelo lançamento normal de avanço: fica no histórico, com a
+      // observação dizendo que veio da aquisição e não de medição nossa.
+      lancarAvanco(c.id, { perc, data: (VIEW.meta && VIEW.meta.dataInicio) || new Date().toISOString().slice(0, 10), obs: 'Executado antes da aquisição da obra' });
+    }
+    afterMutation();
+    VIEW = recompute(STATE);
+    renderAll();
+    toast('Avanço de partida aplicado. Ele aparece no histórico como avanço da aquisição, sem pagamento.');
+  };
+  acoes.appendChild(bAplicar);
+  p.appendChild(acoes);
   return p;
 }
 
