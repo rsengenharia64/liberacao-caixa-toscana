@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="description" content="Painel de acompanhamento financeiro de obra residencial no Gran Park Toscana.">
-<meta name="app-version" content="20261125T215301">
+<meta name="app-version" content="20261127T133817">
 <meta name="theme-color" content="#0f2137">
 <meta name="application-name" content="Obra Toscana">
 <link rel="manifest" href="manifest.webmanifest">
@@ -11998,8 +11998,27 @@ function renderLancamentoQuinzenaPanel() {
     const tr = document.createElement('tr');
     tr.appendChild(td(`${c.numero}`));
     tr.appendChild(td(`<span class="wrap">${esc(c.nome)}</span>`));
-    tr.appendChild(td(`<span class="num">${pct(c.peso)}</span>`));
-    tr.appendChild(td(`<span class="num">${money(c.valorOrcado)}</span>`));
+    const pesoCell = document.createElement('td');
+    pesoCell.className = 'num';
+    pesoCell.textContent = pct(c.peso);
+    tr.appendChild(pesoCell);
+
+    /* O valor orçado da categoria é editável aqui.
+       -----------------------------------------------------------------------
+       É o número que manda no peso, no valor gerado da medição e no contrato
+       quando ele não foi informado à parte. Antes só dava para mexer nele
+       item a item no Detalhamento FC, o que inviabilizava montar uma obra
+       nova: a tabela da medição mostrava o valor e não deixava corrigir.
+       Digitar aqui grava na categoria e refaz a tela, com o peso recalculado. */
+    const orcadoCell = document.createElement('td');
+    orcadoCell.className = 'num';
+    orcadoCell.appendChild(moneyInput({
+      value: c.valorOrcado,
+      titulo: 'Valor orçado desta categoria. Define o peso dela na obra e o valor gerado a cada ponto de avanço.',
+      onSave: (v) => { updateCategoria(c.id, { valorOrcado: v }); VIEW = recompute(STATE); renderAll(); },
+    }));
+    tr.appendChild(orcadoCell);
+
     tr.appendChild(td(`<span class="num">${pct(c.percAvancoEfetivo)}</span>`));
 
     const percAtual = Math.round(c.percAvancoEfetivo * 1000) / 10;
